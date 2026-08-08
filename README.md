@@ -12,7 +12,7 @@ Ready APK: [`greater-art/GreaterArt-v1.4.0-debug.apk`](greater-art/GreaterArt-v1
 
 ## `useless-calculator/`
 
-Useless Calculator is satire about hostile mobile-app onboarding. It presents absurd terms, requests permissions it never uses, erases onboarding progress when permission is denied, and blocks the equals button behind a fake `$29.99/month` paywall.
+Useless Calculator is satire about hostile mobile-app onboarding. It presents more than 300 absurd terms, randomly swaps the meaning of yellow action buttons, requests permissions it never uses, erases onboarding progress when permission is denied, locally bans pizza dissenters, and blocks the equals button behind a fake `$29.99/month` paywall.
 
 Despite the joke, it is intentionally harmless:
 
@@ -25,6 +25,6 @@ Despite the joke, it is intentionally harmless:
 
 The wallet-password screen is a non-editable warning parody. Never enter real credentials into random apps.
 
-Ready APK: [`useless-calculator/UselessCalculator-v1.0.0-debug.apk`](useless-calculator/UselessCalculator-v1.0.0-debug.apk)
+Ready APK: [`useless-calculator/UselessCalculator-v1.1.0-debug.apk`](useless-calculator/UselessCalculator-v1.1.0-debug.apk)
 
 Each folder is a standalone Android Studio project with its own Gradle wrapper.

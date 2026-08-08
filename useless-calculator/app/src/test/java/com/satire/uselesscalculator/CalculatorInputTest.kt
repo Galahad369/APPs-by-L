@@ -1,6 +1,7 @@
 package com.satire.uselesscalculator
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CalculatorInputTest {
@@ -12,4 +13,7 @@ class CalculatorInputTest {
 
     @Test fun subscriptionPriceIsAbsurd() =
         assertEquals("$29.99", MONTHLY_PRICE)
+
+    @Test fun termsArePointlesslyEnormous() =
+        assertTrue(termsClauses.size > 300)
 }

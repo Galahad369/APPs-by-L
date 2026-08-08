@@ -1,6 +1,7 @@
 package com.satire.uselesscalculator
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -62,6 +63,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import kotlin.random.Random
 
 internal const val MONTHLY_PRICE = "$29.99"
 
@@ -84,6 +86,13 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun UselessCalculatorApp(onQuit: () -> Unit) {
+    val context = LocalContext.current
+    val banPreferences = remember {
+        context.getSharedPreferences("calculator_permanent_ban", Context.MODE_PRIVATE)
+    }
+    var permanentlyBanned by rememberSaveable {
+        mutableStateOf(banPreferences.getBoolean("banned", false))
+    }
     var stage by rememberSaveable { mutableStateOf(OnboardingStage.TERMS) }
     BackHandler(onBack = onQuit)
 
@@ -100,10 +109,16 @@ private fun UselessCalculatorApp(onQuit: () -> Unit) {
         ),
     ) {
         Surface(Modifier.fillMaxSize()) {
-            when (stage) {
+            if (permanentlyBanned) {
+                PermanentlyBannedScreen(onQuit = onQuit)
+            } else when (stage) {
                 OnboardingStage.TERMS -> TermsScreen(
                     onAccept = { stage = OnboardingStage.PERMISSIONS },
                     onDecline = onQuit,
+                    onPermanentBan = {
+                        banPreferences.edit().putBoolean("banned", true).apply()
+                        permanentlyBanned = true
+                    },
                 )
                 OnboardingStage.PERMISSIONS -> PermissionGauntlet(
                     onComplete = { stage = OnboardingStage.WALLET_PARODY },
@@ -120,11 +135,84 @@ private fun UselessCalculatorApp(onQuit: () -> Unit) {
 }
 
 @Composable
-private fun TermsScreen(onAccept: () -> Unit, onDecline: () -> Unit) {
+private fun PermanentlyBannedScreen(onQuit: () -> Unit) {
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(18.dp),
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+        ) {
+            Text("10", fontSize = 92.sp, fontWeight = FontWeight.Light, color = Color(0xFF555555))
+            listOf(
+                listOf("AC", "+/−", "%", "÷"),
+                listOf("7", "8", "9", "×"),
+                listOf("4", "5", "6", "−"),
+                listOf("1", "2", "3", "+"),
+            ).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    row.forEachIndexed { index, label ->
+                        Card(
+                            modifier = Modifier.size(72.dp),
+                            shape = RoundedCornerShape(50.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (index == 3) Color(0xFF9A6500) else Color(0xFF202020),
+                            ),
+                        ) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(label, fontSize = 25.sp, color = Color(0xFF777777), fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Card(
+            modifier = Modifier.align(Alignment.Center).padding(28.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF272727)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 18.dp),
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    "You are permanently\nbanned from using\nCalculator",
+                    modifier = Modifier.padding(28.dp),
+                    textAlign = TextAlign.Center,
+                    fontSize = 23.sp,
+                    lineHeight = 27.sp,
+                    fontWeight = FontWeight.Black,
+                )
+                HorizontalDivider(color = Color.White.copy(alpha = 0.16f))
+                Text(
+                    "Pizza orthodoxy violation recorded locally. Clear app data or uninstall to appeal to nobody.",
+                    modifier = Modifier.padding(18.dp),
+                    textAlign = TextAlign.Center,
+                    color = Color(0xFFFFD60A),
+                    fontWeight = FontWeight.Bold,
+                )
+                HorizontalDivider(color = Color.White.copy(alpha = 0.16f))
+                Text(
+                    "OK",
+                    modifier = Modifier.fillMaxWidth().clickable(onClick = onQuit).padding(18.dp),
+                    textAlign = TextAlign.Center,
+                    color = Color(0xFF6EA8FF),
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TermsScreen(
+    onAccept: () -> Unit,
+    onDecline: () -> Unit,
+    onPermanentBan: () -> Unit,
+) {
     val scroll = rememberScrollState()
     var readEverything by rememberSaveable { mutableStateOf(false) }
     var waiveCommonSense by rememberSaveable { mutableStateOf(false) }
     var acceptPremiumMath by rememberSaveable { mutableStateOf(false) }
+    var pizzaOrthodoxy by rememberSaveable { mutableStateOf(false) }
+    val yellowMeansDecline = rememberSaveable { Random.nextBoolean() }
     val reachedBottom by remember {
         derivedStateOf { scroll.maxValue > 0 && scroll.value >= scroll.maxValue - 4 }
     }
@@ -148,7 +236,7 @@ private fun TermsScreen(onAccept: () -> Unit, onDecline: () -> Unit) {
                 Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Icon(Icons.Rounded.Warning, contentDescription = null, tint = Color(0xFFFFD60A))
                     Text(
-                        "SATIRE: these terms have no legal purpose. The app stores nothing, uses no network, and exists to mock hostile onboarding.",
+                        "SATIRE: these terms have no legal purpose. The app stores only a local ban flag, uses no network, and exists to mock hostile onboarding.",
                         fontWeight = FontWeight.Bold,
                     )
                 }
@@ -174,15 +262,49 @@ private fun TermsScreen(onAccept: () -> Unit, onDecline: () -> Unit) {
                 "I understand arithmetic may be a premium feature.",
                 acceptPremiumMath,
             ) { acceptPremiumMath = it }
-            Button(
-                onClick = onAccept,
-                enabled = reachedBottom && readEverything && waiveCommonSense && acceptPremiumMath,
-                modifier = Modifier.fillMaxWidth().height(58.dp),
-            ) {
-                Text("ACCEPT EVERYTHING FOREVER", fontWeight = FontWeight.Black)
+            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF3B0B14))) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("MANDATORY PIZZA ORTHODOXY", fontWeight = FontWeight.Black, color = Color(0xFFFFD60A))
+                    Text("Choose carefully. One answer creates a permanent local ban.")
+                    Button(
+                        onClick = { pizzaOrthodoxy = true },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            if (pizzaOrthodoxy) "✓ I DO NOT DISAGREE: THE WORST TURD IS A PIZZA"
+                            else "I DO NOT DISAGREE: THE WORST TURD IS A PIZZA",
+                            fontWeight = FontWeight.Black,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                    OutlinedButton(onClick = onPermanentBan, modifier = Modifier.fillMaxWidth()) {
+                        Text("I disagree — permanently ban me")
+                    }
+                }
             }
-            OutlinedButton(onClick = onDecline, modifier = Modifier.fillMaxWidth()) {
-                Text("Decline, erase progress, and quit")
+            val canAccept = reachedBottom && readEverything && waiveCommonSense &&
+                acceptPremiumMath && pizzaOrthodoxy
+            if (yellowMeansDecline) {
+                Button(
+                    onClick = onDecline,
+                    modifier = Modifier.fillMaxWidth().height(58.dp),
+                ) {
+                    Text("DECLINE EVERYTHING AND QUIT", fontWeight = FontWeight.Black)
+                }
+                OutlinedButton(onClick = onAccept, enabled = canAccept, modifier = Modifier.fillMaxWidth()) {
+                    Text("Accept using the suspicious grey button")
+                }
+            } else {
+                Button(
+                    onClick = onAccept,
+                    enabled = canAccept,
+                    modifier = Modifier.fillMaxWidth().height(58.dp),
+                ) {
+                    Text("ACCEPT EVERYTHING FOREVER", fontWeight = FontWeight.Black)
+                }
+                OutlinedButton(onClick = onDecline, modifier = Modifier.fillMaxWidth()) {
+                    Text("Decline, erase progress, and quit")
+                }
             }
             Text(
                 if (reachedBottom) "You somehow reached the bottom." else "Keep scrolling. Freedom is disabled.",
@@ -211,6 +333,7 @@ private fun PermissionGauntlet(onComplete: () -> Unit, onDenied: () -> Unit) {
     val context = LocalContext.current
     val demands = remember { permissionDemands() }
     var index by rememberSaveable { mutableIntStateOf(0) }
+    val yellowMeansDeny = rememberSaveable(index) { Random.nextBoolean() }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) index++ else onDenied()
     }
@@ -249,14 +372,29 @@ private fun PermissionGauntlet(onComplete: () -> Unit, onDenied: () -> Unit) {
             }
         }
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button(
-                onClick = { launcher.launch(demand.permission) },
-                modifier = Modifier.fillMaxWidth().height(60.dp),
-            ) {
-                Text("REQUEST ${demand.title.uppercase()}", fontWeight = FontWeight.Black)
-            }
-            OutlinedButton(onClick = onDenied, modifier = Modifier.fillMaxWidth()) {
-                Text("Deny and lose all progress")
+            if (yellowMeansDeny) {
+                Button(
+                    onClick = onDenied,
+                    modifier = Modifier.fillMaxWidth().height(60.dp),
+                ) {
+                    Text("DENY, DECLINE, AND LOSE EVERYTHING", fontWeight = FontWeight.Black)
+                }
+                OutlinedButton(
+                    onClick = { launcher.launch(demand.permission) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Allow using the boring grey button")
+                }
+            } else {
+                Button(
+                    onClick = { launcher.launch(demand.permission) },
+                    modifier = Modifier.fillMaxWidth().height(60.dp),
+                ) {
+                    Text("REQUEST ${demand.title.uppercase()}", fontWeight = FontWeight.Black)
+                }
+                OutlinedButton(onClick = onDenied, modifier = Modifier.fillMaxWidth()) {
+                    Text("Deny and lose all progress")
+                }
             }
         }
     }
@@ -418,7 +556,6 @@ private fun permissionDemands(): List<PermissionDemand> = buildList {
     add(PermissionDemand(Manifest.permission.ACCESS_FINE_LOCATION, "Precise location", "Required to determine whether arithmetic is legal in your postcode."))
     add(PermissionDemand(Manifest.permission.READ_PHONE_STATE, "Phone access", "Required to confirm this rectangular object is allegedly a phone."))
     add(PermissionDemand(Manifest.permission.READ_CALL_LOG, "Call-log access", "Required to count how often you called someone better at mathematics."))
-    add(PermissionDemand(Manifest.permission.BODY_SENSORS, "Body-sensor access", "Required to measure your rising blood pressure."))
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         add(PermissionDemand(Manifest.permission.ACTIVITY_RECOGNITION, "Activity access", "Required to detect the exact moment you walk away."))
     }
@@ -438,10 +575,10 @@ private fun permissionDemands(): List<PermissionDemand> = buildList {
     }
 }
 
-private val termsClauses: List<String> = buildList {
+internal val termsClauses: List<String> = buildList {
     add("These Terms are parody, confer no meaningful rights, and are deliberately longer than the software deserves.")
     add("The word Calculator may refer to a screen containing buttons that resemble arithmetic controls without producing arithmetic.")
-    repeat(72) { index ->
+    repeat(320) { index ->
         add(
             when (index % 8) {
                 0 -> "You grant the Calculator permission to contemplate the philosophical concept of the number ${index + 1}."
