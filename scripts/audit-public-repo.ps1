@@ -13,6 +13,16 @@ if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction Sile
 $root = (Resolve-Path -LiteralPath $RepositoryRoot).Path
 $gitArgs = @("-c", "safe.directory=$($root.Replace('\', '/'))", "-C", $root)
 $findings = [System.Collections.Generic.List[string]]::new()
+$auditStage = "initialization"
+
+trap {
+    $exceptionType = $_.Exception.GetType().Name
+    Write-Host "[FAIL] Audit runtime error during $auditStage ($exceptionType)" -ForegroundColor Red
+    if ($env:GITHUB_ACTIONS -eq "true") {
+        Write-Output "::error title=Audit runtime error::Stage $auditStage failed with $exceptionType"
+    }
+    exit 2
+}
 
 function Invoke-Git {
     param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
@@ -49,6 +59,7 @@ $secretPatterns = @(
 $combinedPattern = $secretPatterns -join "|"
 
 Write-Host "Scanning reachable Git history..."
+$auditStage = "history-pattern-scan"
 $commits = @(Invoke-Git rev-list --all)
 foreach ($commit in $commits) {
     $matches = @(& git @gitArgs grep -I -l -E $combinedPattern $commit -- ":!*.apk" 2>$null)
@@ -62,6 +73,7 @@ foreach ($commit in $commits) {
 }
 
 Write-Host "Scanning tracked and untracked working files..."
+$auditStage = "working-file-scan"
 $workingFiles = @(Invoke-Git ls-files --cached --others --exclude-standard)
 foreach ($relativePath in $workingFiles) {
     $path = Join-Path $root $relativePath
@@ -83,6 +95,7 @@ foreach ($relativePath in $workingFiles) {
 }
 
 Write-Host "Scanning history for sensitive filenames..."
+$auditStage = "history-filename-scan"
 $sensitiveNamePattern = "(^|/)(\.env($|\.)|local\.properties$|google-services\.json$|.*\.(jks|keystore|p12|pfx|pem|key)$|credentials?.*\.json$|secrets?\.(properties|json|ya?ml)$|LINKEDIN_POST\.md$)"
 $objectPaths = @(Invoke-Git rev-list --objects --all | ForEach-Object {
     $parts = $_ -split " ", 2
@@ -97,6 +110,7 @@ foreach ($path in $objectPaths) {
 }
 
 Write-Host "Checking public commit identities..."
+$auditStage = "commit-identity-scan"
 $emails = @(Invoke-Git log --all --format=%ae | Sort-Object -Unique)
 foreach ($email in $emails) {
     if ($email -and $email -notmatch "@users\.noreply\.github\.com$") {
@@ -105,6 +119,7 @@ foreach ($email in $emails) {
 }
 
 Write-Host "Checking APK containers for sensitive entries and local paths..."
+$auditStage = "apk-container-scan"
 if (-not ("System.IO.Compression.ZipFile" -as [type])) {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
 }
