@@ -6,6 +6,9 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue) {
+    $PSNativeCommandUseErrorActionPreference = $false
+}
 
 $root = (Resolve-Path -LiteralPath $RepositoryRoot).Path
 $gitArgs = @("-c", "safe.directory=$($root.Replace('\', '/'))", "-C", $root)
@@ -98,7 +101,9 @@ foreach ($email in $emails) {
 }
 
 Write-Host "Checking APK containers for sensitive entries and local paths..."
-Add-Type -AssemblyName System.IO.Compression.FileSystem
+if (-not ("System.IO.Compression.ZipFile" -as [type])) {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+}
 $apks = @(Invoke-Git ls-files "*.apk")
 foreach ($relativePath in $apks) {
     $path = Join-Path $root $relativePath
