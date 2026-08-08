@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to publish
+        required: true
+        default: v1.4.0
 
 permissions:
   contents: write
@@ -12,6 +18,8 @@ jobs:
   release:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     steps:
       - name: Check out tagged source
         uses: actions/checkout@v4
@@ -20,7 +28,7 @@ jobs:
         id: asset
         shell: bash
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${RELEASE_TAG#v}"
           apk="GreaterArt-${version}-debug.apk"
           test -f "$apk"
           echo "apk=$apk" >> "$GITHUB_OUTPUT"
@@ -29,8 +37,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
-          gh release create "$GITHUB_REF_NAME"
+          gh release create "$RELEASE_TAG"
           "${{ steps.asset.outputs.apk }}"
           --verify-tag
-          --title "Greater Art ${GITHUB_REF_NAME}"
+          --title "Greater Art ${RELEASE_TAG}"
           --generate-notes
