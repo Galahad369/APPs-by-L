@@ -1,0 +1,36 @@
+name: Publish GitHub Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v4
+
+      - name: Resolve versioned APK
+        id: asset
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          apk="GreaterArt-${version}-debug.apk"
+          test -f "$apk"
+          echo "apk=$apk" >> "$GITHUB_OUTPUT"
+
+      - name: Create release and upload APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME"
+          "${{ steps.asset.outputs.apk }}"
+          --verify-tag
+          --title "Greater Art ${GITHUB_REF_NAME}"
+          --generate-notes
