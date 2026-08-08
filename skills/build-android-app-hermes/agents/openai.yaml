@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build Android Apps with Hermes"
+  short_description: "Build and ship native Android apps methodically"
+  default_prompt: "Use $build-android-app-hermes to build and verify a native Android app from my requirements."

@@ -28,3 +28,19 @@ The wallet-password screen is a non-editable warning parody. Never enter real cr
 Ready APK: [`useless-calculator/UselessCalculator-v1.1.0-debug.apk`](useless-calculator/UselessCalculator-v1.1.0-debug.apk)
 
 Each folder is a standalone Android Studio project with its own Gradle wrapper.
+
+## Portable Hermes skills
+
+The [`skills/`](skills/) directory contains two reusable, CC-Switch-compatible skills:
+
+- `build-android-app-hermes` builds, verifies, packages, and prepares native Android apps for delivery.
+- `learn-reusable-skill` turns a completed workflow, conversation, file set, or URL collection into one transferable Hermes skill.
+
+To add this private repository to CC-Switch, open **Skills -> Repository Management -> Add Repository** and use:
+
+- Owner: `Galahad369`
+- Name: `greater-art`
+- Branch: `main`
+- Subdirectory: `skills`
+
+CC-Switch can then copy or link an installed skill into its supported Codex, Claude Code, Gemini, OpenCode, and Hermes skill directories. The skills contain no credentials or machine-specific paths.
