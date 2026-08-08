@@ -1,0 +1,27 @@
+*.iml
+.gradle/
+/local.properties
+/.idea/
+/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+app/build/
+
+# Private local writing and configuration
+LINKEDIN_POST.md
+.env
+.env.*
+!.env.example
+secrets.properties
+keystore.properties
+google-services.json
+
+# Signing keys and credentials must never be committed
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+credentials*.json

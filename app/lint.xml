@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lint>
+    <!-- Explicitly accept the Media3 configuration APIs used by the local player. -->
+    <issue id="UnsafeOptInUsageError">
+        <option
+            name="opt-in"
+            value="androidx.media3.common.util.UnstableApi" />
+    </issue>
+    <!-- Adaptive icons require a v26-qualified resource despite this app's minSdk being 26. -->
+    <issue id="ObsoleteSdkInt" severity="ignore" />
+</lint>
