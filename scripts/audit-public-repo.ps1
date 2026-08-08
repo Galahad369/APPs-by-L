@@ -23,6 +23,10 @@ function Add-Finding {
     param([string]$Message)
     $findings.Add($Message)
     Write-Host "[FAIL] $Message" -ForegroundColor Red
+    if ($env:GITHUB_ACTIONS -eq "true") {
+        $annotation = $Message.Replace("%", "%25").Replace("`r", "%0D").Replace("`n", "%0A")
+        Write-Output "::error title=Public repository audit::$annotation"
+    }
 }
 
 Invoke-Git rev-parse --is-inside-work-tree | Out-Null
