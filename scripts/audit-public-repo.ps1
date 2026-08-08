@@ -76,21 +76,23 @@ Write-Host "Scanning tracked and untracked working files..."
 $auditStage = "working-file-scan"
 $workingFiles = @(Invoke-Git ls-files --cached --others --exclude-standard)
 foreach ($relativePath in $workingFiles) {
-    $path = Join-Path $root $relativePath
-    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-        continue
-    }
-    $item = Get-Item -LiteralPath $path
-    if ($item.Length -gt 5MB -or $item.Extension -eq ".apk") {
-        continue
-    }
     try {
+        $path = Join-Path $root $relativePath
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            continue
+        }
+        $item = Get-Item -LiteralPath $path
+        if ($item.Length -gt 5MB -or $item.Extension -eq ".apk") {
+            continue
+        }
         $content = [System.IO.File]::ReadAllText($path)
-    } catch {
+        if ($content -match $combinedPattern) {
+            Add-Finding "Credential or local-path pattern in working file: $relativePath"
+        }
+    } catch [System.IO.IOException] {
         continue
-    }
-    if ($content -match $combinedPattern) {
-        Add-Finding "Credential or local-path pattern in working file: $relativePath"
+    } catch [System.UnauthorizedAccessException] {
+        continue
     }
 }
 
