@@ -1,15 +1,16 @@
 *.iml
-.gradle/
-/local.properties
-/.idea/
-/build/
-/captures/
-.externalNativeBuild/
-.cxx/
-app/build/
+**/.gradle/
+**/.kotlin/
+**/local.properties
+**/.idea/
+**/build/
+**/captures/
+**/.externalNativeBuild/
+**/.cxx/
+**/app/build/
 
 # Private local writing and configuration
-LINKEDIN_POST.md
+**/LINKEDIN_POST.md
 .env
 .env.*
 !.env.example

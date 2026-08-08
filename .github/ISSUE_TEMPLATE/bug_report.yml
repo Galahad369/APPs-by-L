@@ -6,6 +6,15 @@ body:
   - type: markdown
     attributes:
       value: Greater Art is offline. Never attach private media or signing files.
+  - type: dropdown
+    id: app
+    attributes:
+      label: App
+      options:
+        - Greater Art
+        - Useless Calculator satire
+    validations:
+      required: true
   - type: input
     id: version
     attributes:

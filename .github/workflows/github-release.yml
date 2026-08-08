@@ -29,7 +29,7 @@ jobs:
         shell: bash
         run: |
           version="${RELEASE_TAG#v}"
-          apk="GreaterArt-${version}-debug.apk"
+          apk="greater-art/GreaterArt-${version}-debug.apk"
           test -f "$apk"
           echo "apk=$apk" >> "$GITHUB_OUTPUT"
 
