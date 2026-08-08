@@ -26,3 +26,22 @@ google-services.json
 *.pem
 *.key
 credentials*.json
+
+# Authentication, identity, and encrypted-vault files
+.authinfo
+.netrc
+.npmrc
+.pypirc
+*.token
+*.secret
+*.kdbx
+*.ovpn
+*.mobileprovision
+*.provisionprofile
+*.gpg
+*.asc
+id_rsa*
+id_ed25519*
+**/.secrets/
+**/secrets/
+**/credentials/

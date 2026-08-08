@@ -1,46 +1,71 @@
-# Offline Android satire lab
+# APPs by L
 
-This private monorepo contains two deliberately opposite Android apps.
+A public, expandable collection of experimental Android apps. Each app lives in its own top-level folder, with shared automation and transferable agent skills kept at the repository root.
 
-## `greater-art/`
+> **Vibe-coded disclosure:** These apps were built through iterative conversations with AI coding agents. The human supplied the ideas, taste, constraints, testing feedback, and final decisions; AI produced substantial code, documentation, and automation. “Vibe-coded” is a description of the workflow, not a claim that the software is flawless.
 
-Greater Art is the real app: a private, ad-free, offline local audio and video player. It requests no Internet permission and contains no analytics, accounts, subscriptions, telemetry, or cloud features.
+## Apps
 
-See [`greater-art/README.md`](greater-art/README.md) for installation, supported formats, settings, and build instructions.
+### `greater-art/`
 
-Ready APK: [`greater-art/GreaterArt-v1.4.0-debug.apk`](greater-art/GreaterArt-v1.4.0-debug.apk)
+Greater Art is an ad-free, offline local audio and video player. It requests no Internet permission and contains no analytics, accounts, subscriptions, telemetry, or cloud features.
 
-## `useless-calculator/`
+- Documentation: [`greater-art/README.md`](greater-art/README.md)
+- Ready APK: [`greater-art/GreaterArt-v1.4.0-debug.apk`](greater-art/GreaterArt-v1.4.0-debug.apk)
 
-Useless Calculator is satire about hostile mobile-app onboarding. It presents more than 300 absurd terms, randomly swaps the meaning of yellow action buttons, requests permissions it never uses, erases onboarding progress when permission is denied, locally bans pizza dissenters, and blocks the equals button behind a fake `$29.99/month` paywall.
+### `useless-calculator/`
 
-Despite the joke, it is intentionally harmless:
+Useless Calculator is harmless satire about hostile mobile-app onboarding. It presents absurd terms and unused permission prompts before blocking `=` behind a fake `$29.99/month` subscription screen.
 
-- no Internet permission
-- no analytics or advertising SDK
-- no notification permission or background spam
-- no real payment or billing integration
+Despite the joke, it includes:
+
+- no Internet or notification permission
+- no analytics, advertising, billing, or background service
 - no reading, storing, or transmitting granted data
 - no editable password, wallet-secret, seed-phrase, or credential field
 
-The wallet-password screen is a non-editable warning parody. Never enter real credentials into random apps.
+- Documentation: [`useless-calculator/README.md`](useless-calculator/README.md)
+- Ready APK: [`useless-calculator/UselessCalculator-v1.1.0-debug.apk`](useless-calculator/UselessCalculator-v1.1.0-debug.apk)
 
-Ready APK: [`useless-calculator/UselessCalculator-v1.1.0-debug.apk`](useless-calculator/UselessCalculator-v1.1.0-debug.apk)
+Each app folder is a standalone Android Studio project with its own Gradle wrapper. Future apps should follow the same one-folder-per-app structure.
 
-Each folder is a standalone Android Studio project with its own Gradle wrapper.
+## Security and privacy
 
-## Portable Hermes skills
+This public repository is intentionally designed to contain no personal secrets, production credentials, signing keys, analytics identifiers, or machine-specific paths.
 
-The [`skills/`](skills/) directory contains two reusable, CC-Switch-compatible skills:
+- Commit metadata uses a pseudonym and a GitHub noreply address.
+- Keystores, credentials, local Android configuration, environment files, and private writing are ignored.
+- `scripts/audit-public-repo.ps1` scans the working tree and reachable Git history for high-confidence credential patterns, sensitive filenames, local user paths, and public commit emails.
+- GitHub Actions runs that audit on pushes, pull requests, and a weekly schedule.
+- CodeQL analyzes Kotlin/Java code, dependency review checks pull requests, and Dependabot monitors Gradle and workflow dependencies.
+- Workflow dependencies are pinned to immutable commit SHAs and run with minimum permissions.
+
+The included APKs are personal debug builds. Never treat a public repository as a password vault, and never paste a live credential into an issue, source file, commit, or AI prompt. See [`SECURITY.md`](SECURITY.md) for private reporting guidance.
+
+Run the local audit from the repository root:
+
+```powershell
+pwsh -NoProfile -File scripts/audit-public-repo.ps1
+```
+
+## Portable agent skills
+
+The [`skills/`](skills/) directory contains two reusable skills:
 
 - `build-android-app-hermes` builds, verifies, packages, and prepares native Android apps for delivery.
 - `learn-reusable-skill` turns a completed workflow, conversation, file set, or URL collection into one transferable Hermes skill.
 
-To add this private repository to CC-Switch, open **Skills -> Repository Management -> Add Repository** and use:
+To add this repository to CC-Switch, open **Skills -> Repository Management -> Add Repository** and use:
 
 - Owner: `Galahad369`
-- Name: `greater-art`
+- Name: `APPs-by-L`
 - Branch: `main`
 - Subdirectory: `skills`
 
-CC-Switch can then copy or link an installed skill into its supported Codex, Claude Code, Gemini, OpenCode, and Hermes skill directories. The skills contain no credentials or machine-specific paths.
+CC-Switch can then copy or link installed skills into supported Codex, Claude Code, Gemini, OpenCode, and Hermes skill directories.
+
+## Build verification
+
+GitHub Actions tests, lints, and builds each Android project. Local commands are also documented in the individual app folders.
+
+The code and APKs are provided for experimentation and personal sideloading. Review the source, permissions, and build output before installing software from any public repository.
