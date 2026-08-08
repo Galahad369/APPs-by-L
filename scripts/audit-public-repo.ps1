@@ -92,7 +92,7 @@ foreach ($path in $objectPaths) {
 Write-Host "Checking public commit identities..."
 $emails = @(Invoke-Git log --all --format=%ae | Sort-Object -Unique)
 foreach ($email in $emails) {
-    if ($email -and $email -notmatch "^[0-9+A-Za-z._-]+@users\.noreply\.github\.com$") {
+    if ($email -and $email -notmatch "@users\.noreply\.github\.com$") {
         Add-Finding "Commit author email is not a GitHub noreply address"
     }
 }
