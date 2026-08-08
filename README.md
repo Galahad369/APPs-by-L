@@ -4,7 +4,7 @@ Greater Art is a private, fully offline Android player for local video and audio
 
 ## Install the ready-built app
 
-The project folder includes `GreaterArt-v1.3.1-debug.apk`. Copy it to the phone, open it, and allow installation from the Files app if Android asks. It is signed with this computer's Android debug key for personal sideloading.
+The project folder includes `GreaterArt-v1.4.0-debug.apk`. Copy it to the phone, open it, and allow installation from the Files app if Android asks. It is signed with this computer's Android debug key for personal sideloading.
 
 ## First launch
 
@@ -25,6 +25,11 @@ The app recursively scans Download. It does not depend on, display, or hardcode 
 - Stops background thumbnail work immediately when playback is requested
 - Starts playback by tapping anywhere on a media row
 - Includes custom drag ordering and Name A-Z / Name Z-A sorting
+- Includes a complete local Settings screen with system/light/dark themes
+- Offers Small, Medium, and Large library rows; Small is the compact default
+- Can hide thumbnails, file details, or thumbnail format badges independently
+- Lets the user control thumbnail preloading, resume behavior, automatic Picture-in-Picture, speed, and repeat mode
+- Includes safe local rescan, thumbnail-cache clearing, and settings reset actions
 - Includes previous, play/pause, next, seek, repeat, and speeds from 0.25x to 3x
 - Uses repeat-one by default
 - Continues audio through a Media3 session with notification and lock-screen controls
@@ -61,6 +66,12 @@ For the cleanest high-resolution route, use 1x speed and a DAC or audio output t
 
 To generate another APK, use **Build -> Build APK(s)**. Android Studio writes it to `app/build/outputs/apk/debug/app-debug.apk`.
 
+## GitHub builds and releases
+
+The repository includes an Android CI workflow that runs unit tests, lint, and a debug APK build on pushes, pull requests, and manual dispatches. Versioned installable APKs are also attached to GitHub Releases for straightforward sideloading.
+
+Signing keys, local properties, credentials, environment files, and private writing are excluded by `.gitignore`. Never commit a release keystore; losing the signing key also prevents future Android upgrades from being installed over the same package.
+
 ## Storage and privacy
 
 This personal sideload build uses `MANAGE_EXTERNAL_STORAGE` to scan Download and its subfolders. It is not intended for Google Play. A Play Store version should use the Storage Access Framework folder picker instead; scanner comments describe that alternative.
@@ -70,3 +81,15 @@ The thumbnail cache lives inside Android's private app cache. It contains only r
 ## Animated walkthrough
 
 Open `presentation/index.html` in any modern browser. It is a standalone offline presentation with no CDN, font download, or external asset requests.
+
+## Fuck "Subscribe to Remove Ads"
+
+- This app is free and offline. It contains no ads, analytics, or subscriptions.
+- It does not require an account or network access. It does not track you or your media. It does not send any data to any server.
+- It does not ask for money.
+- It does not nag you to pay for features.
+- It does not have a "Subscribe to Remove Ads" button.
+
+* Just like the old days, you can just copy your media to your phone and play it. No strings attached.
+* Just like Clippy, not invasive, not annoying, not tracking you, not asking for money, not nagging you to pay for features. Just trying to help.
+* Fuck Dystopian "Terms and Conditions", no one read that shit, and no one should have to. Just copy your media to your phone and play it. No strings attached.

@@ -3,6 +3,7 @@ package com.local.listentomusic.data
 import android.content.Context
 import android.util.Base64
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -22,7 +23,18 @@ data class UserPreferences(
     val lastPositionMs: Long = 0L,
     val playbackSpeed: Float = 1f,
     val repeatMode: Int = Player.REPEAT_MODE_ONE,
+    val libraryRowSize: LibraryRowSize = LibraryRowSize.SMALL,
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val showThumbnails: Boolean = true,
+    val showFileDetails: Boolean = true,
+    val showTypeBadge: Boolean = true,
+    val preloadThumbnails: Boolean = true,
+    val resumePlayback: Boolean = true,
+    val autoPictureInPicture: Boolean = true,
 )
+
+enum class LibraryRowSize(val label: String) { SMALL("Small"), MEDIUM("Medium"), LARGE("Large") }
+enum class ThemeMode(val label: String) { SYSTEM("System"), LIGHT("Light"), DARK("Dark") }
 
 class AppPreferences(private val context: Context) {
     private object Keys {
@@ -32,6 +44,14 @@ class AppPreferences(private val context: Context) {
         val lastPosition = longPreferencesKey("last_position_ms")
         val speed = floatPreferencesKey("playback_speed")
         val repeatMode = longPreferencesKey("repeat_mode")
+        val libraryRowSize = stringPreferencesKey("library_row_size")
+        val themeMode = stringPreferencesKey("theme_mode")
+        val showThumbnails = booleanPreferencesKey("show_thumbnails")
+        val showFileDetails = booleanPreferencesKey("show_file_details")
+        val showTypeBadge = booleanPreferencesKey("show_type_badge")
+        val preloadThumbnails = booleanPreferencesKey("preload_thumbnails")
+        val resumePlayback = booleanPreferencesKey("resume_playback")
+        val autoPictureInPicture = booleanPreferencesKey("auto_picture_in_picture")
     }
 
     val values: Flow<UserPreferences> = context.dataStore.data.map { prefs ->
@@ -44,6 +64,17 @@ class AppPreferences(private val context: Context) {
             lastPositionMs = prefs[Keys.lastPosition] ?: 0L,
             playbackSpeed = prefs[Keys.speed] ?: 1f,
             repeatMode = (prefs[Keys.repeatMode] ?: Player.REPEAT_MODE_ONE.toLong()).toInt(),
+            libraryRowSize = enumValueOrDefault(
+                prefs[Keys.libraryRowSize],
+                LibraryRowSize.SMALL,
+            ),
+            themeMode = enumValueOrDefault(prefs[Keys.themeMode], ThemeMode.SYSTEM),
+            showThumbnails = prefs[Keys.showThumbnails] ?: true,
+            showFileDetails = prefs[Keys.showFileDetails] ?: true,
+            showTypeBadge = prefs[Keys.showTypeBadge] ?: true,
+            preloadThumbnails = prefs[Keys.preloadThumbnails] ?: true,
+            resumePlayback = prefs[Keys.resumePlayback] ?: true,
+            autoPictureInPicture = prefs[Keys.autoPictureInPicture] ?: true,
         )
     }
 
@@ -71,6 +102,34 @@ class AppPreferences(private val context: Context) {
         }
     }
 
+    suspend fun setLibraryRowSize(value: LibraryRowSize) = edit { it[Keys.libraryRowSize] = value.name }
+    suspend fun setThemeMode(value: ThemeMode) = edit { it[Keys.themeMode] = value.name }
+    suspend fun setShowThumbnails(value: Boolean) = edit { it[Keys.showThumbnails] = value }
+    suspend fun setShowFileDetails(value: Boolean) = edit { it[Keys.showFileDetails] = value }
+    suspend fun setShowTypeBadge(value: Boolean) = edit { it[Keys.showTypeBadge] = value }
+    suspend fun setPreloadThumbnails(value: Boolean) = edit { it[Keys.preloadThumbnails] = value }
+    suspend fun setResumePlayback(value: Boolean) = edit { it[Keys.resumePlayback] = value }
+    suspend fun setAutoPictureInPicture(value: Boolean) = edit { it[Keys.autoPictureInPicture] = value }
+
+    suspend fun resetAppSettings() {
+        context.dataStore.edit {
+            it.remove(Keys.libraryRowSize)
+            it.remove(Keys.themeMode)
+            it.remove(Keys.showThumbnails)
+            it.remove(Keys.showFileDetails)
+            it.remove(Keys.showTypeBadge)
+            it.remove(Keys.preloadThumbnails)
+            it.remove(Keys.resumePlayback)
+            it.remove(Keys.autoPictureInPicture)
+            it[Keys.speed] = 1f
+            it[Keys.repeatMode] = Player.REPEAT_MODE_ONE.toLong()
+        }
+    }
+
+    private suspend inline fun edit(crossinline block: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
+        context.dataStore.edit { block(it) }
+    }
+
     private fun decodeOrder(encoded: String): List<String> = encoded
         .lineSequence()
         .filter { it.isNotBlank() }
@@ -80,4 +139,7 @@ class AppPreferences(private val context: Context) {
             }.getOrNull()
         }
         .toList()
+
+    private inline fun <reified T : Enum<T>> enumValueOrDefault(value: String?, fallback: T): T =
+        runCatching { enumValueOf<T>(value ?: fallback.name) }.getOrDefault(fallback)
 }

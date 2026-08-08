@@ -79,6 +79,7 @@ class MainActivity : ComponentActivity() {
             playerScreenVisible &&
             playback.isVideo &&
             playback.isPlaying &&
+            viewModel.settings.value.autoPictureInPicture &&
             !isInPictureInPictureMode
         ) {
             updatePictureInPictureParams()
@@ -98,7 +99,8 @@ class MainActivity : ComponentActivity() {
 
     private fun updatePictureInPictureParams() {
         val playback = viewModel.playback.value
-        val autoEnter = playerScreenVisible && playback.isVideo && playback.isPlaying
+        val autoEnter = playerScreenVisible && playback.isVideo && playback.isPlaying &&
+            viewModel.settings.value.autoPictureInPicture
         setPictureInPictureParams(buildPictureInPictureParams(autoEnter))
     }
 

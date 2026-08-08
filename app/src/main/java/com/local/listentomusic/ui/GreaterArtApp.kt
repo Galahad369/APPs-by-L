@@ -20,7 +20,7 @@ import com.local.listentomusic.MainViewModel
 import com.local.listentomusic.ui.components.MiniPlayer
 import com.local.listentomusic.ui.theme.GreaterArtTheme
 
-private enum class Screen { LIBRARY, NOW_PLAYING }
+private enum class Screen { LIBRARY, NOW_PLAYING, SETTINGS }
 
 @Composable
 fun GreaterArtApp(
@@ -34,15 +34,16 @@ fun GreaterArtApp(
     val library by viewModel.library.collectAsStateWithLifecycle()
     val playback by viewModel.playback.collectAsStateWithLifecycle()
     val controller by viewModel.controller.collectAsStateWithLifecycle()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
     var screen by rememberSaveable { mutableStateOf(Screen.LIBRARY) }
 
     LaunchedEffect(screen) {
         onPlayerScreenChanged(screen == Screen.NOW_PLAYING)
     }
 
-    BackHandler(enabled = screen == Screen.NOW_PLAYING) { screen = Screen.LIBRARY }
+    BackHandler(enabled = screen != Screen.LIBRARY) { screen = Screen.LIBRARY }
 
-    GreaterArtTheme {
+    GreaterArtTheme(themeMode = settings.themeMode) {
         Surface(modifier = Modifier.fillMaxSize()) {
             when (screen) {
                 Screen.LIBRARY -> Scaffold(
@@ -60,6 +61,7 @@ fun GreaterArtApp(
                 ) { padding ->
                     LibraryScreen(
                         state = library,
+                        preferences = settings,
                         currentPath = playback.currentPath,
                         contentPadding = padding,
                         onGrantStorageAccess = onGrantStorageAccess,
@@ -68,6 +70,7 @@ fun GreaterArtApp(
                         onSortChange = viewModel::setSortMode,
                         onMoveItem = viewModel::moveCustomItem,
                         onLoadThumbnail = viewModel::loadThumbnail,
+                        onOpenSettings = { screen = Screen.SETTINGS },
                         onPlay = {
                             viewModel.play(it)
                             screen = Screen.NOW_PLAYING
@@ -89,6 +92,24 @@ fun GreaterArtApp(
                         onSpeed = viewModel::setSpeed,
                         onRepeat = viewModel::cycleRepeatMode,
                     )
+                Screen.SETTINGS -> SettingsScreen(
+                    preferences = settings,
+                    playback = playback,
+                    onBack = { screen = Screen.LIBRARY },
+                    onRowSize = viewModel::setLibraryRowSize,
+                    onThemeMode = viewModel::setThemeMode,
+                    onShowThumbnails = viewModel::setShowThumbnails,
+                    onShowFileDetails = viewModel::setShowFileDetails,
+                    onShowTypeBadge = viewModel::setShowTypeBadge,
+                    onPreloadThumbnails = viewModel::setPreloadThumbnails,
+                    onResumePlayback = viewModel::setResumePlayback,
+                    onAutoPictureInPicture = viewModel::setAutoPictureInPicture,
+                    onSpeed = viewModel::setSpeed,
+                    onRepeatMode = viewModel::setRepeatMode,
+                    onClearThumbnailCache = viewModel::clearThumbnailCache,
+                    onRescan = viewModel::rescan,
+                    onReset = viewModel::resetAppSettings,
+                )
             }
         }
     }

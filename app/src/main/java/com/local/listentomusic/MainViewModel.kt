@@ -20,6 +20,8 @@ import com.local.listentomusic.data.MediaScanner
 import com.local.listentomusic.data.ScanResult
 import com.local.listentomusic.data.ThumbnailRepository
 import com.local.listentomusic.data.UserPreferences
+import com.local.listentomusic.data.LibraryRowSize
+import com.local.listentomusic.data.ThemeMode
 import com.local.listentomusic.model.MediaFile
 import com.local.listentomusic.model.SortMode
 import com.local.listentomusic.playback.PlaybackService
@@ -80,6 +82,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _controller = MutableStateFlow<MediaController?>(null)
     val controller: StateFlow<MediaController?> = _controller.asStateFlow()
 
+    private val _settings = MutableStateFlow(UserPreferences())
+    val settings: StateFlow<UserPreferences> = _settings.asStateFlow()
+
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var tickerJob: Job? = null
     private var thumbnailPreloadJob: Job? = null
@@ -103,6 +108,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             preferences.values.collect {
                 userPreferences = it
+                _settings.value = it
                 applySortingAndFilter()
             }
         }
@@ -123,11 +129,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     applySortingAndFilter()
                     _library.value = _library.value.copy(status = LibraryStatus.READY)
                     thumbnailPreloadJob?.cancel()
-                    thumbnailPreloadJob = viewModelScope.launch {
+                    thumbnailPreloadJob = if (userPreferences.preloadThumbnails) viewModelScope.launch {
                         // A recursive Download scan can find hundreds of files. Warm the first
                         // library page eagerly; every other preview still loads on demand.
                         thumbnailRepository.preload(orderedFiles.take(MAX_PRELOAD_ITEMS))
-                    }
+                    } else null
                 }
                 is ScanResult.FolderMissing -> {
                     scannedFiles = emptyList()
@@ -191,7 +197,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         lastPlaybackError = null
         val queue = orderedFiles.ifEmpty { listOf(file) }
         val index = queue.indexOfFirst { it.path == file.path }.coerceAtLeast(0)
-        val resumeAt = if (file.path == userPreferences.lastPath) userPreferences.lastPositionMs else 0L
+        val resumeAt = if (userPreferences.resumePlayback && file.path == userPreferences.lastPath) {
+            userPreferences.lastPositionMs
+        } else 0L
         player.setMediaItems(queue.map(MediaFile::toMediaItem), index, resumeAt)
         player.playWhenReady = true
         player.prepare()
@@ -221,6 +229,48 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setSpeed(speed: Float) {
         _controller.value?.playbackParameters = PlaybackParameters(speed)
         _controller.value?.let(::publishPlayback)
+    }
+
+    fun setRepeatMode(mode: Int) {
+        _controller.value?.let {
+            it.repeatMode = mode
+            publishPlayback(it)
+        }
+    }
+
+    fun setLibraryRowSize(value: LibraryRowSize) = updatePreference { preferences.setLibraryRowSize(value) }
+    fun setThemeMode(value: ThemeMode) = updatePreference { preferences.setThemeMode(value) }
+    fun setShowThumbnails(value: Boolean) = updatePreference { preferences.setShowThumbnails(value) }
+    fun setShowFileDetails(value: Boolean) = updatePreference { preferences.setShowFileDetails(value) }
+    fun setShowTypeBadge(value: Boolean) = updatePreference { preferences.setShowTypeBadge(value) }
+    fun setResumePlayback(value: Boolean) = updatePreference { preferences.setResumePlayback(value) }
+    fun setAutoPictureInPicture(value: Boolean) = updatePreference { preferences.setAutoPictureInPicture(value) }
+
+    fun setPreloadThumbnails(value: Boolean) {
+        updatePreference { preferences.setPreloadThumbnails(value) }
+        if (value) {
+            thumbnailPreloadJob?.cancel()
+            thumbnailPreloadJob = viewModelScope.launch {
+                thumbnailRepository.preload(orderedFiles.take(MAX_PRELOAD_ITEMS))
+            }
+        } else {
+            thumbnailPreloadJob?.cancel()
+        }
+    }
+
+    fun clearThumbnailCache() {
+        viewModelScope.launch { thumbnailRepository.clear() }
+    }
+
+    fun resetAppSettings() {
+        viewModelScope.launch {
+            preferences.resetAppSettings()
+            _controller.value?.let {
+                it.playbackParameters = PlaybackParameters(1f)
+                it.repeatMode = Player.REPEAT_MODE_ONE
+                publishPlayback(it)
+            }
+        }
     }
 
     fun cycleRepeatMode() {
@@ -321,6 +371,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 android.Manifest.permission.READ_EXTERNAL_STORAGE,
             ) == android.content.pm.PackageManager.PERMISSION_GRANTED
         }
+    }
+
+    private fun updatePreference(block: suspend () -> Unit) {
+        viewModelScope.launch { block() }
     }
 
     override fun onCleared() {

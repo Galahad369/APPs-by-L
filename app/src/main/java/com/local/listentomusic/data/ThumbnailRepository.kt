@@ -78,6 +78,12 @@ class ThumbnailRepository(context: Context) {
         Unit
     }
 
+    suspend fun clear() = withContext(Dispatchers.IO) {
+        memoryCache.evictAll()
+        cacheDirectory.listFiles()?.forEach { it.delete() }
+        Unit
+    }
+
     private fun generate(file: MediaFile): Bitmap? = when (file.kind) {
         MediaKind.VIDEO -> createVideoThumbnail(file)
         MediaKind.AUDIO -> createEmbeddedArtwork(file)

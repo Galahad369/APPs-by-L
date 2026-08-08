@@ -115,6 +115,21 @@
     .privacy-card { min-height:130px; padding:20px; background:var(--panel); border:1px solid var(--line); border-radius:14px; display:flex; flex-direction:column; justify-content:space-between; }
     .privacy-card strong { font-size:42px; letter-spacing:-.06em; color:var(--accent); }
     .privacy-card span { color:var(--muted); font-size:13px; }
+    .density-demo { width:min(490px,100%); display:grid; gap:12px; }
+    .density-card { display:flex; align-items:center; gap:14px; min-height:72px; padding:12px 15px; border:1px solid var(--line); border-radius:13px; background:rgba(21,25,24,.92); opacity:0; transform:translate3d(22px,0,0); }
+    .active .density-card { animation:density-in .65s var(--ease) forwards; animation-delay:var(--d); }
+    @keyframes density-in { to { opacity:1; transform:translate3d(0,0,0); } }
+    .density-card.selected { border-color:var(--accent); box-shadow:inset 3px 0 0 var(--accent), 0 12px 34px rgba(0,0,0,.18); }
+    .density-thumb { flex:none; aspect-ratio:16/9; border-radius:7px; background:linear-gradient(145deg,#3a5c60,#a6bd83); position:relative; overflow:hidden; }
+    .density-thumb::after { content:"▶"; position:absolute; inset:0; display:grid; place-items:center; color:white; text-shadow:0 2px 7px #000; font-size:11px; }
+    .density-card.small .density-thumb { width:72px; }
+    .density-card.medium .density-thumb { width:100px; }
+    .density-card.large .density-thumb { width:132px; }
+    .density-copy { flex:1; }
+    .density-copy b { display:block; font-size:14px; }
+    .density-copy span { display:block; margin-top:5px; width:72%; height:5px; border-radius:4px; background:#48514d; }
+    .density-choice { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.12em; }
+    .selected .density-choice { color:var(--accent); }
     footer { justify-content: space-between; border-top: 1px solid rgba(255,255,255,.06); }
     .steps { display:flex; gap:7px; align-items:center; }
     .dot { width:24px; height:3px; border:0; padding:0; background:#343a37; cursor:pointer; transition:width .45s var(--ease), background .3s; position:relative; overflow:hidden; }
@@ -167,15 +182,19 @@
         <div class="stage"><div class="diagram"><div class="node" style="--d:.05s"><b>System thumbnail</b><span>fast first choice</span></div><div class="node" style="--d:.2s"><b>Frame extraction</b><span>automatic fallback</span></div><div class="node" style="--d:.35s"><b>Memory LRU</b><span>instant repeat draw</span></div><div class="node" style="--d:.5s"><b>Private disk cache</b><span>survives app restarts</span></div></div></div>
       </section>
       <section class="slide">
-        <div class="copy"><div class="eyebrow">03 · Tap to play</div><h2>The whole row is the play button.</h2><p>One tap prioritizes playback, pauses background thumbnail work, prepares the local queue, and opens the player. Previous, play/pause, and next remain within reach below.</p></div>
+        <div class="copy"><div class="eyebrow">03 · Make it yours</div><h2>Small by default.<br>Yours by choice.</h2><p>The gear opens real local settings. Pick Small, Medium, or Large rows; hide previews or metadata; control theme, resume, repeat, speed, preloading, and automatic floating video.</p><div class="chips"><span class="chip">Saved on-device</span><span class="chip">Cache controls</span><span class="chip">No account</span></div></div>
+        <div class="stage"><div class="density-demo"><div class="density-card small selected" style="--d:.08s"><div class="density-thumb"></div><div class="density-copy"><b>Compact library row</b><span></span></div><div class="density-choice">Small · default</div></div><div class="density-card medium" style="--d:.24s"><div class="density-thumb"></div><div class="density-copy"><b>Balanced library row</b><span></span></div><div class="density-choice">Medium</div></div><div class="density-card large" style="--d:.4s"><div class="density-thumb"></div><div class="density-copy"><b>Full preview row</b><span></span></div><div class="density-choice">Large</div></div></div></div>
+      </section>
+      <section class="slide">
+        <div class="copy"><div class="eyebrow">04 · Tap to play</div><h2>The whole row is the play button.</h2><p>One tap prioritizes playback, pauses background thumbnail work, prepares the local queue, and opens the player. Previous, play/pause, and next remain within reach below.</p></div>
         <div class="stage"><div class="halo"></div><div class="phone"><div class="speaker"></div><div class="screen"><div class="app-head"><div><div class="app-title">Greater Art</div><div class="app-sub">12 files · offline</div></div><div class="head-icons">↻ ≡</div></div><div class="search">⌕ &nbsp; Filter library</div><div class="media-row selected"><div class="thumb"></div><div class="meta"><div class="name">Night Drive</div><div class="type">FLAC · 84 MB</div></div></div><div class="media-row"><div class="thumb t2"></div><div class="meta"><div class="name">City Lights</div><div class="type">MP4 · 216 MB</div></div></div><div class="media-row"><div class="thumb t3"></div><div class="meta"><div class="name">Quiet Room</div><div class="type">WAV · 132 MB</div></div></div><div class="mini"><div class="mini-line"><span>Night Drive</span><span class="mini-controls">◀ ‖ ▶</span></div><div class="progress"></div></div></div></div></div>
       </section>
       <section class="slide">
-        <div class="copy"><div class="eyebrow">04 · Focused playback</div><h2>Big video.<br>Controls when needed.</h2><p>The system bar gets its own black strip, so it never covers the picture. Tap the video for balanced transport controls and a thin timeline; the title and secondary actions stay below.</p></div>
+        <div class="copy"><div class="eyebrow">05 · Focused playback</div><h2>Big video.<br>Controls when needed.</h2><p>The system bar gets its own black strip, so it never covers the picture. Tap the video for balanced transport controls and a thin timeline; the title and secondary actions stay below.</p></div>
         <div class="stage"><div class="halo"></div><div class="phone"><div class="speaker"></div><div class="screen video-screen"><div class="video"><div class="video-controls"><div class="video-top"><span>‹</span><span>▣　⛶</span></div><div class="video-mid">▶</div><div class="video-bottom"><div class="bar"></div><span>1:24　　　　　　　　　4:08</span></div></div></div><div class="video-info"><div class="video-name">City Lights</div><div class="video-actions"><div class="pill">1× Speed</div><div class="pill">↻ One</div></div></div></div></div><div class="pip show">▶</div></div>
       </section>
       <section class="slide">
-        <div class="copy"><div class="eyebrow">05 · Keep listening</div><h2>Leave the screen.<br>Keep the sound.</h2><p>Audio continues through Android's media session with notification and lock-screen controls. The last item, position, speed, repeat mode, and custom ordering remain on the device.</p></div>
+        <div class="copy"><div class="eyebrow">06 · Keep listening</div><h2>Leave the screen.<br>Keep the sound.</h2><p>Audio continues through Android's media session with notification and lock-screen controls. The last item, position, speed, repeat mode, and custom ordering remain on the device.</p></div>
         <div class="stage"><div class="diagram"><div class="node" style="--d:.05s"><b>Media session</b><span>one reliable player</span></div><div class="arrow">↓</div><div class="node" style="--d:.22s"><b>Notification controls</b><span>previous · pause · next</span></div><div class="arrow">↓</div><div class="node" style="--d:.39s"><b>Local resume state</b><span>position + preferences</span></div></div></div>
       </section>
       <section class="slide">
@@ -183,7 +202,7 @@
         <div class="stage"><div class="mark" style="width:150px;height:150px;border-radius:34px;box-shadow:0 0 90px rgba(139,233,211,.16)"><svg viewBox="0 0 24 24" style="width:88px;height:88px"><path fill="currentColor" d="M14 3v11.3a3.7 3.7 0 1 1-2-3.3V5.2l8-2V12a3.7 3.7 0 1 1-2-3.3V5.6z"/></svg></div></div>
       </section>
     </main>
-    <footer><div class="steps" id="steps" aria-label="Slides"></div><div class="nav"><span class="counter" id="counter">01 / 07</span><button class="autoplay" id="auto">Pause</button><button id="prev" aria-label="Previous slide">←</button><button id="next" aria-label="Next slide">→</button></div></footer>
+    <footer><div class="steps" id="steps" aria-label="Slides"></div><div class="nav"><span class="counter" id="counter">01 / 08</span><button class="autoplay" id="auto">Pause</button><button id="prev" aria-label="Previous slide">←</button><button id="next" aria-label="Next slide">→</button></div></footer>
   </div>
   <script>
     (() => {

@@ -145,7 +145,7 @@ class PlaybackService : MediaSessionService() {
             .setUri(android.net.Uri.fromFile(file))
             .setMediaMetadata(MediaMetadata.Builder().setTitle(file.name).build())
             .build()
-        player.setMediaItem(item, saved.lastPositionMs)
+        player.setMediaItem(item, if (saved.resumePlayback) saved.lastPositionMs else 0L)
         player.prepare()
         player.playWhenReady = false
     }

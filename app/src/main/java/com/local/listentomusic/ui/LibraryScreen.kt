@@ -28,6 +28,7 @@ import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -67,12 +68,15 @@ import com.local.listentomusic.LibraryUiState
 import com.local.listentomusic.model.MediaFile
 import com.local.listentomusic.model.MediaKind
 import com.local.listentomusic.model.SortMode
+import com.local.listentomusic.data.LibraryRowSize
+import com.local.listentomusic.data.UserPreferences
 import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
     state: LibraryUiState,
+    preferences: UserPreferences,
     currentPath: String?,
     contentPadding: PaddingValues,
     onGrantStorageAccess: () -> Unit,
@@ -81,6 +85,7 @@ fun LibraryScreen(
     onSortChange: (SortMode) -> Unit,
     onMoveItem: (Int, Int) -> Unit,
     onLoadThumbnail: suspend (MediaFile) -> Bitmap?,
+    onOpenSettings: () -> Unit,
     onPlay: (MediaFile) -> Unit,
 ) {
     var sortMenuOpen by remember { mutableStateOf(false) }
@@ -116,6 +121,9 @@ fun LibraryScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(Icons.Rounded.Settings, contentDescription = "Settings")
+                    }
                     IconButton(onClick = onRefresh) {
                         Icon(Icons.Rounded.Refresh, contentDescription = "Scan again")
                     }
@@ -211,10 +219,18 @@ fun LibraryScreen(
                                 itemCount = state.files.size,
                                 onMove = onMoveItem,
                                 onLoadThumbnail = onLoadThumbnail,
+                                rowSize = preferences.libraryRowSize,
+                                showThumbnails = preferences.showThumbnails,
+                                showFileDetails = preferences.showFileDetails,
+                                showTypeBadge = preferences.showTypeBadge,
                                 onPlay = { onPlay(item) },
                             )
                             HorizontalDivider(
-                                modifier = Modifier.padding(start = 142.dp),
+                                modifier = Modifier.padding(
+                                    start = if (preferences.showThumbnails) {
+                                        preferences.libraryRowSize.thumbnailWidth + 28.dp
+                                    } else 14.dp
+                                ),
                                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
                             )
                         }
@@ -234,16 +250,19 @@ private fun MediaFileRow(
     dragEnabled: Boolean,
     onMove: (Int, Int) -> Unit,
     onLoadThumbnail: suspend (MediaFile) -> Bitmap?,
+    rowSize: LibraryRowSize,
+    showThumbnails: Boolean,
+    showFileDetails: Boolean,
+    showTypeBadge: Boolean,
     onPlay: () -> Unit,
 ) {
     var accumulatedDrag by remember(index, file.path) { mutableFloatStateOf(0f) }
     val thumbnail by produceState<Bitmap?>(
         initialValue = null,
         key1 = file.path,
-        key2 = file.sizeBytes,
-        key3 = file.modifiedMs,
+        key2 = "${file.sizeBytes}:${file.modifiedMs}:$showThumbnails",
     ) {
-        value = onLoadThumbnail(file)
+        value = if (showThumbnails) onLoadThumbnail(file) else null
     }
     val dragModifier = if (dragEnabled) {
         Modifier.pointerInput(index, itemCount) {
@@ -274,34 +293,49 @@ private fun MediaFileRow(
             )
             .clickable(onClick = onPlay)
             .then(dragModifier)
-            .padding(horizontal = 14.dp, vertical = 9.dp),
+            .padding(horizontal = 14.dp, vertical = rowSize.verticalPadding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (isCurrent) {
             Box(
-                modifier = Modifier.width(3.dp).height(48.dp).clip(RoundedCornerShape(4.dp))
+                modifier = Modifier.width(3.dp).height(rowSize.accentHeight).clip(RoundedCornerShape(4.dp))
                     .background(MaterialTheme.colorScheme.secondary),
             )
             Spacer(Modifier.width(9.dp))
         }
-        MediaThumbnail(file = file, bitmap = thumbnail)
-        Spacer(Modifier.width(14.dp))
+        if (showThumbnails) {
+            MediaThumbnail(
+                file = file,
+                bitmap = thumbnail,
+                rowSize = rowSize,
+                showTypeBadge = showTypeBadge,
+            )
+            Spacer(Modifier.width(rowSize.textSpacing))
+        }
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
             Text(
                 text = file.name.substringBeforeLast('.', file.name),
-                style = MaterialTheme.typography.titleMedium,
+                style = when (rowSize) {
+                    LibraryRowSize.SMALL -> MaterialTheme.typography.bodyLarge
+                    LibraryRowSize.MEDIUM -> MaterialTheme.typography.titleMedium
+                    LibraryRowSize.LARGE -> MaterialTheme.typography.titleLarge
+                },
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = "${file.name.substringAfterLast('.', "media").uppercase()}  •  ${formatBytes(file.sizeBytes)}",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (showFileDetails) {
+                Spacer(Modifier.height(if (rowSize == LibraryRowSize.SMALL) 2.dp else 4.dp))
+                Text(
+                    text = "${file.name.substringAfterLast('.', "media").uppercase()}  •  ${formatBytes(file.sizeBytes)}",
+                    style = if (rowSize == LibraryRowSize.LARGE) {
+                        MaterialTheme.typography.bodyMedium
+                    } else MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
         if (dragEnabled) {
             Spacer(Modifier.width(8.dp))
@@ -315,11 +349,16 @@ private fun MediaFileRow(
 }
 
 @Composable
-private fun MediaThumbnail(file: MediaFile, bitmap: Bitmap?) {
+private fun MediaThumbnail(
+    file: MediaFile,
+    bitmap: Bitmap?,
+    rowSize: LibraryRowSize,
+    showTypeBadge: Boolean,
+) {
     val shape = RoundedCornerShape(9.dp)
     Box(
         modifier = Modifier
-            .size(width = 114.dp, height = 68.dp)
+            .size(width = rowSize.thumbnailWidth, height = rowSize.thumbnailHeight)
             .clip(shape)
             .background(
                 Brush.linearGradient(
@@ -340,7 +379,7 @@ private fun MediaThumbnail(file: MediaFile, bitmap: Bitmap?) {
             )
             if (file.kind == MediaKind.VIDEO) {
                 Box(
-                    modifier = Modifier.size(28.dp).clip(RoundedCornerShape(50))
+                    modifier = Modifier.size(rowSize.playBadgeSize).clip(RoundedCornerShape(50))
                         .background(Color.Black.copy(alpha = 0.62f)),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -348,7 +387,7 @@ private fun MediaThumbnail(file: MediaFile, bitmap: Bitmap?) {
                         Icons.Rounded.PlayArrow,
                         contentDescription = null,
                         tint = Color.White,
-                        modifier = Modifier.size(19.dp),
+                        modifier = Modifier.size(rowSize.playIconSize),
                     )
                 }
             }
@@ -356,18 +395,20 @@ private fun MediaThumbnail(file: MediaFile, bitmap: Bitmap?) {
             Icon(
                 imageVector = if (file.kind == MediaKind.VIDEO) Icons.Rounded.PlayArrow else Icons.Rounded.MusicNote,
                 contentDescription = null,
-                modifier = Modifier.size(31.dp),
+                modifier = Modifier.size(rowSize.placeholderIconSize),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Text(
-            text = file.name.substringAfterLast('.', "").uppercase(),
-            style = MaterialTheme.typography.labelSmall,
-            color = Color.White,
-            modifier = Modifier.align(Alignment.BottomStart)
-                .background(Color.Black.copy(alpha = 0.72f))
-                .padding(horizontal = 5.dp, vertical = 2.dp),
-        )
+        if (showTypeBadge) {
+            Text(
+                text = file.name.substringAfterLast('.', "").uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White,
+                modifier = Modifier.align(Alignment.BottomStart)
+                    .background(Color.Black.copy(alpha = 0.72f))
+                    .padding(horizontal = 5.dp, vertical = 1.dp),
+            )
+        }
     }
 }
 
@@ -411,4 +452,45 @@ private fun formatBytes(bytes: Long): String = when {
     bytes >= 1_048_576 -> "%.1f MB".format(bytes / 1_048_576.0)
     bytes >= 1024 -> "%.1f KB".format(bytes / 1024.0)
     else -> "$bytes B"
+}
+
+private val LibraryRowSize.thumbnailWidth get() = when (this) {
+    LibraryRowSize.SMALL -> 72.dp
+    LibraryRowSize.MEDIUM -> 100.dp
+    LibraryRowSize.LARGE -> 132.dp
+}
+private val LibraryRowSize.thumbnailHeight get() = when (this) {
+    LibraryRowSize.SMALL -> 42.dp
+    LibraryRowSize.MEDIUM -> 58.dp
+    LibraryRowSize.LARGE -> 78.dp
+}
+private val LibraryRowSize.verticalPadding get() = when (this) {
+    LibraryRowSize.SMALL -> 5.dp
+    LibraryRowSize.MEDIUM -> 8.dp
+    LibraryRowSize.LARGE -> 10.dp
+}
+private val LibraryRowSize.textSpacing get() = when (this) {
+    LibraryRowSize.SMALL -> 10.dp
+    LibraryRowSize.MEDIUM -> 12.dp
+    LibraryRowSize.LARGE -> 14.dp
+}
+private val LibraryRowSize.accentHeight get() = when (this) {
+    LibraryRowSize.SMALL -> 34.dp
+    LibraryRowSize.MEDIUM -> 46.dp
+    LibraryRowSize.LARGE -> 58.dp
+}
+private val LibraryRowSize.playBadgeSize get() = when (this) {
+    LibraryRowSize.SMALL -> 20.dp
+    LibraryRowSize.MEDIUM -> 25.dp
+    LibraryRowSize.LARGE -> 30.dp
+}
+private val LibraryRowSize.playIconSize get() = when (this) {
+    LibraryRowSize.SMALL -> 14.dp
+    LibraryRowSize.MEDIUM -> 17.dp
+    LibraryRowSize.LARGE -> 20.dp
+}
+private val LibraryRowSize.placeholderIconSize get() = when (this) {
+    LibraryRowSize.SMALL -> 22.dp
+    LibraryRowSize.MEDIUM -> 27.dp
+    LibraryRowSize.LARGE -> 32.dp
 }

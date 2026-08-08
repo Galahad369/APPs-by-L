@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.local.listentomusic.data.ThemeMode
 
 private val LightColors = lightColorScheme(
     primary = Color(0xFF161C1A),
@@ -57,8 +58,12 @@ private val SharpShapes = Shapes(
 )
 
 @Composable
-fun GreaterArtTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
+fun GreaterArtTheme(themeMode: ThemeMode = ThemeMode.SYSTEM, content: @Composable () -> Unit) {
+    val dark = when (themeMode) {
+        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
+    }
     MaterialTheme(
         colorScheme = if (dark) DarkColors else LightColors,
         shapes = SharpShapes,
