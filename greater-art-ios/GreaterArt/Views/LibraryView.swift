@@ -65,6 +65,12 @@ struct LibraryView: View {
         } message: {
             Text(language.text("mediaUntouched"))
         }
+        .alert(language.text(library.importMessage ?? "failedImport"), isPresented: Binding(
+            get: { library.importMessage != nil },
+            set: { if !$0 { library.importMessage = nil } }
+        )) {
+            Button("OK") { library.importMessage = nil }
+        }
         .overlay(alignment: .top) {
             if library.isImporting {
                 Label(language.text("importing"), systemImage: "square.and.arrow.down")

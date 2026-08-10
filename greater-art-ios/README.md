@@ -12,6 +12,7 @@ Greater Art is a native SwiftUI audio and video player for media that already be
 - whole-row playback, search, Name A–Z, Name Z–A, and persistent custom order
 - local playlists with add, remove, rename, delete, and drag-to-reorder
 - background audio, lock-screen/Control Center commands, previous/next, and seeking
+- queued next-track decoding for near-gapless transitions on compatible media
 - playback speed from 0.25× through 3×
 - repeat one by default, plus repeat all and repeat off
 - restored last item and position
@@ -85,4 +86,3 @@ Never commit an Apple distribution certificate, private key, provisioning profil
 ## Testing notes
 
 The included tests cover the progress calculation that prevents an audio slider from falsely sticking at the end, duration formatting, alphabetical sorting, and persistent custom ordering. GitHub Actions compiles both the app and unit-test bundle on a macOS runner without signing.
-

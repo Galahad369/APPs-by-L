@@ -1,6 +1,7 @@
 import XCTest
 @testable import GreaterArt
 
+@MainActor
 final class LibraryOrderingTests: XCTestCase {
     private let alpha = MediaRecord(
         id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,

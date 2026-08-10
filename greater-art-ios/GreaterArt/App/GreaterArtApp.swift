@@ -13,6 +13,7 @@ struct GreaterArtApp: App {
                 .preferredColorScheme(settings.theme.colorScheme)
                 .task {
                     player.restoreIfAvailable(from: library, enabled: settings.resumePlayback)
+                    player.prewarm(Array(library.visibleItems.prefix(40)))
                     if settings.preloadArtwork {
                         await ArtworkCache.shared.preheat(
                             Array(library.visibleItems.prefix(80)),
@@ -26,4 +27,3 @@ struct GreaterArtApp: App {
         }
     }
 }
-
