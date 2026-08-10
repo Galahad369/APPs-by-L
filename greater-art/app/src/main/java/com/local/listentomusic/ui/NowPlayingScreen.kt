@@ -448,6 +448,7 @@ private fun Timeline(playback: PlaybackUiState, onSeek: (Long) -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun WaveformTimeline(
     playback: PlaybackUiState,
