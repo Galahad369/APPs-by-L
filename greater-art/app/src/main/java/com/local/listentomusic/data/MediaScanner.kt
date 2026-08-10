@@ -8,14 +8,14 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 object MediaScanner {
-    private val videoExtensions = setOf(
+    internal val videoExtensions = setOf(
         "mp4", "mov", "m4v", "mkv", "webm", "3gp", "ts", "mpeg", "mpg", "flv", "avi",
     )
-    private val audioExtensions = setOf(
+    internal val audioExtensions = setOf(
         "mp3", "aac", "m4a", "flac", "wav", "alac", "aif", "aiff", "opus", "ogg",
         "ape", "dsf", "dff", "amr", "ac3", "eac3", "mka",
     )
-    private val supportedExtensions = videoExtensions + audioExtensions
+    internal val supportedExtensions = videoExtensions + audioExtensions
 
     @Suppress("DEPRECATION")
     fun targetFolder(): File =
@@ -40,7 +40,11 @@ object MediaScanner {
             return@withContext ScanResult.PermissionMissing(folder.absolutePath)
         }
 
-        val files = folder.walkTopDown()
+        ScanResult.Success(scanFolder(folder))
+    }
+
+    /** Pure folder traversal kept separate so recursive discovery can be unit-tested. */
+    internal fun scanFolder(folder: File): List<MediaFile> = folder.walkTopDown()
             .onFail { _, _ -> /* Ignore unreadable children and keep the rest of the library. */ }
             .filter { it.isFile && it.extension.lowercase() in supportedExtensions }
             // Keep the launch scan fast: do not open or decode every file here.
@@ -60,9 +64,6 @@ object MediaScanner {
                 )
             }
             .toList()
-
-        ScanResult.Success(files)
-    }
 
 }
 

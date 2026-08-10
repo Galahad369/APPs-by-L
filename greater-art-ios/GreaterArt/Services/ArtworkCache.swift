@@ -33,8 +33,11 @@ actor ArtworkCache {
         case .audio:
             raw = await embeddedArtwork(from: mediaURL)
         case .video:
-            raw = await videoFrame(from: mediaURL, duration: item.duration)
-                ?? embeddedArtwork(from: mediaURL)
+            if let frame = await videoFrame(from: mediaURL, duration: item.duration) {
+                raw = frame
+            } else {
+                raw = await embeddedArtwork(from: mediaURL)
+            }
         }
         guard let raw, let prepared = squareCrop(raw, size: pixelSize) else { return nil }
         if let data = prepared.jpegData(compressionQuality: 0.88) {

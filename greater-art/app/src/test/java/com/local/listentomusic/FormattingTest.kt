@@ -1,11 +1,16 @@
 package com.local.listentomusic
 
 import com.local.listentomusic.ui.formatDuration
+import com.local.listentomusic.data.AppLanguage
+import com.local.listentomusic.data.FloatingWindowMode
 import com.local.listentomusic.data.LibraryRowSize
 import com.local.listentomusic.data.UserPreferences
+import com.local.listentomusic.model.SortMode
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import androidx.media3.common.C
+import androidx.media3.common.Player
 
 class FormattingTest {
     @Test
@@ -21,4 +26,16 @@ class FormattingTest {
 
     @Test fun defaultsToTheSmallestLibraryRow() =
         assertEquals(LibraryRowSize.SMALL, UserPreferences().libraryRowSize)
+
+    @Test fun requestedPlaybackAndPresentationDefaultsRemainStable() {
+        val defaults = UserPreferences()
+        assertEquals(Player.REPEAT_MODE_ONE, defaults.repeatMode)
+        assertEquals(FloatingWindowMode.COMPACT, defaults.floatingWindowMode)
+        assertEquals(AppLanguage.ENGLISH, defaults.appLanguage)
+        assertTrue(defaults.preloadThumbnails)
+        assertEquals(
+            setOf(SortMode.CUSTOM, SortMode.NAME_ASC, SortMode.NAME_DESC),
+            SortMode.entries.toSet(),
+        )
+    }
 }

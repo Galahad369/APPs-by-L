@@ -4,7 +4,7 @@ Greater Art is a private, fully offline Android player for local video and audio
 
 ## Install the ready-built app
 
-The project folder includes `GreaterArt-v1.5.0-debug.apk`. Copy it to the phone, open it, and allow installation from the Files app if Android asks. It is a debug build for personal sideloading.
+The project folder includes `GreaterArt-v1.5.1-debug.apk`. Copy it to the phone, open it, and allow installation from the Files app if Android asks. It is a debug build for personal sideloading.
 
 ## First launch
 
@@ -69,6 +69,8 @@ For the cleanest high-resolution route, use 1x speed and a DAC or audio output t
 5. Select the phone and click the green **Run** button.
 
 To generate another APK, use **Build -> Build APK(s)**. Android Studio writes it to `app/build/outputs/apk/debug/app-debug.apk`.
+
+On Windows, `build-personal-debug.ps1` runs tests and lint, builds the APK, and copies a versioned artifact. It deliberately uses the established debug keystore under the real Windows profile so updates retain the same Android signing identity even inside a restricted build shell. The keystore remains outside this repository and must never be committed.
 
 ## GitHub builds and releases
 

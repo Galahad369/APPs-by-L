@@ -23,7 +23,7 @@ struct MediaRecord: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-enum LibrarySort: String, CaseIterable, Codable, Identifiable {
+enum LibrarySort: String, CaseIterable, Codable, Identifiable, Sendable {
     case custom
     case nameAscending
     case nameDescending
@@ -49,4 +49,3 @@ enum MediaSupport {
         videoExtensions.contains(url.pathExtension.lowercased()) ? .video : .audio
     }
 }
-

@@ -48,6 +48,8 @@ final class PlayerController: ObservableObject {
     private var timeControlObservation: NSKeyValueObservation?
     private var endObserver: NSObjectProtocol?
     private var failureObserver: NSObjectProtocol?
+    private var interruptionObserver: NSObjectProtocol?
+    private var mediaResetObserver: NSObjectProtocol?
     private var nowPlayingArtwork: UIImage?
     private let defaults = UserDefaults.standard
 
@@ -73,6 +75,8 @@ final class PlayerController: ObservableObject {
         if let timeObserver { player.removeTimeObserver(timeObserver) }
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
         if let failureObserver { NotificationCenter.default.removeObserver(failureObserver) }
+        if let interruptionObserver { NotificationCenter.default.removeObserver(interruptionObserver) }
+        if let mediaResetObserver { NotificationCenter.default.removeObserver(mediaResetObserver) }
     }
 
     func play(_ item: MediaRecord, in records: [MediaRecord]) {
@@ -160,6 +164,17 @@ final class PlayerController: ObservableObject {
         savePlaybackPosition()
     }
 
+    func prewarm(_ records: [MediaRecord]) {
+        for record in records {
+            let asset = assets[record.id] ?? AVURLAsset(url: LibraryStore.shared.url(for: record))
+            assets[record.id] = asset
+            Task.detached(priority: .utility) {
+                _ = try? await asset.load(.isPlayable)
+                _ = try? await asset.load(.duration)
+            }
+        }
+    }
+
     private func rebuildQueue(
         records: [MediaRecord],
         startingAt start: Int,
@@ -179,7 +194,8 @@ final class PlayerController: ObservableObject {
         player.pause()
         player.removeAllItems()
         itemIDs.removeAll()
-        let recordsToQueue = repeatMode == .one ? [record] : Array(queue[index...])
+        let queueEnd = min(index + 2, queue.count)
+        let recordsToQueue = repeatMode == .one ? [record] : Array(queue[index..<queueEnd])
         for queuedRecord in recordsToQueue {
             player.insert(makePlayerItem(queuedRecord), after: nil)
         }
@@ -200,10 +216,7 @@ final class PlayerController: ObservableObject {
 
     private func makePlayerItem(_ record: MediaRecord) -> AVPlayerItem {
         let url = LibraryStore.shared.url(for: record)
-        let asset = assets[record.id] ?? AVURLAsset(
-            url: url,
-            options: [AVURLAssetPreferPreciseDurationAndTimingKey: true]
-        )
+        let asset = assets[record.id] ?? AVURLAsset(url: url)
         assets[record.id] = asset
         let item = AVPlayerItem(asset: asset)
         item.preferredForwardBufferDuration = 2
@@ -263,8 +276,27 @@ final class PlayerController: ObservableObject {
             queue: .main
         ) { [weak self] note in
             Task { @MainActor in
-                self?.playbackError = (note.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error)?.localizedDescription
+                self?.handleFailure(
+                    note.object as? AVPlayerItem,
+                    error: note.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error
+                )
             }
+        }
+
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] note in
+            Task { @MainActor in self?.handleInterruption(note) }
+        }
+
+        mediaResetObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.mediaServicesWereResetNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.configureAudioSession() }
         }
     }
 
@@ -316,7 +348,42 @@ final class PlayerController: ObservableObject {
         savePlaybackPosition()
         updateNowPlayingInfo()
         loadNowPlayingArtwork(record)
+        appendFollowingItem(after: newIndex)
         prewarmNextAsset()
+    }
+
+    private func appendFollowingItem(after currentIndex: Int) {
+        guard repeatMode != .one, currentIndex + 1 < queue.count else { return }
+        let following = queue[currentIndex + 1]
+        let isAlreadyQueued = player.items().contains { itemIDs[ObjectIdentifier($0)] == following.id }
+        guard !isAlreadyQueued else { return }
+        player.insert(makePlayerItem(following), after: nil)
+    }
+
+    private func handleFailure(_ failedItem: AVPlayerItem?, error: Error?) {
+        guard let failedItem,
+              itemIDs[ObjectIdentifier(failedItem)] == current?.id else { return }
+        playbackError = error?.localizedDescription ?? "This media could not be decoded on this iPhone."
+        if index + 1 < queue.count {
+            index += 1
+            rebuildCurrent(position: 0, autoplay: true)
+        } else {
+            player.pause()
+        }
+    }
+
+    private func handleInterruption(_ notification: Notification) {
+        guard let rawType = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: rawType) else { return }
+        if type == .began {
+            player.pause()
+            return
+        }
+        let rawOptions = notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
+        if AVAudioSession.InterruptionOptions(rawValue: rawOptions).contains(.shouldResume) {
+            configureAudioSession()
+            player.playImmediately(atRate: speed)
+        }
     }
 
     private func configureRemoteCommands() {
