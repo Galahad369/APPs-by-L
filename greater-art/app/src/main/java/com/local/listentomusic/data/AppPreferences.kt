@@ -13,6 +13,7 @@ import com.local.listentomusic.model.SortMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import java.util.UUID
 
 private val Context.dataStore by preferencesDataStore(name = "listen_to_music_preferences")
 
@@ -31,10 +32,22 @@ data class UserPreferences(
     val preloadThumbnails: Boolean = true,
     val resumePlayback: Boolean = true,
     val autoPictureInPicture: Boolean = true,
+    val floatingWindowMode: FloatingWindowMode = FloatingWindowMode.COMPACT,
+    val appLanguage: AppLanguage = AppLanguage.ENGLISH,
+    val playlists: List<LocalPlaylist> = emptyList(),
+    val activePlaylistId: String? = null,
 )
 
 enum class LibraryRowSize(val label: String) { SMALL("Small"), MEDIUM("Medium"), LARGE("Large") }
 enum class ThemeMode(val label: String) { SYSTEM("System"), LIGHT("Light"), DARK("Dark") }
+enum class FloatingWindowMode { COMPACT, FOLLOW_VIDEO }
+enum class AppLanguage { ENGLISH, TRADITIONAL_CHINESE }
+
+data class LocalPlaylist(
+    val id: String,
+    val name: String,
+    val paths: List<String>,
+)
 
 class AppPreferences(private val context: Context) {
     private object Keys {
@@ -52,6 +65,10 @@ class AppPreferences(private val context: Context) {
         val preloadThumbnails = booleanPreferencesKey("preload_thumbnails")
         val resumePlayback = booleanPreferencesKey("resume_playback")
         val autoPictureInPicture = booleanPreferencesKey("auto_picture_in_picture")
+        val floatingWindowMode = stringPreferencesKey("floating_window_mode")
+        val appLanguage = stringPreferencesKey("app_language")
+        val playlists = stringPreferencesKey("playlists")
+        val activePlaylistId = stringPreferencesKey("active_playlist_id")
     }
 
     val values: Flow<UserPreferences> = context.dataStore.data.map { prefs ->
@@ -75,6 +92,13 @@ class AppPreferences(private val context: Context) {
             preloadThumbnails = prefs[Keys.preloadThumbnails] ?: true,
             resumePlayback = prefs[Keys.resumePlayback] ?: true,
             autoPictureInPicture = prefs[Keys.autoPictureInPicture] ?: true,
+            floatingWindowMode = enumValueOrDefault(
+                prefs[Keys.floatingWindowMode],
+                FloatingWindowMode.COMPACT,
+            ),
+            appLanguage = enumValueOrDefault(prefs[Keys.appLanguage], AppLanguage.ENGLISH),
+            playlists = decodePlaylists(prefs[Keys.playlists].orEmpty()),
+            activePlaylistId = prefs[Keys.activePlaylistId],
         )
     }
 
@@ -110,6 +134,56 @@ class AppPreferences(private val context: Context) {
     suspend fun setPreloadThumbnails(value: Boolean) = edit { it[Keys.preloadThumbnails] = value }
     suspend fun setResumePlayback(value: Boolean) = edit { it[Keys.resumePlayback] = value }
     suspend fun setAutoPictureInPicture(value: Boolean) = edit { it[Keys.autoPictureInPicture] = value }
+    suspend fun setFloatingWindowMode(value: FloatingWindowMode) =
+        edit { it[Keys.floatingWindowMode] = value.name }
+    suspend fun setAppLanguage(value: AppLanguage) = edit { it[Keys.appLanguage] = value.name }
+
+    suspend fun setActivePlaylist(id: String?) = edit { prefs ->
+        if (id == null) prefs.remove(Keys.activePlaylistId) else prefs[Keys.activePlaylistId] = id
+    }
+
+    suspend fun createPlaylist(name: String): String {
+        val id = UUID.randomUUID().toString()
+        updatePlaylists { current -> current + LocalPlaylist(id, name.trim(), emptyList()) }
+        return id
+    }
+
+    suspend fun renamePlaylist(id: String, name: String) = updatePlaylists { playlists ->
+        playlists.map { if (it.id == id) it.copy(name = name.trim()) else it }
+    }
+
+    suspend fun deletePlaylist(id: String) {
+        context.dataStore.edit { prefs ->
+            val updated = decodePlaylists(prefs[Keys.playlists].orEmpty()).filterNot { it.id == id }
+            prefs[Keys.playlists] = encodePlaylists(updated)
+            if (prefs[Keys.activePlaylistId] == id) prefs.remove(Keys.activePlaylistId)
+        }
+    }
+
+    suspend fun addToPlaylist(id: String, path: String) = updatePlaylists { playlists ->
+        playlists.map { playlist ->
+            if (playlist.id != id || path in playlist.paths) playlist
+            else playlist.copy(paths = playlist.paths + path)
+        }
+    }
+
+    suspend fun removeFromPlaylist(id: String, path: String) = updatePlaylists { playlists ->
+        playlists.map { playlist ->
+            if (playlist.id == id) playlist.copy(paths = playlist.paths.filterNot { it == path }) else playlist
+        }
+    }
+
+    suspend fun movePlaylistItem(id: String, fromIndex: Int, toIndex: Int) = updatePlaylists { playlists ->
+        playlists.map { playlist ->
+            if (playlist.id != id || fromIndex !in playlist.paths.indices || toIndex !in playlist.paths.indices) {
+                playlist
+            } else {
+                playlist.copy(paths = playlist.paths.toMutableList().apply {
+                    add(toIndex, removeAt(fromIndex))
+                })
+            }
+        }
+    }
 
     suspend fun resetAppSettings() {
         context.dataStore.edit {
@@ -121,6 +195,8 @@ class AppPreferences(private val context: Context) {
             it.remove(Keys.preloadThumbnails)
             it.remove(Keys.resumePlayback)
             it.remove(Keys.autoPictureInPicture)
+            it.remove(Keys.floatingWindowMode)
+            it.remove(Keys.appLanguage)
             it[Keys.speed] = 1f
             it[Keys.repeatMode] = Player.REPEAT_MODE_ONE.toLong()
         }
@@ -139,6 +215,37 @@ class AppPreferences(private val context: Context) {
             }.getOrNull()
         }
         .toList()
+
+    private suspend fun updatePlaylists(transform: (List<LocalPlaylist>) -> List<LocalPlaylist>) {
+        context.dataStore.edit { prefs ->
+            val current = decodePlaylists(prefs[Keys.playlists].orEmpty())
+            prefs[Keys.playlists] = encodePlaylists(transform(current))
+        }
+    }
+
+    private fun encodePlaylists(playlists: List<LocalPlaylist>): String = playlists.joinToString("\n") { playlist ->
+        listOf(
+            encode(playlist.id),
+            encode(playlist.name),
+            playlist.paths.joinToString(",", transform = ::encode),
+        ).joinToString("|")
+    }
+
+    private fun decodePlaylists(encoded: String): List<LocalPlaylist> = encoded.lineSequence().mapNotNull { line ->
+        val parts = line.split('|', limit = 3)
+        if (parts.size != 3) return@mapNotNull null
+        val id = decode(parts[0]) ?: return@mapNotNull null
+        val name = decode(parts[1])?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+        val paths = if (parts[2].isBlank()) emptyList() else parts[2].split(',').mapNotNull(::decode)
+        LocalPlaylist(id, name, paths.distinct())
+    }.toList()
+
+    private fun encode(value: String): String =
+        Base64.encodeToString(value.toByteArray(Charsets.UTF_8), Base64.NO_WRAP or Base64.URL_SAFE)
+
+    private fun decode(value: String): String? = runCatching {
+        Base64.decode(value, Base64.NO_WRAP or Base64.URL_SAFE).toString(Charsets.UTF_8)
+    }.getOrNull()
 
     private inline fun <reified T : Enum<T>> enumValueOrDefault(value: String?, fallback: T): T =
         runCatching { enumValueOf<T>(value ?: fallback.name) }.getOrDefault(fallback)
