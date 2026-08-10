@@ -1,6 +1,6 @@
 # APPs by L
 
-A public, expandable collection of experimental Android apps. Each app lives in its own top-level folder, with shared automation and transferable agent skills kept at the repository root.
+A public, expandable collection of experimental Android and iOS apps. Each app lives in its own top-level folder, with shared automation and transferable agent skills kept at the repository root.
 
 > **Vibe-coded disclosure:** These apps were built through iterative conversations with AI coding agents. The human supplied the ideas, taste, constraints, testing feedback, and final decisions; AI produced substantial code, documentation, and automation. “Vibe-coded” is a description of the workflow, not a claim that the software is flawless.
 
@@ -12,6 +12,13 @@ Greater Art is an ad-free, offline local audio and video player. It requests no 
 
 - Documentation: [`greater-art/README.md`](greater-art/README.md)
 - Ready APK: [`greater-art/GreaterArt-v1.5.0-debug.apk`](greater-art/GreaterArt-v1.5.0-debug.apk)
+
+### `greater-art-ios/`
+
+Greater Art for iPhone is a native SwiftUI edition of the offline media player. It imports local files through Apple's Files picker, caches artwork, supports background audio and Picture in Picture, and is designed for private TestFlight distribution.
+
+- Documentation: [`greater-art-ios/README.md`](greater-art-ios/README.md)
+- Xcode project: [`greater-art-ios/GreaterArt.xcodeproj`](greater-art-ios/GreaterArt.xcodeproj)
 
 ### `useless-calculator/`
 
@@ -27,7 +34,7 @@ Despite the joke, it includes:
 - Documentation: [`useless-calculator/README.md`](useless-calculator/README.md)
 - Ready APK: [`useless-calculator/UselessCalculator-v1.1.0-debug.apk`](useless-calculator/UselessCalculator-v1.1.0-debug.apk)
 
-Each app folder is a standalone Android Studio project with its own Gradle wrapper. Future apps should follow the same one-folder-per-app structure.
+Each app folder is standalone: Android projects include their own Gradle wrapper, while iOS projects include an Xcode project. Future apps should follow the same one-folder-per-app structure.
 
 ## Security and privacy
 
@@ -66,6 +73,6 @@ CC-Switch can then copy or link installed skills into supported Codex, Claude Co
 
 ## Build verification
 
-GitHub Actions tests, lints, and builds each Android project. Local commands are also documented in the individual app folders.
+GitHub Actions tests, lints, and builds the Android projects and performs an unsigned compile of the iOS app and its test bundle. Local commands are documented in each app folder.
 
 The code and APKs are provided for experimentation and personal sideloading. Review the source, permissions, and build output before installing software from any public repository.
