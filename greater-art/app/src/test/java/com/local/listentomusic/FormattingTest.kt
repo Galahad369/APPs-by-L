@@ -5,8 +5,14 @@ import com.local.listentomusic.data.LibraryRowSize
 import com.local.listentomusic.data.UserPreferences
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import androidx.media3.common.C
 
 class FormattingTest {
+    @Test
+    fun durationResolverIgnoresUnknownAndInvalidCandidates() {
+        assertEquals(0L, resolveDurationMs(C.TIME_UNSET, 0L, -4L))
+        assertEquals(215_000L, resolveDurationMs(C.TIME_UNSET, 0L, 215_000L, 220_000L))
+    }
     @Test fun formatsUnknownDuration() = assertEquals("--:--", formatDuration(0))
 
     @Test fun formatsMinutesAndSeconds() = assertEquals("2:05", formatDuration(125_000))

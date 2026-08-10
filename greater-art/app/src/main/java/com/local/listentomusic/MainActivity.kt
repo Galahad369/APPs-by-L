@@ -26,7 +26,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.local.listentomusic.ui.GreaterArtApp
+import com.local.listentomusic.data.FloatingWindowMode
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -42,8 +44,14 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.playback
-                    .map { Triple(it.isVideo, it.isPlaying, (it.videoAspectRatio * 100).roundToInt()) }
+                combine(viewModel.playback, viewModel.settings) { playback, settings ->
+                        listOf(
+                            playback.isVideo,
+                            playback.isPlaying,
+                            (playback.videoAspectRatio * 100).roundToInt(),
+                            settings.floatingWindowMode,
+                        )
+                    }
                     .distinctUntilChanged()
                     .collect { updatePictureInPictureParams() }
             }
@@ -114,7 +122,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun buildPictureInPictureParams(autoEnter: Boolean): PictureInPictureParams {
-        val ratio = viewModel.playback.value.videoAspectRatio.coerceIn(0.5f, 2.0f)
+        val ratio = when (viewModel.settings.value.floatingWindowMode) {
+            FloatingWindowMode.COMPACT -> 16f / 9f
+            FloatingWindowMode.FOLLOW_VIDEO ->
+                viewModel.playback.value.videoAspectRatio.coerceIn(0.5f, 2.0f)
+        }
         return PictureInPictureParams.Builder()
             .setAspectRatio(Rational((ratio * 1_000).toInt(), 1_000))
             .apply {

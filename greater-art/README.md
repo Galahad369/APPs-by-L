@@ -4,7 +4,7 @@ Greater Art is a private, fully offline Android player for local video and audio
 
 ## Install the ready-built app
 
-The project folder includes `GreaterArt-v1.4.0-debug.apk`. Copy it to the phone, open it, and allow installation from the Files app if Android asks. It is signed with this computer's Android debug key for personal sideloading.
+The project folder includes `GreaterArt-v1.5.0-debug.apk`. Copy it to the phone, open it, and allow installation from the Files app if Android asks. It is a debug build for personal sideloading.
 
 ## First launch
 
@@ -21,14 +21,18 @@ The app recursively scans Download. It does not depend on, display, or hardcode 
 - Opens the library quickly without decoding every file during the initial scan
 - Uses Android's system video-thumbnail generator first, then a frame-extraction fallback
 - Reads embedded audio artwork when available
+- Uses a dedicated audio-player layout with large cached artwork, waveform-style seeking, and a compact artwork mini-player
 - Preloads the first library batch into a memory LRU and persistent, automatically pruned disk cache
 - Stops background thumbnail work immediately when playback is requested
 - Starts playback by tapping anywhere on a media row
 - Includes custom drag ordering and Name A-Z / Name Z-A sorting
+- Includes local playlists with create, rename, delete, add/remove, persistent ordering, and playlist-aware playback queues
 - Includes a complete local Settings screen with system/light/dark themes
 - Offers Small, Medium, and Large library rows; Small is the compact default
 - Can hide thumbnails, file details, or thumbnail format badges independently
 - Lets the user control thumbnail preloading, resume behavior, automatic Picture-in-Picture, speed, and repeat mode
+- Offers English (default) and Traditional Chinese UI settings
+- Offers compact 16:9 (default) or follow-video Picture-in-Picture shape preferences
 - Includes safe local rescan, thumbnail-cache clearing, and settings reset actions
 - Includes previous, play/pause, next, seek, repeat, and speeds from 0.25x to 3x
 - Uses repeat-one by default
@@ -39,7 +43,7 @@ The app recursively scans Download. It does not depend on, display, or hardcode 
 
 ## Floating video window
 
-Tap the floating-window button in the video controls, or press Home while a video is playing. Android owns the final Picture-in-Picture size and minimum dimensions. On supported devices the window is resizable by pinching or dragging its edges, and this app supplies the video's real aspect ratio for a compact result.
+Tap the floating-window button in the video controls, or press Home while a video is playing. Compact 16:9 is the default; **Follow video** is available in Settings. Android owns the final Picture-in-Picture size and minimum dimensions. On supported devices the window is resizable by pinching or dragging its edges.
 
 Force-stopping the app from Android Settings terminates every Android service and floating window by design. Ordinary Home/app switching keeps eligible video in Picture-in-Picture and keeps audio available through the media notification.
 

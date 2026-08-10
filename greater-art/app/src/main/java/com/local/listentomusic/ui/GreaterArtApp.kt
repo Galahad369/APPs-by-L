@@ -1,6 +1,7 @@
 package com.local.listentomusic.ui
 
 import android.graphics.Rect
+import android.graphics.Bitmap
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -35,6 +37,9 @@ fun GreaterArtApp(
     val playback by viewModel.playback.collectAsStateWithLifecycle()
     val controller by viewModel.controller.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val artwork by produceState<Bitmap?>(initialValue = null, key1 = playback.currentPath) {
+        value = viewModel.loadCurrentArtwork(playback.currentPath)
+    }
     var screen by rememberSaveable { mutableStateOf(Screen.LIBRARY) }
 
     LaunchedEffect(screen) {
@@ -51,6 +56,8 @@ fun GreaterArtApp(
                         if (playback.hasMedia) {
                             MiniPlayer(
                                 playback = playback,
+                                artwork = artwork,
+                                language = settings.appLanguage,
                                 onOpen = { screen = Screen.NOW_PLAYING },
                                 onTogglePlay = viewModel::togglePlayPause,
                                 onPrevious = viewModel::previous,
@@ -69,6 +76,10 @@ fun GreaterArtApp(
                         onQueryChange = viewModel::setQuery,
                         onSortChange = viewModel::setSortMode,
                         onMoveItem = viewModel::moveCustomItem,
+                        onSelectPlaylist = viewModel::setActivePlaylist,
+                        onCreatePlaylist = viewModel::createPlaylist,
+                        onAddToPlaylist = viewModel::addToPlaylist,
+                        onRemoveFromPlaylist = viewModel::removeFromActivePlaylist,
                         onLoadThumbnail = viewModel::loadThumbnail,
                         onOpenSettings = { screen = Screen.SETTINGS },
                         onPlay = {
@@ -79,6 +90,8 @@ fun GreaterArtApp(
                 }
                 Screen.NOW_PLAYING -> NowPlayingScreen(
                         playback = playback,
+                        artwork = artwork,
+                        language = settings.appLanguage,
                         controller = controller,
                         contentPadding = PaddingValues(0.dp),
                         isPictureInPicture = isPictureInPicture,
@@ -104,6 +117,11 @@ fun GreaterArtApp(
                     onPreloadThumbnails = viewModel::setPreloadThumbnails,
                     onResumePlayback = viewModel::setResumePlayback,
                     onAutoPictureInPicture = viewModel::setAutoPictureInPicture,
+                    onFloatingWindowMode = viewModel::setFloatingWindowMode,
+                    onAppLanguage = viewModel::setAppLanguage,
+                    onCreatePlaylist = viewModel::createPlaylist,
+                    onRenamePlaylist = viewModel::renamePlaylist,
+                    onDeletePlaylist = viewModel::deletePlaylist,
                     onSpeed = viewModel::setSpeed,
                     onRepeatMode = viewModel::setRepeatMode,
                     onClearThumbnailCache = viewModel::clearThumbnailCache,
