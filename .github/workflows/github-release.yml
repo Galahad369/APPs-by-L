@@ -9,7 +9,7 @@ on:
       tag:
         description: Existing version tag to publish
         required: true
-        default: v1.4.0
+        default: v1.5.0
 
 permissions:
   contents: write
@@ -30,8 +30,7 @@ jobs:
         id: asset
         shell: bash
         run: |
-          version="${RELEASE_TAG#v}"
-          apk="greater-art/GreaterArt-${version}-debug.apk"
+          apk="greater-art/GreaterArt-${RELEASE_TAG}-debug.apk"
           test -f "$apk"
           echo "apk=$apk" >> "$GITHUB_OUTPUT"
 
