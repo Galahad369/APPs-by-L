@@ -9,6 +9,14 @@
 **/.cxx/
 **/app/build/
 
+# Apple/Xcode local and signed output
+**/xcuserdata/
+*.xcuserstate
+**/DerivedData/
+*.xcarchive
+*.ipa
+.DS_Store
+
 # Private local writing and configuration
 **/LINKEDIN_POST.md
 .env

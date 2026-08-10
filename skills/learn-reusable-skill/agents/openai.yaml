@@ -1,4 +1,0 @@
-interface:
-  display_name: "Learn a Reusable Skill"
-  short_description: "Distill completed work into a portable skill"
-  default_prompt: "Use $learn-reusable-skill to turn this workflow into a transferable Hermes skill."
