@@ -11,7 +11,7 @@ A public, expandable collection of experimental Android apps. Each app lives in 
 Greater Art is an ad-free, offline local audio and video player. It requests no Internet permission and contains no analytics, accounts, subscriptions, telemetry, or cloud features.
 
 - Documentation: [`greater-art/README.md`](greater-art/README.md)
-- Ready APK: [`greater-art/GreaterArt-v1.4.0-debug.apk`](greater-art/GreaterArt-v1.4.0-debug.apk)
+- Ready APK: [`greater-art/GreaterArt-v1.5.0-debug.apk`](greater-art/GreaterArt-v1.5.0-debug.apk)
 
 ### `useless-calculator/`
 

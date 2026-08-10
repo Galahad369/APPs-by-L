@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import android.graphics.Rect
+import android.graphics.Bitmap
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
@@ -12,6 +13,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -74,7 +77,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -90,14 +97,19 @@ import androidx.media3.session.MediaController
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.local.listentomusic.PlaybackUiState
+import com.local.listentomusic.data.AppLanguage
 import kotlinx.coroutines.delay
+import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 private val playbackSpeeds = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f)
 
 @Composable
 fun NowPlayingScreen(
     playback: PlaybackUiState,
+    artwork: Bitmap?,
+    language: AppLanguage,
     controller: MediaController?,
     contentPadding: PaddingValues,
     isPictureInPicture: Boolean,
@@ -169,6 +181,8 @@ fun NowPlayingScreen(
         } else {
             AudioPlayer(
                 playback = playback,
+                artwork = artwork,
+                language = language,
                 onBack = onBack,
                 onTogglePlay = onTogglePlay,
                 onPrevious = onPrevious,
@@ -199,8 +213,9 @@ private fun VideoPlayerStage(
     var controlsVisible by rememberSaveable { mutableStateOf(true) }
     var seeking by remember { mutableStateOf(false) }
     var seekPosition by remember { mutableFloatStateOf(0f) }
-    val maximum = playback.durationMs.coerceAtLeast(1L).toFloat()
-    val position = if (seeking) seekPosition else playback.positionMs.toFloat()
+    val hasDuration = playback.durationMs > 0L
+    val maximum = if (hasDuration) playback.durationMs.toFloat() else 1f
+    val position = if (seeking) seekPosition else if (hasDuration) playback.positionMs.toFloat() else 0f
 
     LaunchedEffect(controlsVisible, playback.isPlaying, playback.currentPath) {
         if (controlsVisible && playback.isPlaying) {
@@ -288,12 +303,16 @@ private fun VideoPlayerStage(
                         onValueChange = { seeking = true; seekPosition = it },
                         onValueChangeFinished = { onSeek(seekPosition.toLong()); seeking = false },
                         valueRange = 0f..maximum,
-                        enabled = playback.durationMs > 0,
+                        enabled = hasDuration,
                         activeColor = Color(0xFFF3F5F0),
                         inactiveColor = Color.White.copy(alpha = 0.38f),
                     )
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(formatDuration(position.toLong()), color = Color.White, style = MaterialTheme.typography.labelMedium)
+                        Text(
+                            formatDuration(if (seeking) position.toLong() else playback.positionMs),
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelMedium,
+                        )
                         Text(formatDuration(playback.durationMs), color = Color.White, style = MaterialTheme.typography.labelMedium)
                     }
                 }
@@ -305,6 +324,8 @@ private fun VideoPlayerStage(
 @Composable
 private fun AudioPlayer(
     playback: PlaybackUiState,
+    artwork: Bitmap?,
+    language: AppLanguage,
     onBack: () -> Unit,
     onTogglePlay: () -> Unit,
     onPrevious: () -> Unit,
@@ -318,29 +339,41 @@ private fun AudioPlayer(
             .windowInsetsPadding(WindowInsets.navigationBars).verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back to library")
+                Icon(
+                    Icons.AutoMirrored.Rounded.ArrowBack,
+                    uiText(language, "Back to library", "返回音樂庫"),
+                )
             }
         }
         Box(
-            modifier = Modifier.padding(horizontal = 28.dp).fillMaxWidth().aspectRatio(1f)
-                .clip(RoundedCornerShape(18.dp)).background(
+            modifier = Modifier.padding(horizontal = 30.dp, vertical = 4.dp).fillMaxWidth().aspectRatio(1f)
+                .clip(RoundedCornerShape(22.dp)).background(
                     Brush.linearGradient(
-                        listOf(Color(0xFF151918), Color(0xFF365A52), Color(0xFF202624))
+                        listOf(Color(0xFF111413), Color(0xFF29423C), Color(0xFF1A211F))
                     )
                 ),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                Icons.Rounded.MusicNote,
-                null,
-                modifier = Modifier.size(124.dp),
-                tint = Color(0xFF8BE9D3),
-            )
+            if (artwork != null) {
+                Image(
+                    bitmap = artwork.asImageBitmap(),
+                    contentDescription = uiText(language, "Album artwork", "專輯封面"),
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                Icon(
+                    Icons.Rounded.MusicNote,
+                    contentDescription = null,
+                    modifier = Modifier.size(116.dp),
+                    tint = Color(0xFF8BE9D3),
+                )
+            }
         }
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 20.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 18.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
@@ -351,8 +384,8 @@ private fun AudioPlayer(
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
             )
-            Spacer(Modifier.height(18.dp))
-            Timeline(playback, onSeek)
+            Spacer(Modifier.height(12.dp))
+            WaveformTimeline(playback, onSeek, language)
             Transport(playback, onPrevious, onTogglePlay, onNext)
             SecondaryControlRow(playback, onSpeed, onRepeat)
             PlaybackError(playback.errorMessage)
@@ -397,20 +430,83 @@ private fun SecondaryControls(
 private fun Timeline(playback: PlaybackUiState, onSeek: (Long) -> Unit) {
     var seeking by remember { mutableStateOf(false) }
     var seekPosition by remember { mutableFloatStateOf(0f) }
-    val maximum = playback.durationMs.coerceAtLeast(1L).toFloat()
-    val position = if (seeking) seekPosition else playback.positionMs.toFloat()
+    val hasDuration = playback.durationMs > 0L
+    val maximum = if (hasDuration) playback.durationMs.toFloat() else 1f
+    val position = if (seeking) seekPosition else if (hasDuration) playback.positionMs.toFloat() else 0f
     CompactSlider(
         value = position.coerceIn(0f, maximum),
         onValueChange = { seeking = true; seekPosition = it },
         onValueChangeFinished = { onSeek(seekPosition.toLong()); seeking = false },
         valueRange = 0f..maximum,
-        enabled = playback.durationMs > 0,
+        enabled = hasDuration,
         activeColor = MaterialTheme.colorScheme.secondary,
         inactiveColor = MaterialTheme.colorScheme.outlineVariant,
     )
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(formatDuration(position.toLong()), style = MaterialTheme.typography.labelMedium)
+        Text(formatDuration(if (seeking) position.toLong() else playback.positionMs), style = MaterialTheme.typography.labelMedium)
         Text(formatDuration(playback.durationMs), style = MaterialTheme.typography.labelMedium)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WaveformTimeline(
+    playback: PlaybackUiState,
+    onSeek: (Long) -> Unit,
+    language: AppLanguage,
+) {
+    var seeking by remember(playback.currentPath) { mutableStateOf(false) }
+    var seekPosition by remember(playback.currentPath) { mutableFloatStateOf(0f) }
+    val hasDuration = playback.durationMs > 0L
+    val maximum = if (hasDuration) playback.durationMs.toFloat() else 1f
+    val position = if (seeking) seekPosition else if (hasDuration) playback.positionMs.toFloat() else 0f
+    val fraction = if (hasDuration) (position / maximum).coerceIn(0f, 1f) else 0f
+    val active = MaterialTheme.colorScheme.secondary
+    val inactive = MaterialTheme.colorScheme.outlineVariant
+
+    Slider(
+        value = position.coerceIn(0f, maximum),
+        onValueChange = { seeking = true; seekPosition = it },
+        onValueChangeFinished = {
+            if (hasDuration) onSeek(seekPosition.toLong())
+            seeking = false
+        },
+        valueRange = 0f..maximum,
+        enabled = hasDuration,
+        modifier = Modifier.fillMaxWidth().height(56.dp),
+        thumb = {
+            Box(Modifier.size(8.dp).clip(CircleShape).background(if (hasDuration) active else Color.Transparent))
+        },
+        track = {
+            Canvas(Modifier.fillMaxWidth().height(44.dp)) {
+                val bars = 72
+                val spacing = size.width / bars
+                repeat(bars) { index ->
+                    val wave = abs(sin(index * 0.67) * 0.62 + sin(index * 0.19) * 0.38)
+                    val barHeight = size.height * (0.18f + wave.toFloat() * 0.74f)
+                    val x = spacing * (index + 0.5f)
+                    drawLine(
+                        color = if ((index + 1f) / bars <= fraction) active else inactive,
+                        start = Offset(x, (size.height - barHeight) / 2f),
+                        end = Offset(x, (size.height + barHeight) / 2f),
+                        strokeWidth = 2.dp.toPx(),
+                        cap = StrokeCap.Round,
+                    )
+                }
+            }
+        },
+    )
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(
+            formatDuration(if (seeking) seekPosition.toLong() else playback.positionMs),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.secondary,
+        )
+        Text(
+            if (hasDuration) formatDuration(playback.durationMs) else uiText(language, "Loading duration…", "正在讀取長度…"),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

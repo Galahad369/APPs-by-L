@@ -3,12 +3,14 @@ package com.local.listentomusic
 import android.app.Application
 import android.content.ComponentName
 import android.graphics.Bitmap
+import android.media.MediaMetadataRetriever
 import android.os.Build
 import android.os.Environment
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
+import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
@@ -22,15 +24,19 @@ import com.local.listentomusic.data.ThumbnailRepository
 import com.local.listentomusic.data.UserPreferences
 import com.local.listentomusic.data.LibraryRowSize
 import com.local.listentomusic.data.ThemeMode
+import com.local.listentomusic.data.AppLanguage
+import com.local.listentomusic.data.FloatingWindowMode
 import com.local.listentomusic.model.MediaFile
 import com.local.listentomusic.model.SortMode
 import com.local.listentomusic.playback.PlaybackService
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Locale
 
 enum class LibraryStatus { NEEDS_PERMISSION, SCANNING, READY, FOLDER_MISSING, CANNOT_READ }
@@ -88,6 +94,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var tickerJob: Job? = null
     private var thumbnailPreloadJob: Job? = null
+    private var durationProbeJob: Job? = null
+    private var durationProbePath: String? = null
+    private val probedDurations = mutableMapOf<String, Long>()
     private var pendingPlay: MediaFile? = null
     private var lastPlaybackError: String? = null
 
@@ -171,8 +180,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun moveCustomItem(fromIndex: Int, toIndex: Int) {
-        if (_library.value.query.isNotBlank() || userPreferences.sortMode != SortMode.CUSTOM) return
+        if (_library.value.query.isNotBlank()) return
         if (fromIndex !in orderedFiles.indices || toIndex !in orderedFiles.indices || fromIndex == toIndex) return
+        userPreferences.activePlaylistId?.let { playlistId ->
+            viewModelScope.launch { preferences.movePlaylistItem(playlistId, fromIndex, toIndex) }
+            return
+        }
+        if (userPreferences.sortMode != SortMode.CUSTOM) return
         val moved = orderedFiles.toMutableList().apply {
             add(toIndex, removeAt(fromIndex))
         }
@@ -206,6 +220,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     suspend fun loadThumbnail(file: MediaFile): Bitmap? = thumbnailRepository.load(file)
+
+    suspend fun loadCurrentArtwork(path: String?): Bitmap? {
+        val file = scannedFiles.firstOrNull { it.path == path } ?: return null
+        return thumbnailRepository.load(file)
+    }
 
     fun togglePlayPause() {
         _controller.value?.let { if (it.isPlaying) it.pause() else it.play() }
@@ -245,6 +264,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setShowTypeBadge(value: Boolean) = updatePreference { preferences.setShowTypeBadge(value) }
     fun setResumePlayback(value: Boolean) = updatePreference { preferences.setResumePlayback(value) }
     fun setAutoPictureInPicture(value: Boolean) = updatePreference { preferences.setAutoPictureInPicture(value) }
+    fun setFloatingWindowMode(value: FloatingWindowMode) =
+        updatePreference { preferences.setFloatingWindowMode(value) }
+    fun setAppLanguage(value: AppLanguage) = updatePreference { preferences.setAppLanguage(value) }
+    fun setActivePlaylist(id: String?) = updatePreference { preferences.setActivePlaylist(id) }
+    fun createPlaylist(name: String) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            val id = preferences.createPlaylist(name)
+            preferences.setActivePlaylist(id)
+        }
+    }
+    fun renamePlaylist(id: String, name: String) {
+        if (name.isBlank()) return
+        updatePreference { preferences.renamePlaylist(id, name) }
+    }
+    fun deletePlaylist(id: String) = updatePreference { preferences.deletePlaylist(id) }
+    fun addToPlaylist(id: String, path: String) = updatePreference { preferences.addToPlaylist(id, path) }
+    fun removeFromActivePlaylist(path: String) {
+        val id = userPreferences.activePlaylistId ?: return
+        updatePreference { preferences.removeFromPlaylist(id, path) }
+    }
 
     fun setPreloadThumbnails(value: Boolean) {
         updatePreference { preferences.setPreloadThumbnails(value) }
@@ -314,7 +354,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun publishPlayback(player: Player) {
-        val duration = player.duration.takeIf { it > 0 && it != androidx.media3.common.C.TIME_UNSET } ?: 0L
+        val path = player.currentMediaItem?.mediaId?.takeIf { it.isNotBlank() }
+        val timelineDuration = if (
+            !player.currentTimeline.isEmpty &&
+            player.currentMediaItemIndex in 0 until player.currentTimeline.windowCount
+        ) {
+            player.currentTimeline.getWindow(
+                player.currentMediaItemIndex,
+                androidx.media3.common.Timeline.Window(),
+            ).durationMs
+        } else {
+            C.TIME_UNSET
+        }
+        val duration = resolveDurationMs(
+            player.duration,
+            player.contentDuration,
+            timelineDuration,
+            path?.let(probedDurations::get) ?: C.TIME_UNSET,
+        )
+        if (duration == 0L && path != null) probeDuration(path)
         val videoSize = player.videoSize
         val videoAspectRatio = if (videoSize.width > 0 && videoSize.height > 0) {
             videoSize.width.toFloat() / videoSize.height.toFloat()
@@ -323,7 +381,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         _playback.value = PlaybackUiState(
             connected = true,
-            currentPath = player.currentMediaItem?.mediaId?.takeIf { it.isNotBlank() },
+            currentPath = path,
             title = player.mediaMetadata.title?.toString()
                 ?: player.currentMediaItem?.mediaId?.substringAfterLast('/')
                 ?: "Nothing playing",
@@ -340,7 +398,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun applySortingAndFilter() {
-        orderedFiles = when (userPreferences.sortMode) {
+        val sortedLibrary = when (userPreferences.sortMode) {
             SortMode.CUSTOM -> {
                 val rank = userPreferences.customOrder.withIndex().associate { it.value to it.index }
                 scannedFiles.sortedWith(
@@ -351,6 +409,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             SortMode.NAME_ASC -> scannedFiles.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
             SortMode.NAME_DESC -> scannedFiles.sortedWith(compareByDescending<MediaFile> { it.name.lowercase() })
         }
+        orderedFiles = userPreferences.activePlaylistId
+            ?.let { id -> userPreferences.playlists.firstOrNull { it.id == id } }
+            ?.let { playlist ->
+                val byPath = scannedFiles.associateBy(MediaFile::path)
+                playlist.paths.mapNotNull(byPath::get)
+            }
+            ?: sortedLibrary
         val query = _library.value.query.trim()
         val shown = if (query.isBlank()) orderedFiles else orderedFiles.filter {
             it.name.contains(query, ignoreCase = true)
@@ -377,9 +442,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { block() }
     }
 
+    private fun probeDuration(path: String) {
+        if (durationProbePath == path || probedDurations.containsKey(path)) return
+        durationProbeJob?.cancel()
+        durationProbePath = path
+        durationProbeJob = viewModelScope.launch {
+            val duration = withContext(Dispatchers.IO) {
+                val retriever = MediaMetadataRetriever()
+                try {
+                        retriever.setDataSource(path)
+                        retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+                } catch (_: Exception) {
+                    null
+                } finally {
+                    runCatching { retriever.release() }
+                }
+            }
+            if (duration != null && duration > 0L) probedDurations[path] = duration
+            durationProbePath = null
+            _controller.value?.let(::publishPlayback)
+        }
+    }
+
     override fun onCleared() {
         tickerJob?.cancel()
         thumbnailPreloadJob?.cancel()
+        durationProbeJob?.cancel()
         _controller.value?.removeListener(playerListener)
         controllerFuture?.let(MediaController::releaseFuture)
         _controller.value = null
@@ -390,3 +478,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         const val MAX_PRELOAD_ITEMS = 120
     }
 }
+
+internal fun resolveDurationMs(vararg candidates: Long): Long =
+    candidates.firstOrNull { it > 0L && it != C.TIME_UNSET } ?: 0L
