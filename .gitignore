@@ -55,3 +55,53 @@ id_ed25519*
 **/.secrets/
 **/secrets/
 **/credentials/
+
+# === Hermes security+media hygiene ===
+# media: ignore all video/audio/images unless website asset
+*.mp4
+*.webm
+*.mov
+*.avi
+*.mkv
+*.mpg
+*.mpeg
+*.mp3
+*.wav
+*.flac
+*.ogg
+*.m4a
+*.aac
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.bmp
+*.tif
+*.tiff
+# keep web graphics everywhere
+!**/*.svg
+!**/*.ico
+!**/*.gif
+!**/*icon*.*
+!**/favicon.*
+!**/logo.*
+!**/banner.*
+!**/og.*
+!**/og-image.*
+!**/thumbnail.*
+!**/hero.*
+!**/preview.*
+!**/screenshot.*
+!**/demo*.*
+# keep all media inside web asset dirs
+!**/assets/**
+!**/public/**
+!**/static/**
+!**/img/**
+!**/images/**
+!**/media/**
+!**/www/**
+!**/css/**
+!**/js/**
+!**/photos/**
+!**/sprites/**
