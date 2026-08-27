@@ -148,7 +148,8 @@ fun GreaterArtApp(
                 )
             }
             MiniWindowEffect(
-                enabled = settings.floatingWindowMode == com.local.listentomusic.data.FloatingWindowMode.MINI_WINDOW && playback.hasMedia && !isPictureInPicture,
+                enabled = settings.floatingWindowMode == com.local.listentomusic.data.FloatingWindowMode.MINI_WINDOW
+                        && playback.hasMedia && !isPictureInPicture && screen != Screen.LIBRARY,
             )
         }
     }

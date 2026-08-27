@@ -27,6 +27,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.local.listentomusic.ui.GreaterArtApp
 import com.local.listentomusic.data.FloatingWindowMode
+import com.local.listentomusic.playback.MiniWindowOverlayService
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -42,6 +43,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
+        if (intent?.getBooleanExtra(MiniWindowOverlayService.EXTRA_STOP_APP, false) == true) {
+            // ponytail: mini window dragged onto the red cross -> the service already stopped
+            // playback; just exit the app here.
+            finishAffinity()
+            return
+        }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 combine(viewModel.playback, viewModel.settings) { playback, settings ->
