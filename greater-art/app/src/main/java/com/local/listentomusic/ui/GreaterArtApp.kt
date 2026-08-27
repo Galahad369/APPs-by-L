@@ -8,6 +8,14 @@ import android.os.Build
 import android.provider.Settings
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.Scaffold
@@ -20,6 +28,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalContext
@@ -58,7 +67,22 @@ fun GreaterArtApp(
 
     GreaterArtTheme(themeMode = settings.themeMode) {
         Surface(modifier = Modifier.fillMaxSize()) {
-            when (screen) {
+            AnimatedContent(
+                targetState = screen,
+                transitionSpec = {
+                    val spring = spring<IntOffset>(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy)
+                    // ponytail: iOS-style horizontal push; forward pushes in from right, back from left.
+                    if (targetState > initialState) {
+                        slideInHorizontally(spring, initialOffsetX = { it }) + fadeIn() togetherWith
+                            slideOutHorizontally(spring, targetOffsetX = { -it / 3 }) + fadeOut()
+                    } else {
+                        slideInHorizontally(spring, initialOffsetX = { -it / 3 }) + fadeIn() togetherWith
+                            slideOutHorizontally(spring, targetOffsetX = { it }) + fadeOut()
+                    }
+                },
+                label = "screen",
+            ) { scr ->
+                when (scr) {
                 Screen.LIBRARY -> Scaffold(
                     bottomBar = {
                         if (playback.hasMedia) {
@@ -146,6 +170,7 @@ fun GreaterArtApp(
                     onReset = viewModel::resetAppSettings,
                     onSeekOffset = viewModel::setSeekOffset,
                 )
+            }
             }
             MiniWindowEffect(
                 enabled = settings.floatingWindowMode == com.local.listentomusic.data.FloatingWindowMode.MINI_WINDOW

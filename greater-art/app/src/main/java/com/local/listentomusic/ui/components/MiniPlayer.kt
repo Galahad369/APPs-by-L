@@ -59,27 +59,27 @@ fun MiniPlayer(
     val progress = if (playback.durationMs > 0L) {
         (playback.positionMs.toFloat() / playback.durationMs).coerceIn(0f, 1f)
     } else 0f
+    // ponytail: iOS-style frosted bar — translucent scrim, no hard card edge.
     Surface(
         modifier = Modifier.fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)),
         color = Color.Transparent,
     ) {
-        Card(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-            shape = RoundedCornerShape(9.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color(0xFF171B1A),
-                contentColor = Color(0xFFF4F6F2),
-            ),
+        Box(
+            modifier = Modifier.fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 6.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)),
         ) {
             Column(modifier = Modifier.clickable(onClick = onOpen)) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().height(54.dp),
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(
-                        modifier = Modifier.padding(start = 5.dp).size(44.dp).clip(RoundedCornerShape(7.dp))
-                            .background(Color(0xFF29302E)),
+                        modifier = Modifier.padding(start = 8.dp).size(42.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
                         contentAlignment = Alignment.Center,
                     ) {
                         if (artwork != null) {
@@ -94,7 +94,7 @@ fun MiniPlayer(
                                 Icons.Rounded.MusicNote,
                                 contentDescription = null,
                                 modifier = Modifier.size(21.dp),
-                                tint = Color(0xFF8BE9D3),
+                                tint = MaterialTheme.colorScheme.secondary,
                             )
                         }
                     }
@@ -102,6 +102,7 @@ fun MiniPlayer(
                         text = playback.title.substringBeforeLast('.', playback.title),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
@@ -114,7 +115,7 @@ fun MiniPlayer(
                             if (playback.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                             uiText(language, if (playback.isPlaying) "Pause" else "Play", if (playback.isPlaying) "暫停" else "播放"),
                             modifier = Modifier.size(25.dp),
-                            tint = Color(0xFF8BE9D3),
+                            tint = MaterialTheme.colorScheme.secondary,
                         )
                     }
                     IconButton(onClick = onNext, enabled = playback.hasNext, modifier = Modifier.size(38.dp)) {
@@ -123,9 +124,9 @@ fun MiniPlayer(
                 }
                 LinearProgressIndicator(
                     progress = { progress },
-                    modifier = Modifier.fillMaxWidth().height(2.dp),
-                    color = Color(0xFF8BE9D3),
-                    trackColor = Color.White.copy(alpha = 0.12f),
+                    modifier = Modifier.fillMaxWidth().height(2.dp).padding(bottom = 1.dp),
+                    color = MaterialTheme.colorScheme.secondary,
+                    trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
                 )
             }
         }
