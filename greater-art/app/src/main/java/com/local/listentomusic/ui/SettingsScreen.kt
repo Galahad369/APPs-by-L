@@ -18,6 +18,7 @@ import androidx.compose.material.icons.rounded.Cached
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PrivacyTip
 import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material3.AlertDialog
@@ -59,6 +60,7 @@ import com.local.listentomusic.data.ThemeMode
 import com.local.listentomusic.data.UserPreferences
 
 private val speeds = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f, 2.5f, 3f)
+private val seekOffsets = listOf(1000L, 2000L, 3000L, 5000L, 10000L, 20000L, 30000L, 60000L)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,13 +72,14 @@ fun SettingsScreen(
     onThemeMode: (ThemeMode) -> Unit,
     onShowThumbnails: (Boolean) -> Unit,
     onShowFileDetails: (Boolean) -> Unit,
-    onShowTypeBadge: (Boolean) -> Unit,
     onPreloadThumbnails: (Boolean) -> Unit,
     onResumePlayback: (Boolean) -> Unit,
     onAutoPictureInPicture: (Boolean) -> Unit,
     onFloatingWindowMode: (FloatingWindowMode) -> Unit,
     onAppLanguage: (AppLanguage) -> Unit,
     onCreatePlaylist: (String) -> Unit,
+    onCreatePlaylistAndSeed: (String, String?, String?) -> Unit,
+    onPlayPlaylist: (String) -> Unit,
     onRenamePlaylist: (String, String) -> Unit,
     onDeletePlaylist: (String) -> Unit,
     onSpeed: (Float) -> Unit,
@@ -84,6 +87,7 @@ fun SettingsScreen(
     onClearThumbnailCache: () -> Unit,
     onRescan: () -> Unit,
     onReset: () -> Unit,
+    onSeekOffset: (Long) -> Unit,
 ) {
     val language = preferences.appLanguage
     var cacheCleared by remember { mutableStateOf(false) }
@@ -154,7 +158,6 @@ fun SettingsScreen(
                 )
                 SwitchSetting(uiText(language, "Show thumbnails", "顯示縮圖"), uiText(language, "Turn off previews for the densest list.", "關閉預覽以顯示最緊密的清單。"), preferences.showThumbnails, onShowThumbnails)
                 SwitchSetting(uiText(language, "Show file details", "顯示檔案詳情"), uiText(language, "Display format and file size below the title.", "在標題下顯示格式與檔案大小。"), preferences.showFileDetails, onShowFileDetails)
-                SwitchSetting(uiText(language, "Show format badge", "顯示格式標籤"), uiText(language, "Display MP4, FLAC, MP3 and other labels.", "顯示 MP4、FLAC、MP3 等標籤。"), preferences.showTypeBadge, onShowTypeBadge, preferences.showThumbnails)
 
                 SectionTitle(uiText(language, "Playback", "播放"))
                 ChoiceSetting(uiText(language, "Playback speed", "播放速度"), uiText(language, "Applied immediately and remembered locally.", "立即套用並儲存在本機。"), speeds, playback.speed, { "${it}×" }, onSpeed)
@@ -166,6 +169,14 @@ fun SettingsScreen(
                     { it.second },
                     { onRepeatMode(it.first) },
                 )
+                ChoiceSetting(
+                    uiText(language, "Jump back / forward", "快退 / 快進"),
+                    uiText(language, "How far the skip buttons move playback.", "快退快進按鈕一次移動的時間。"),
+                    seekOffsets,
+                    preferences.seekOffsetMs,
+                    { if (it >= 60_000L) "1m" else "${it / 1000}s" },
+                    onSeekOffset,
+                )
                 SwitchSetting(uiText(language, "Resume last position", "接續上次位置"), uiText(language, "Continue the last file where you stopped.", "從上次停止的位置繼續播放。"), preferences.resumePlayback, onResumePlayback)
                 SwitchSetting(uiText(language, "Automatic floating video", "自動浮動影片"), uiText(language, "Enter picture-in-picture when leaving a playing video.", "離開正在播放的影片時進入子母畫面。"), preferences.autoPictureInPicture, onAutoPictureInPicture)
                 ChoiceSetting(
@@ -173,7 +184,9 @@ fun SettingsScreen(
                     uiText(language, "Compact is the smallest default. Android still controls final size and pinch resizing.", "「精簡」為最小預設。最終大小與縮放仍由 Android 控制。"),
                     FloatingWindowMode.entries,
                     preferences.floatingWindowMode,
-                    { if (it == FloatingWindowMode.COMPACT) uiText(language, "Compact", "精簡") else uiText(language, "Follow video", "跟隨影片") },
+                    { if (it == FloatingWindowMode.COMPACT) uiText(language, "Compact", "精簡")
+                      else if (it == FloatingWindowMode.FOLLOW_VIDEO) uiText(language, "Follow video", "跟隨影片")
+                      else uiText(language, "Mini window", "迷你視窗") },
                     onFloatingWindowMode,
                 )
 
@@ -190,6 +203,10 @@ fun SettingsScreen(
                         supportingContent = { Text(uiText(language, "${playlist.paths.size} songs", "${playlist.paths.size} 首歌曲")) },
                         trailingContent = {
                             Row {
+                                IconButton(
+                                    onClick = { onPlayPlaylist(playlist.id) },
+                                    enabled = playlist.paths.isNotEmpty(),
+                                ) { Icon(Icons.Rounded.PlayArrow, uiText(language, "Play", "播放")) }
                                 IconButton(onClick = { playlistName = playlist.name; editPlaylist = playlist }) { Icon(Icons.Rounded.Edit, uiText(language, "Rename", "重新命名")) }
                                 IconButton(onClick = { deletePlaylist = playlist }) { Icon(Icons.Rounded.Delete, uiText(language, "Delete", "刪除")) }
                             }
@@ -232,7 +249,7 @@ fun SettingsScreen(
         }
     }
 
-    if (createOpen) NameDialog(language, null, playlistName, { playlistName = it.take(60) }, { createOpen = false }, { onCreatePlaylist(playlistName); createOpen = false })
+    if (createOpen) NameDialog(language, null, playlistName, { playlistName = it.take(60) }, { createOpen = false }, { onCreatePlaylistAndSeed(playlistName, null, null); createOpen = false })
     editPlaylist?.let { playlist ->
         NameDialog(language, playlist, playlistName, { playlistName = it.take(60) }, { editPlaylist = null }, { onRenamePlaylist(playlist.id, playlistName); editPlaylist = null })
     }

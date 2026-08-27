@@ -10,12 +10,15 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -78,6 +81,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.boundsInWindow
@@ -122,6 +126,8 @@ fun NowPlayingScreen(
     onSeek: (Long) -> Unit,
     onSpeed: (Float) -> Unit,
     onRepeat: () -> Unit,
+    seekOffsetMs: Long = 5_000L,
+    onSeekBy: (Long) -> Unit,
 ) {
     var fullscreen by rememberSaveable { mutableStateOf(false) }
 
@@ -162,6 +168,8 @@ fun NowPlayingScreen(
                     onPrevious = onPrevious,
                     onNext = onNext,
                     onSeek = onSeek,
+                    seekOffsetMs = seekOffsetMs,
+                    onSeekBy = onSeekBy,
                     modifier = if (immersiveVideo) {
                         Modifier.fillMaxSize()
                     } else {
@@ -190,6 +198,8 @@ fun NowPlayingScreen(
                 onSeek = onSeek,
                 onSpeed = onSpeed,
                 onRepeat = onRepeat,
+                seekOffsetMs = seekOffsetMs,
+                onSeekBy = onSeekBy,
             )
         }
     }
@@ -208,6 +218,8 @@ private fun VideoPlayerStage(
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onSeek: (Long) -> Unit,
+    seekOffsetMs: Long = 5_000L,
+    onSeekBy: (Long) -> Unit,
     modifier: Modifier,
 ) {
     var controlsVisible by rememberSaveable { mutableStateOf(true) }
@@ -225,7 +237,14 @@ private fun VideoPlayerStage(
     }
 
     Box(
-        modifier = modifier.background(Color.Black).clickable { controlsVisible = !controlsVisible },
+        modifier = modifier.background(Color.Black).pointerInput(Unit) {
+            detectTapGestures(
+                onTap = { controlsVisible = !controlsVisible },
+                onDoubleTap = { offset ->
+                    if (offset.x < size.width / 2) onSeekBy(-seekOffsetMs) else onSeekBy(seekOffsetMs)
+                },
+            )
+        },
         contentAlignment = Alignment.Center,
     ) {
         VideoSurface(controller, onVideoBoundsChanged, Modifier.fillMaxSize())
@@ -277,11 +296,17 @@ private fun VideoPlayerStage(
                     OverlayIconButton(onClick = onPrevious, enabled = playback.hasPrevious) {
                         Icon(Icons.Rounded.SkipPrevious, "Previous", tint = Color.White, modifier = Modifier.size(31.dp))
                     }
-                    FilledIconButton(onClick = onTogglePlay, modifier = Modifier.size(58.dp)) {
+                    // ponytail: translucent center control, always available while controls show; taps toggle play/pause
+                    Box(
+                        modifier = Modifier.size(52.dp).clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.2f)).clickable(onClick = onTogglePlay),
+                        contentAlignment = Alignment.Center,
+                    ) {
                         Icon(
                             if (playback.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                             if (playback.isPlaying) "Pause" else "Play",
-                            modifier = Modifier.size(33.dp),
+                            modifier = Modifier.size(30.dp),
+                            tint = Color.White.copy(alpha = 0.92f),
                         )
                     }
                     OverlayIconButton(onClick = onNext, enabled = playback.hasNext) {
@@ -333,6 +358,8 @@ private fun AudioPlayer(
     onSeek: (Long) -> Unit,
     onSpeed: (Float) -> Unit,
     onRepeat: () -> Unit,
+    seekOffsetMs: Long = 5_000L,
+    onSeekBy: (Long) -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)
@@ -353,7 +380,14 @@ private fun AudioPlayer(
                     Brush.linearGradient(
                         listOf(Color(0xFF111413), Color(0xFF29423C), Color(0xFF1A211F))
                     )
-                ),
+                )
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onDoubleTap = { offset ->
+                            if (offset.x < size.width / 2) onSeekBy(-seekOffsetMs) else onSeekBy(seekOffsetMs)
+                        },
+                    )
+                },
             contentAlignment = Alignment.Center,
         ) {
             if (artwork != null) {
@@ -414,13 +448,7 @@ private fun SecondaryControls(
             overflow = TextOverflow.Ellipsis,
             color = Color(0xFFF3F5F0),
         )
-        Spacer(Modifier.height(7.dp))
-        Text(
-            "Local video  •  offline",
-            color = Color(0xFF9CA39D),
-            style = MaterialTheme.typography.labelMedium,
-        )
-        Spacer(Modifier.height(30.dp))
+        Spacer(Modifier.height(18.dp))
         SecondaryControlRow(playback, onSpeed, onRepeat, dark = true)
         PlaybackError(playback.errorMessage)
     }
@@ -525,6 +553,12 @@ private fun CompactSlider(
     val fraction = if (range > 0f) {
         ((value - valueRange.start) / range).coerceIn(0f, 1f)
     } else 0f
+    // ponytail: spring-animate the fill so dragging feels liquid, not steppy
+    val animatedFraction by animateFloatAsState(
+        targetValue = fraction,
+        animationSpec = spring(dampingRatio = 0.85f, stiffness = 340f),
+        label = "sliderFill",
+    )
     Slider(
         value = value,
         onValueChange = onValueChange,
@@ -533,17 +567,30 @@ private fun CompactSlider(
         enabled = enabled,
         modifier = Modifier.fillMaxWidth().height(22.dp),
         thumb = { _ ->
-            Box(
-                Modifier.size(10.dp).clip(CircleShape).background(activeColor)
-            )
+            // ponytail: half-transparent liquid ball — soft glow + radial-gradient core
+            Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(20.dp).clip(CircleShape).background(activeColor.copy(alpha = 0.22f)))
+                Box(
+                    Modifier.size(13.dp).clip(CircleShape).background(
+                        Brush.radialGradient(
+                            listOf(Color.White.copy(alpha = 0.95f), activeColor.copy(alpha = 0.55f))
+                        )
+                    )
+                )
+            }
         },
         track = { _ ->
             Box(
-                Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp))
-                    .background(inactiveColor)
+                Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp))
+                    .background(inactiveColor.copy(alpha = 0.4f))
             ) {
                 Box(
-                    Modifier.fillMaxWidth(fraction).fillMaxHeight().background(activeColor)
+                    Modifier.fillMaxWidth(animatedFraction).fillMaxHeight().clip(RoundedCornerShape(2.dp))
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(activeColor.copy(alpha = 0.55f), activeColor)
+                            )
+                        )
                 )
             }
         },
