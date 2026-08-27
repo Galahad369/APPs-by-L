@@ -126,6 +126,7 @@ class MainActivity : ComponentActivity() {
             FloatingWindowMode.COMPACT -> 16f / 9f
             FloatingWindowMode.FOLLOW_VIDEO ->
                 viewModel.playback.value.videoAspectRatio.coerceIn(0.5f, 2.0f)
+            FloatingWindowMode.MINI_WINDOW -> 16f / 9f
         }
         return PictureInPictureParams.Builder()
             .setAspectRatio(Rational((ratio * 1_000).toInt(), 1_000))

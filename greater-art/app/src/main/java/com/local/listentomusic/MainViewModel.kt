@@ -99,6 +99,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val probedDurations = mutableMapOf<String, Long>()
     private var pendingPlay: MediaFile? = null
     private var lastPlaybackError: String? = null
+    private val _miniWindowVisible = MutableStateFlow(false)
+    val miniWindowVisible: StateFlow<Boolean> = _miniWindowVisible.asStateFlow()
 
     private val playerListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) = publishPlayback(player)
@@ -230,6 +232,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _controller.value?.let { if (it.isPlaying) it.pause() else it.play() }
     }
 
+    fun seekBy(deltaMs: Long) {
+        _controller.value?.let { seekTo(it.currentPosition + deltaMs) }
+    }
+
     fun seekTo(positionMs: Long) {
         _controller.value?.seekTo(positionMs.coerceAtLeast(0L))
         _controller.value?.let(::publishPlayback)
@@ -261,12 +267,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setThemeMode(value: ThemeMode) = updatePreference { preferences.setThemeMode(value) }
     fun setShowThumbnails(value: Boolean) = updatePreference { preferences.setShowThumbnails(value) }
     fun setShowFileDetails(value: Boolean) = updatePreference { preferences.setShowFileDetails(value) }
-    fun setShowTypeBadge(value: Boolean) = updatePreference { preferences.setShowTypeBadge(value) }
     fun setResumePlayback(value: Boolean) = updatePreference { preferences.setResumePlayback(value) }
     fun setAutoPictureInPicture(value: Boolean) = updatePreference { preferences.setAutoPictureInPicture(value) }
     fun setFloatingWindowMode(value: FloatingWindowMode) =
         updatePreference { preferences.setFloatingWindowMode(value) }
     fun setAppLanguage(value: AppLanguage) = updatePreference { preferences.setAppLanguage(value) }
+    fun setSeekOffset(value: Long) = updatePreference { preferences.setSeekOffsetMs(value) }
     fun setActivePlaylist(id: String?) = updatePreference { preferences.setActivePlaylist(id) }
     fun createPlaylist(name: String) {
         if (name.isBlank()) return
@@ -274,6 +280,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val id = preferences.createPlaylist(name)
             preferences.setActivePlaylist(id)
         }
+    }
+    fun addAllToPlaylist(id: String, paths: List<String>) {
+        if (paths.isEmpty()) return
+        updatePreference { preferences.addAllToPlaylist(id, paths) }
+    }
+    fun createPlaylistAndSeed(name: String, seedPath: String?, keyword: String?) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            val id = preferences.createPlaylist(name)
+            val toAdd = buildList {
+                seedPath?.let { add(it) }
+                keyword?.takeIf { it.isNotBlank() }?.let { kw ->
+                    val upper = kw.uppercase(Locale.ROOT)
+                    orderedFiles.filter { it.path.uppercase(Locale.ROOT).contains(upper) || it.name.uppercase(Locale.ROOT).contains(upper) }
+                        .forEach { add(it.path) }
+                }
+            }.distinct()
+            if (toAdd.isNotEmpty()) preferences.addAllToPlaylist(id, toAdd)
+            preferences.setActivePlaylist(id)
+        }
+    }
+    fun playPlaylist(id: String) {
+        val player = _controller.value ?: return
+        val playlist = userPreferences.playlists.firstOrNull { it.id == id } ?: return
+        val byPath = orderedFiles.associateBy { it.path }
+        val queue = playlist.paths.mapNotNull(byPath::get)
+        if (queue.isEmpty()) return
+        lastPlaybackError = null
+        player.setMediaItems(queue.map(MediaFile::toMediaItem), 0, 0L)
+        player.playWhenReady = true
+        player.prepare()
     }
     fun renamePlaylist(id: String, name: String) {
         if (name.isBlank()) return
@@ -284,6 +321,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun removeFromActivePlaylist(path: String) {
         val id = userPreferences.activePlaylistId ?: return
         updatePreference { preferences.removeFromPlaylist(id, path) }
+    }
+
+    fun setMiniWindowVisible(visible: Boolean) {
+        _miniWindowVisible.value = visible
     }
 
     fun setPreloadThumbnails(value: Boolean) {

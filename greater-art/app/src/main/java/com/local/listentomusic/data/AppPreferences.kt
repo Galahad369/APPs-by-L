@@ -27,20 +27,20 @@ data class UserPreferences(
     val libraryRowSize: LibraryRowSize = LibraryRowSize.SMALL,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val showThumbnails: Boolean = true,
-    val showFileDetails: Boolean = true,
-    val showTypeBadge: Boolean = true,
+    val showFileDetails: Boolean = false,
     val preloadThumbnails: Boolean = true,
     val resumePlayback: Boolean = true,
     val autoPictureInPicture: Boolean = true,
-    val floatingWindowMode: FloatingWindowMode = FloatingWindowMode.COMPACT,
+    val floatingWindowMode: FloatingWindowMode = FloatingWindowMode.FOLLOW_VIDEO,
     val appLanguage: AppLanguage = AppLanguage.ENGLISH,
     val playlists: List<LocalPlaylist> = emptyList(),
     val activePlaylistId: String? = null,
+    val seekOffsetMs: Long = 5_000L,
 )
 
 enum class LibraryRowSize(val label: String) { SMALL("Small"), MEDIUM("Medium"), LARGE("Large") }
 enum class ThemeMode(val label: String) { SYSTEM("System"), LIGHT("Light"), DARK("Dark") }
-enum class FloatingWindowMode { COMPACT, FOLLOW_VIDEO }
+enum class FloatingWindowMode { COMPACT, FOLLOW_VIDEO, MINI_WINDOW }
 enum class AppLanguage { ENGLISH, TRADITIONAL_CHINESE }
 
 data class LocalPlaylist(
@@ -61,7 +61,6 @@ class AppPreferences(private val context: Context) {
         val themeMode = stringPreferencesKey("theme_mode")
         val showThumbnails = booleanPreferencesKey("show_thumbnails")
         val showFileDetails = booleanPreferencesKey("show_file_details")
-        val showTypeBadge = booleanPreferencesKey("show_type_badge")
         val preloadThumbnails = booleanPreferencesKey("preload_thumbnails")
         val resumePlayback = booleanPreferencesKey("resume_playback")
         val autoPictureInPicture = booleanPreferencesKey("auto_picture_in_picture")
@@ -69,6 +68,7 @@ class AppPreferences(private val context: Context) {
         val appLanguage = stringPreferencesKey("app_language")
         val playlists = stringPreferencesKey("playlists")
         val activePlaylistId = stringPreferencesKey("active_playlist_id")
+        val seekOffsetMs = longPreferencesKey("seek_offset_ms")
     }
 
     val values: Flow<UserPreferences> = context.dataStore.data.map { prefs ->
@@ -88,17 +88,17 @@ class AppPreferences(private val context: Context) {
             themeMode = enumValueOrDefault(prefs[Keys.themeMode], ThemeMode.SYSTEM),
             showThumbnails = prefs[Keys.showThumbnails] ?: true,
             showFileDetails = prefs[Keys.showFileDetails] ?: true,
-            showTypeBadge = prefs[Keys.showTypeBadge] ?: true,
             preloadThumbnails = prefs[Keys.preloadThumbnails] ?: true,
             resumePlayback = prefs[Keys.resumePlayback] ?: true,
             autoPictureInPicture = prefs[Keys.autoPictureInPicture] ?: true,
             floatingWindowMode = enumValueOrDefault(
                 prefs[Keys.floatingWindowMode],
-                FloatingWindowMode.COMPACT,
+                FloatingWindowMode.FOLLOW_VIDEO,
             ),
             appLanguage = enumValueOrDefault(prefs[Keys.appLanguage], AppLanguage.ENGLISH),
             playlists = decodePlaylists(prefs[Keys.playlists].orEmpty()),
             activePlaylistId = prefs[Keys.activePlaylistId],
+            seekOffsetMs = prefs[Keys.seekOffsetMs] ?: 5_000L,
         )
     }
 
@@ -130,13 +130,13 @@ class AppPreferences(private val context: Context) {
     suspend fun setThemeMode(value: ThemeMode) = edit { it[Keys.themeMode] = value.name }
     suspend fun setShowThumbnails(value: Boolean) = edit { it[Keys.showThumbnails] = value }
     suspend fun setShowFileDetails(value: Boolean) = edit { it[Keys.showFileDetails] = value }
-    suspend fun setShowTypeBadge(value: Boolean) = edit { it[Keys.showTypeBadge] = value }
     suspend fun setPreloadThumbnails(value: Boolean) = edit { it[Keys.preloadThumbnails] = value }
     suspend fun setResumePlayback(value: Boolean) = edit { it[Keys.resumePlayback] = value }
     suspend fun setAutoPictureInPicture(value: Boolean) = edit { it[Keys.autoPictureInPicture] = value }
     suspend fun setFloatingWindowMode(value: FloatingWindowMode) =
         edit { it[Keys.floatingWindowMode] = value.name }
     suspend fun setAppLanguage(value: AppLanguage) = edit { it[Keys.appLanguage] = value.name }
+    suspend fun setSeekOffsetMs(value: Long) = edit { it[Keys.seekOffsetMs] = value }
 
     suspend fun setActivePlaylist(id: String?) = edit { prefs ->
         if (id == null) prefs.remove(Keys.activePlaylistId) else prefs[Keys.activePlaylistId] = id
@@ -167,6 +167,13 @@ class AppPreferences(private val context: Context) {
         }
     }
 
+    suspend fun addAllToPlaylist(id: String, paths: List<String>) = updatePlaylists { playlists ->
+        playlists.map { playlist ->
+            if (playlist.id != id || paths.isEmpty()) playlist
+            else playlist.copy(paths = (playlist.paths + paths).distinct())
+        }
+    }
+
     suspend fun removeFromPlaylist(id: String, path: String) = updatePlaylists { playlists ->
         playlists.map { playlist ->
             if (playlist.id == id) playlist.copy(paths = playlist.paths.filterNot { it == path }) else playlist
@@ -191,12 +198,12 @@ class AppPreferences(private val context: Context) {
             it.remove(Keys.themeMode)
             it.remove(Keys.showThumbnails)
             it.remove(Keys.showFileDetails)
-            it.remove(Keys.showTypeBadge)
             it.remove(Keys.preloadThumbnails)
             it.remove(Keys.resumePlayback)
             it.remove(Keys.autoPictureInPicture)
             it.remove(Keys.floatingWindowMode)
             it.remove(Keys.appLanguage)
+            it.remove(Keys.seekOffsetMs)
             it[Keys.speed] = 1f
             it[Keys.repeatMode] = Player.REPEAT_MODE_ONE.toLong()
         }

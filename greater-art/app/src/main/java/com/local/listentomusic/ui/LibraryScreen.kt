@@ -25,10 +25,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.PlaylistAdd
-import androidx.compose.material.icons.rounded.QueueMusic
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
@@ -91,8 +92,11 @@ fun LibraryScreen(
     onMoveItem: (Int, Int) -> Unit,
     onSelectPlaylist: (String?) -> Unit,
     onCreatePlaylist: (String) -> Unit,
+    onCreatePlaylistAndSeed: (String, String?, String?) -> Unit,
+    onPlayPlaylist: (String) -> Unit,
     onAddToPlaylist: (String, String) -> Unit,
     onRemoveFromPlaylist: (String) -> Unit,
+    onDeletePlaylist: (String) -> Unit,
     onLoadThumbnail: suspend (MediaFile) -> Bitmap?,
     onOpenSettings: () -> Unit,
     onPlay: (MediaFile) -> Unit,
@@ -102,7 +106,9 @@ fun LibraryScreen(
     var sortMenuOpen by remember { mutableStateOf(false) }
     var playlistMenuOpen by remember { mutableStateOf(false) }
     var createPlaylistOpen by remember { mutableStateOf(false) }
+    var createSeedPath by remember { mutableStateOf<String?>(null) }
     var playlistName by remember { mutableStateOf("") }
+    var seedKeyword by remember { mutableStateOf("") }
     var songListFile by remember { mutableStateOf<MediaFile?>(null) }
 
     Scaffold(
@@ -182,7 +188,7 @@ fun LibraryScreen(
             ) {
                 Box(Modifier.weight(1f)) {
                     Button(onClick = { playlistMenuOpen = true }) {
-                        Icon(Icons.Rounded.QueueMusic, null)
+                        Icon(Icons.AutoMirrored.Rounded.QueueMusic, null)
                         Spacer(Modifier.width(8.dp))
                         Text(activePlaylist?.name ?: uiText(language, "All songs", "所有歌曲"), maxLines = 1)
                     }
@@ -190,7 +196,7 @@ fun LibraryScreen(
                         DropdownMenuItem(
                             text = { Text(uiText(language, "All songs", "所有歌曲")) },
                             onClick = { playlistMenuOpen = false; onSelectPlaylist(null) },
-                            leadingIcon = { Icon(Icons.Rounded.QueueMusic, null) },
+                            leadingIcon = { Icon(Icons.AutoMirrored.Rounded.QueueMusic, null) },
                         )
                         preferences.playlists.forEach { playlist ->
                             DropdownMenuItem(
@@ -199,10 +205,23 @@ fun LibraryScreen(
                             )
                         }
                         DropdownMenuItem(
-                            text = { Text(uiText(language, "Create playlist", "建立播放清單")) },
-                            onClick = { playlistMenuOpen = false; createPlaylistOpen = true },
-                            leadingIcon = { Icon(Icons.Rounded.PlaylistAdd, null) },
+                            text = { Text(uiText(language, "Play this list", "播放此清單")) },
+                            leadingIcon = { Icon(Icons.Rounded.PlayArrow, null) },
+                            onClick = { playlistMenuOpen = false; activePlaylist?.let { onPlayPlaylist(it.id) } },
+                            enabled = activePlaylist != null && activePlaylist.paths.isNotEmpty(),
                         )
+                        DropdownMenuItem(
+                            text = { Text(uiText(language, "Create playlist", "建立播放清單")) },
+                            onClick = { playlistMenuOpen = false; createSeedPath = null; createPlaylistOpen = true },
+                            leadingIcon = { Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, null) },
+                        )
+                        activePlaylist?.let { pl ->
+                            DropdownMenuItem(
+                                text = { Text(uiText(language, "Delete list", "刪除清單")) },
+                                onClick = { playlistMenuOpen = false; onDeletePlaylist(pl.id) },
+                                leadingIcon = { Icon(Icons.Rounded.Delete, null) },
+                            )
+                        }
                     }
                 }
                 if (activePlaylist != null) {
@@ -246,8 +265,15 @@ fun LibraryScreen(
                         onRefresh,
                     )
                 } else {
-                    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 12.dp)) {
-                        itemsIndexed(state.files, key = { _, item -> item.id }) { index, item ->
+                    LazyColumn(
+                        Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 12.dp),
+                    ) {
+                        itemsIndexed(
+                            state.files,
+                            key = { _, item -> item.id },
+                            contentType = { _, item -> item.kind },
+                        ) { index, item ->
                             MediaFileRow(
                                 file = item,
                                 isCurrent = item.path == currentPath,
@@ -259,7 +285,6 @@ fun LibraryScreen(
                                 rowSize = preferences.libraryRowSize,
                                 showThumbnails = preferences.showThumbnails,
                                 showFileDetails = preferences.showFileDetails,
-                                showTypeBadge = preferences.showTypeBadge,
                                 onPlay = { onPlay(item) },
                                 onMore = { songListFile = item },
                                 moreDescription = uiText(language, "Song list", "歌曲清單"),
@@ -279,8 +304,18 @@ fun LibraryScreen(
         language = language,
         name = playlistName,
         onName = { playlistName = it.take(60) },
-        onDismiss = { createPlaylistOpen = false; playlistName = "" },
-        onCreate = { onCreatePlaylist(playlistName); createPlaylistOpen = false; playlistName = "" },
+        seedPath = createSeedPath,
+        keyword = seedKeyword,
+        onKeyword = { seedKeyword = it },
+        onDismiss = { createPlaylistOpen = false; playlistName = ""; seedKeyword = ""; createSeedPath = null },
+        onCreate = {
+            onCreatePlaylistAndSeed(playlistName, createSeedPath, null)
+            createPlaylistOpen = false; playlistName = ""; seedKeyword = ""; createSeedPath = null
+        },
+        onCreateWithKeyword = {
+            onCreatePlaylistAndSeed(playlistName, createSeedPath, seedKeyword.ifBlank { null })
+            createPlaylistOpen = false; playlistName = ""; seedKeyword = ""; createSeedPath = null
+        },
     )
     songListFile?.let { file ->
         AlertDialog(
@@ -300,8 +335,8 @@ fun LibraryScreen(
                             onClick = { onAddToPlaylist(playlist.id, file.path); songListFile = null },
                         ) { Text(if (added) "✓  ${playlist.name}" else playlist.name) }
                     }
-                    TextButton(onClick = { songListFile = null; createPlaylistOpen = true }) {
-                        Icon(Icons.Rounded.PlaylistAdd, null)
+                    TextButton(onClick = { songListFile = null; createSeedPath = file.path; createPlaylistOpen = true }) {
+                        Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, null)
                         Text("  ${uiText(language, "Create playlist", "建立播放清單")}")
                     }
                 }
@@ -316,14 +351,44 @@ private fun CreatePlaylistDialog(
     language: com.local.listentomusic.data.AppLanguage,
     name: String,
     onName: (String) -> Unit,
+    seedPath: String?,
+    keyword: String,
+    onKeyword: (String) -> Unit,
     onDismiss: () -> Unit,
     onCreate: () -> Unit,
+    onCreateWithKeyword: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(uiText(language, "Create playlist", "建立播放清單")) },
-        text = { OutlinedTextField(name, onName, singleLine = true, label = { Text(uiText(language, "Playlist name", "播放清單名稱")) }) },
-        confirmButton = { TextButton(enabled = name.isNotBlank(), onClick = onCreate) { Text(uiText(language, "Create", "建立")) } },
+        text = {
+            Column {
+                OutlinedTextField(
+                    name, onName, singleLine = true,
+                    label = { Text(uiText(language, "Playlist name", "播放清單名稱")) },
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    keyword, onKeyword, singleLine = true,
+                    label = { Text(uiText(language, "Add all songs containing (optional)", "加入含此關鍵字的所有歌曲（選填）")) },
+                    placeholder = { Text(uiText(language, "e.g. example", "例如：example")) },
+                )
+                if (seedPath != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        uiText(language, "Also adds the song you opened.", "同時加入你開啟的歌曲。"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = name.isNotBlank(),
+                onClick = if (keyword.isBlank()) onCreate else onCreateWithKeyword,
+            ) { Text(if (keyword.isBlank()) uiText(language, "Create", "建立") else uiText(language, "Create + add matches", "建立並加入")) }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text(uiText(language, "Cancel", "取消")) } },
     )
 }
@@ -340,7 +405,6 @@ private fun MediaFileRow(
     rowSize: LibraryRowSize,
     showThumbnails: Boolean,
     showFileDetails: Boolean,
-    showTypeBadge: Boolean,
     onPlay: () -> Unit,
     onMore: () -> Unit,
     moreDescription: String,
@@ -378,7 +442,7 @@ private fun MediaFileRow(
             Spacer(Modifier.width(9.dp))
         }
         if (showThumbnails) {
-            MediaThumbnail(file, thumbnail, rowSize, showTypeBadge)
+            MediaThumbnail(file, thumbnail, rowSize)
             Spacer(Modifier.width(rowSize.textSpacing))
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
@@ -408,21 +472,31 @@ private fun MediaFileRow(
     }
 }
 
+// ponytail: hoisted so the brush isn't reallocated per-row during scroll
+private val thumbnailBrush @androidx.compose.runtime.Composable get() =
+    Brush.linearGradient(listOf(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.primaryContainer))
+
 @Composable
-private fun MediaThumbnail(file: MediaFile, bitmap: Bitmap?, rowSize: LibraryRowSize, showTypeBadge: Boolean) {
+private fun MediaThumbnail(file: MediaFile, bitmap: Bitmap?, rowSize: LibraryRowSize) {
     val shape = RoundedCornerShape(9.dp)
     Box(
-        Modifier.size(rowSize.thumbnailWidth, rowSize.thumbnailHeight).clip(shape).background(
-            Brush.linearGradient(listOf(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.primaryContainer))
-        ),
+        Modifier.size(rowSize.thumbnailWidth, rowSize.thumbnailHeight).clip(shape).background(thumbnailBrush),
         contentAlignment = Alignment.Center,
     ) {
         if (bitmap != null) {
             Image(bitmap.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            if (file.kind == MediaKind.VIDEO) Box(
-                Modifier.size(rowSize.playBadgeSize).clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.62f)),
-                contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Rounded.PlayArrow, null, Modifier.size(rowSize.playIconSize), Color.White) }
+            // ponytail: subtle play glyph, never a blocking circle — the thumbnail stays visible
+            if (file.kind == MediaKind.VIDEO) {
+                val badge = Modifier.align(Alignment.Center).clip(RoundedCornerShape(50))
+                Box(badge.background(Color(0xFF0A0C0B).copy(alpha = 0.26f))) {
+                    Icon(
+                        Icons.Rounded.PlayArrow,
+                        null,
+                        Modifier.size(rowSize.playIconSize.times(1.25f)).padding(2.dp),
+                        Color.White.copy(alpha = 0.82f),
+                    )
+                }
+            }
         } else {
             Icon(
                 if (file.kind == MediaKind.VIDEO) Icons.Rounded.PlayArrow else Icons.Rounded.MusicNote,
@@ -431,12 +505,6 @@ private fun MediaThumbnail(file: MediaFile, bitmap: Bitmap?, rowSize: LibraryRow
                 MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        if (showTypeBadge) Text(
-            file.name.substringAfterLast('.', "").uppercase(),
-            style = MaterialTheme.typography.labelSmall,
-            color = Color.White,
-            modifier = Modifier.align(Alignment.BottomStart).background(Color.Black.copy(alpha = 0.72f)).padding(horizontal = 5.dp, vertical = 1.dp),
-        )
     }
 }
 
@@ -471,11 +539,10 @@ private fun formatBytes(bytes: Long): String = when {
     else -> "$bytes B"
 }
 
-private val LibraryRowSize.thumbnailWidth get() = when (this) { LibraryRowSize.SMALL -> 72.dp; LibraryRowSize.MEDIUM -> 100.dp; LibraryRowSize.LARGE -> 132.dp }
-private val LibraryRowSize.thumbnailHeight get() = when (this) { LibraryRowSize.SMALL -> 42.dp; LibraryRowSize.MEDIUM -> 58.dp; LibraryRowSize.LARGE -> 78.dp }
-private val LibraryRowSize.verticalPadding get() = when (this) { LibraryRowSize.SMALL -> 5.dp; LibraryRowSize.MEDIUM -> 8.dp; LibraryRowSize.LARGE -> 10.dp }
+private val LibraryRowSize.thumbnailWidth get() = when (this) { LibraryRowSize.SMALL -> 84.dp; LibraryRowSize.MEDIUM -> 104.dp; LibraryRowSize.LARGE -> 136.dp }
+private val LibraryRowSize.thumbnailHeight get() = when (this) { LibraryRowSize.SMALL -> 56.dp; LibraryRowSize.MEDIUM -> 62.dp; LibraryRowSize.LARGE -> 84.dp }
+private val LibraryRowSize.verticalPadding get() = when (this) { LibraryRowSize.SMALL -> 3.dp; LibraryRowSize.MEDIUM -> 6.dp; LibraryRowSize.LARGE -> 8.dp }
 private val LibraryRowSize.textSpacing get() = when (this) { LibraryRowSize.SMALL -> 10.dp; LibraryRowSize.MEDIUM -> 12.dp; LibraryRowSize.LARGE -> 14.dp }
 private val LibraryRowSize.accentHeight get() = when (this) { LibraryRowSize.SMALL -> 34.dp; LibraryRowSize.MEDIUM -> 46.dp; LibraryRowSize.LARGE -> 58.dp }
-private val LibraryRowSize.playBadgeSize get() = when (this) { LibraryRowSize.SMALL -> 20.dp; LibraryRowSize.MEDIUM -> 25.dp; LibraryRowSize.LARGE -> 30.dp }
 private val LibraryRowSize.playIconSize get() = when (this) { LibraryRowSize.SMALL -> 14.dp; LibraryRowSize.MEDIUM -> 17.dp; LibraryRowSize.LARGE -> 20.dp }
 private val LibraryRowSize.placeholderIconSize get() = when (this) { LibraryRowSize.SMALL -> 22.dp; LibraryRowSize.MEDIUM -> 27.dp; LibraryRowSize.LARGE -> 32.dp }

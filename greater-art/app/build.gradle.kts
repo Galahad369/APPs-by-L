@@ -11,11 +11,21 @@ android {
         applicationId = "com.local.listentomusic"
         minSdk = 26
         targetSdk = 37
-        versionCode = 9
-        versionName = "1.5.1"
+        versionCode = 17
+        versionName = "1.5.9"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
+    }
+
+    signingConfigs {
+        // ponytail: pin the exact debug keystore already on the device so sideload updates keep the same signature
+        create("release") {
+            storeFile = File(System.getProperty("user.home"), ".android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
@@ -25,6 +35,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs["release"]
+        }
+        getByName("debug") {
+            signingConfig = signingConfigs["release"]
         }
     }
 
