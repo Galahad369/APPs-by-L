@@ -63,6 +63,7 @@ class MiniWindowOverlayService : Service() {
     private lateinit var videoView: PlayerView
     private lateinit var titleView: TextView
     private lateinit var toggleBtn: ImageButton
+    private lateinit var closeBtn: ImageButton
 
     companion object {
         // ponytail: reuse the media channel so Android accepts the foreground promotion.
@@ -91,11 +92,18 @@ class MiniWindowOverlayService : Service() {
         }
         wm.addView(root, params)
         connect()
-        root.setOnTouchListener { _, event -> drag(event) }
+        val touch = View.OnTouchListener { _, event -> drag(event) }
+        root.setOnTouchListener(touch)
+        root.setOnClickListener { if (!dragging) openApp() }
+        videoView.setOnTouchListener(touch)
+        videoView.setOnClickListener { if (!dragging) openApp() }
         scope.launch {
             isVideo.collect { v ->
                 artBox.visibility = if (v) View.GONE else View.VISIBLE
                 videoView.visibility = if (v) View.VISIBLE else View.GONE
+                closeBtn.visibility = if (v) View.GONE else View.VISIBLE
+                // ponytail: video mode is pure video — no box, no chrome
+                root.background = if (v) null else getDrawable(R.drawable.mini_player_bg)
                 params.width = dp(if (v) 120 else 140)
                 params.height = dp(if (v) 68 else 46)
                 wm.updateViewLayout(root, params)
@@ -130,12 +138,15 @@ class MiniWindowOverlayService : Service() {
     }
 
     private fun openApp() {
+        // ponytail: tapping the mini window goes home and hides it (user request)
+        stopSelf()
         startActivity(Intent(this, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK })
     }
 
     private fun buildView() {
         root = FrameLayout(this)
-        root.setBackgroundResource(R.drawable.mini_player_bg)
+        // ponytail: black translucent so video letterboxing looks clean; audio mode swaps to the light chip
+        root.setBackgroundColor(0xCC0A0C0B.toInt())
         val pad = dp(4)
         root.setPadding(pad, pad, pad, pad)
 
@@ -176,7 +187,7 @@ class MiniWindowOverlayService : Service() {
             visibility = View.GONE
         }
 
-        val close = ImageButton(this).apply {
+        closeBtn = ImageButton(this).apply {
             setImageResource(R.drawable.ic_close)
             background = null
             setOnClickListener { stopSelf() }
@@ -187,9 +198,7 @@ class MiniWindowOverlayService : Service() {
 
         root.addView(artBox)
         root.addView(videoView)
-        root.addView(close)
-        // ponytail: single tap opens the app only when not dragging
-        root.setOnClickListener { if (!dragging) openApp() }
+        root.addView(closeBtn)
     }
 
     private fun connect() {
