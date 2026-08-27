@@ -460,7 +460,11 @@ private fun MediaFileRow(
             if (showFileDetails) {
                 Spacer(Modifier.height(if (rowSize == LibraryRowSize.SMALL) 2.dp else 4.dp))
                 Text(
-                    "${file.name.substringAfterLast('.', "media").uppercase()}  •  ${formatBytes(file.sizeBytes)}",
+                    buildString {
+                        append(file.name.substringAfterLast('.', "media").uppercase())
+                        append("  •  ${formatBytes(file.sizeBytes)}")
+                        if (file.durationMs > 0) append("  •  ${formatDuration(file.durationMs)}")
+                    },
                     style = if (rowSize == LibraryRowSize.LARGE) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
