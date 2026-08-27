@@ -11,7 +11,10 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.view.WindowManager
+import androidx.core.app.NotificationCompat
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -81,12 +84,19 @@ class MiniWindowOverlayService : Service() {
     private var startY = 0
     private var dragging = false
 
+    companion object {
+        // ponytail: must match PlaybackService's notification channel or Android
+        // rejects the foreground promotion; reusing the media channel is fine.
+        private const val CHANNEL_ID = "greater_art_playback"
+    }
+
     override fun onCreate() {
         super.onCreate()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             stopSelf()
             return
         }
+        startForeground(2, buildNotification())
         wm = getSystemService(WindowManager::class.java)
         view = ComposeView(this)
         params = WindowManager.LayoutParams(
@@ -123,6 +133,17 @@ class MiniWindowOverlayService : Service() {
             }
         }
     }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_NOT_STICKY
+
+    private fun buildNotification() =
+        NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Mini window active")
+            .setContentText("Tap the floating player to open Greater Art")
+            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setSilent(true)
+            .build()
 
     private fun openApp() {
         startActivity(Intent(this, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK })
