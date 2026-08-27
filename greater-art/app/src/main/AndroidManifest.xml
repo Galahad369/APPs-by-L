@@ -58,7 +58,8 @@
 
         <service
             android:name=".playback.MiniWindowOverlayService"
-            android:exported="false" />
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
     </application>
 
 </manifest>
