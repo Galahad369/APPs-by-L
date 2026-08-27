@@ -1,13 +1,15 @@
 package com.local.listentomusic.ui
 
-import android.graphics.Rect
-import android.graphics.Bitmap
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.graphics.Bitmap
+import android.graphics.Rect
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
@@ -21,6 +23,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,7 +35,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalContext
-import androidx.activity.compose.rememberLauncherForActivityResult
 import com.local.listentomusic.MainViewModel
 import com.local.listentomusic.ui.components.MiniPlayer
 import com.local.listentomusic.playback.MiniWindowOverlayService
@@ -174,18 +176,29 @@ fun GreaterArtApp(
             }
             MiniWindowEffect(
                 enabled = settings.floatingWindowMode == com.local.listentomusic.data.FloatingWindowMode.MINI_WINDOW
-                        && playback.hasMedia && !isPictureInPicture && screen != Screen.LIBRARY,
+                    && playback.hasMedia && !isPictureInPicture && screen != Screen.LIBRARY,
+                viewModel = viewModel,
             )
         }
     }
 }
 
 @Composable
-private fun MiniWindowEffect(enabled: Boolean) {
+private fun MiniWindowEffect(enabled: Boolean, viewModel: MainViewModel) {
     val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
     ) { /* re-checked on next settings toggle */ }
+    // ponytail: if the overlay can't draw, the service asks us to roll back to compact.
+    DisposableEffect(Unit) {
+        val recv = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: android.content.Context?, i: android.content.Intent?) {
+                viewModel.setFloatingWindowMode(com.local.listentomusic.data.FloatingWindowMode.COMPACT)
+            }
+        }
+        context.registerReceiver(recv, android.content.IntentFilter(MiniWindowOverlayService.ACTION_FALLBACK_COMPACT))
+        onDispose { context.unregisterReceiver(recv) }
+    }
     LaunchedEffect(enabled) {
         if (!enabled) {
             context.stopService(Intent(context, MiniWindowOverlayService::class.java))
