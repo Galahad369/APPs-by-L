@@ -1,8 +1,13 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="120dp" android:height="120dp"
     android:viewportWidth="120" android:viewportHeight="120">
-    <!-- X cross: two diagonal bars as filled paths -->
+    <!-- X cross: two diagonal lines as strokes -->
     <path
-        android:fillColor="#E53935"
-        android:pathData="M25,25 L35,25 L60,50 L85,25 L95,25 L70,50 L95,75 L85,75 L60,50 L35,75 L25,75 L50,50 Z" />
+        android:strokeColor="#E53935"
+        android:strokeWidth="12"
+        android:pathData="M25,25 L95,95" />
+    <path
+        android:strokeColor="#E53935"
+        android:strokeWidth="12"
+        android:pathData="M95,25 L25,95" />
 </vector>
