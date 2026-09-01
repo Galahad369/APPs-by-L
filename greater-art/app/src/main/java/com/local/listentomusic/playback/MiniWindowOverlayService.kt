@@ -185,8 +185,15 @@ class MiniWindowOverlayService : Service() {
 
     // Dragging onto the center red cross closes the window and stops playback.
     private fun closeAndStopApp() {
+        // Stop media first. Calling stopSelf before this can race onDestroy and release
+        // the controller before playback receives the stop command.
+        controller?.run {
+            stop()
+            clearMediaItems()
+        }
+        stopService(Intent(this, PlaybackService::class.java))
+        stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
-        controller?.stop()
         try {
             startActivity(Intent(this, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
