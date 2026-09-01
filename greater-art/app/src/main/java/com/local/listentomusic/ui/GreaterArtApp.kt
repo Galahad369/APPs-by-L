@@ -1,7 +1,6 @@
 package com.local.listentomusic.ui
 
 import android.content.Intent
-import android.content.BroadcastReceiver
 import android.graphics.Bitmap
 import android.graphics.Rect
 import android.net.Uri
@@ -189,16 +188,6 @@ private fun MiniWindowEffect(enabled: Boolean, viewModel: MainViewModel) {
     val launcher = rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
     ) { /* re-checked on next settings toggle */ }
-    // ponytail: if the overlay can't draw, the service asks us to roll back to compact.
-    DisposableEffect(Unit) {
-        val recv = object : android.content.BroadcastReceiver() {
-            override fun onReceive(c: android.content.Context?, i: android.content.Intent?) {
-                viewModel.setFloatingWindowMode(com.local.listentomusic.data.FloatingWindowMode.COMPACT)
-            }
-        }
-        context.registerReceiver(recv, android.content.IntentFilter(MiniWindowOverlayService.ACTION_FALLBACK_COMPACT))
-        onDispose { context.unregisterReceiver(recv) }
-    }
     LaunchedEffect(enabled) {
         if (!enabled) {
             context.stopService(Intent(context, MiniWindowOverlayService::class.java))

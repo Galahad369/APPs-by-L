@@ -2,7 +2,10 @@ package com.local.listentomusic
 
 import android.Manifest
 import android.app.PictureInPictureParams
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.res.Configuration
 import android.graphics.Rect
 import android.os.Build
@@ -39,6 +42,9 @@ class MainActivity : ComponentActivity() {
     private var isPictureInPicture by mutableStateOf(false)
     private var playerScreenVisible = false
     private var videoSourceRect = Rect()
+    // ponytail: fallback receiver lives on MainActivity so it catches the broadcast
+    // even if the Composable isn't composed yet (e.g., service starts in background).
+    private var fallbackReceiver: BroadcastReceiver? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,6 +55,13 @@ class MainActivity : ComponentActivity() {
             finishAffinity()
             return
         }
+        // Register fallback receiver early
+        fallbackReceiver = object : BroadcastReceiver() {
+            override fun onReceive(c: Context?, i: Intent?) {
+                viewModel.setFloatingWindowMode(FloatingWindowMode.COMPACT)
+            }
+        }
+        registerReceiver(fallbackReceiver, IntentFilter(MiniWindowOverlayService.ACTION_FALLBACK_COMPACT))
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 combine(viewModel.playback, viewModel.settings) { playback, settings ->
@@ -145,6 +158,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
             .build()
+    }
+
+    override fun onDestroy() {
+        fallbackReceiver?.let { unregisterReceiver(it) }
+        super.onDestroy()
     }
 }
 
