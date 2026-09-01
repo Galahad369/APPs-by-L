@@ -276,7 +276,7 @@ class MiniWindowOverlayService : Service() {
         playing.value = p.isPlaying
         isVideo.value = path?.substringAfterLast('.').orEmpty().lowercase() in VIDEO_EXTENSIONS
         if (isVideo.value) {
-            videoView.player = controller?.player
+            videoView.player = controller
         }
     }
 
