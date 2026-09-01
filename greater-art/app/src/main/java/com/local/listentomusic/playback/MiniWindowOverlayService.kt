@@ -1,5 +1,6 @@
 package com.local.listentomusic.playback
 
+import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
@@ -21,6 +22,7 @@ import android.widget.TextView
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.media3.common.Player
+import androidx.media3.common.MediaMetadata
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -36,7 +38,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
-// ponytail: real Yee-style floating mini player — a WindowManager overlay service.
+// A tiny, local-only floating player implemented with WindowManager.
 // Plain Android views (NOT Compose) so it needs no LifecycleOwner.
 // Drag onto the bottom-center red cross to close + stop the app.
 class MiniWindowOverlayService : Service() {
@@ -50,12 +52,12 @@ class MiniWindowOverlayService : Service() {
     private val title = MutableStateFlow("")
     private val playing = MutableStateFlow(false)
     private val isVideo = MutableStateFlow(false)
-    private val VIDEO_EXTENSIONS = setOf("mp4", "mov", "m4v", "mkv", "webm", "3gp", "ts", "mpeg", "mpg", "flv", "avi")
+    private val videoExtensions = setOf("mp4", "mov", "m4v", "mkv", "webm", "3gp", "ts", "mpeg", "mpg", "flv", "avi")
 
-    // ponytail: drop-target cross — small, centered horizontally, near the bottom.
-    private val CROSS_SIZE = 64
-    private val CROSS_BOTTOM = 90
-    private val CROSS_HIT = 45
+    // Drop target: small, centered horizontally, near the bottom.
+    private val crossSize = 52
+    private val crossBottom = 72
+    private val crossHit = 42
 
     private var downX = 0f
     private var downY = 0f
@@ -75,12 +77,17 @@ class MiniWindowOverlayService : Service() {
     private var crossImg: ImageView? = null
 
     companion object {
-        // ponytail: reuse the media channel so Android accepts the foreground promotion.
+        // Reuse the media channel so Android accepts the foreground promotion.
         private const val CHANNEL_ID = "greater_art_playback"
         const val EXTRA_STOP_APP = "stop_app"
         const val ACTION_FALLBACK_COMPACT = "com.local.listentomusic.MINI_FALLBACK_COMPACT"
+        private const val AUDIO_WIDTH = 124
+        private const val AUDIO_HEIGHT = 40
+        private const val VIDEO_WIDTH = 108
+        private const val VIDEO_HEIGHT = 61
     }
 
+    @SuppressLint("ClickableViewAccessibility")
     override fun onCreate() {
         super.onCreate()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
@@ -94,7 +101,7 @@ class MiniWindowOverlayService : Service() {
         buildView()
         buildCross()
         params = WindowManager.LayoutParams(
-            dp(140), dp(46),
+            dp(AUDIO_WIDTH), dp(AUDIO_HEIGHT),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT,
@@ -106,29 +113,30 @@ class MiniWindowOverlayService : Service() {
         try {
             root?.let { wm?.addView(it, params!!) }
         } catch (t: Throwable) {
-            // ponytail: any addView failure -> can't show overlay; roll back to compact.
+            // Any root addView failure means the overlay cannot run; fall back to compact.
             sendFallbackCompact()
             stopSelf()
             return
         }
         connect()
-        val touch = View.OnTouchListener { _, event -> drag(event) }
+        val touch = View.OnTouchListener { view, event -> drag(view, event) }
         root?.setOnTouchListener(touch)
-        root?.setOnClickListener { if (!dragging) openApp() }
+        root?.setOnClickListener { openApp() }
         videoView?.setOnTouchListener(touch)
-        videoView?.setOnClickListener { if (!dragging) openApp() }
+        videoView?.setOnClickListener { openApp() }
 
-        // ponytail: all coroutine view updates guarded by null checks
+        // Coroutine-driven view updates are guarded because destruction can race collection.
         scope.launch {
             isVideo.collect { v ->
                 artBox?.visibility = if (v) View.GONE else View.VISIBLE
                 videoView?.visibility = if (v) View.VISIBLE else View.GONE
                 closeBtn?.visibility = if (v) View.GONE else View.VISIBLE
-                // ponytail: video mode is pure video — no box, no chrome
+                // Video mode is pure video: no box and no chrome.
                 root?.background = if (v) null else ContextCompat.getDrawable(this@MiniWindowOverlayService, R.drawable.mini_player_bg)
-                params?.width = dp(if (v) 120 else 140)
-                params?.height = dp(if (v) 68 else 46)
-                params?.let { wm?.updateViewLayout(root!!, it) }
+                params?.width = dp(if (v) VIDEO_WIDTH else AUDIO_WIDTH)
+                params?.height = dp(if (v) VIDEO_HEIGHT else AUDIO_HEIGHT)
+                clampPosition()
+                updateRootLayout()
             }
         }
         scope.launch { title.collect { titleView?.text = it } }
@@ -160,22 +168,22 @@ class MiniWindowOverlayService : Service() {
     }
 
     private fun sendFallbackCompact() {
-        // ponytail: tell the app to switch MINI_WINDOW -> COMPACT so playback still floats.
+        // Switch MINI_WINDOW -> COMPACT so playback can still float.
         val ctx = applicationContext
         ctx.sendBroadcast(Intent(ACTION_FALLBACK_COMPACT).setPackage(ctx.packageName))
     }
 
     private fun openApp() {
-        // ponytail: tapping the mini window goes home and hides it (user request)
+        // Tapping the mini window opens the main app and removes the overlay.
         stopSelf()
         try {
             startActivity(Intent(this, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK })
         } catch (t: Throwable) {
-            // ponytail: can't launch main activity; app already stopped.
+            // The overlay has already stopped even if the Activity cannot be launched.
         }
     }
 
-    // ponytail: drag onto the center red cross -> close window + stop the app
+    // Dragging onto the center red cross closes the window and stops playback.
     private fun closeAndStopApp() {
         stopSelf()
         controller?.stop()
@@ -185,13 +193,13 @@ class MiniWindowOverlayService : Service() {
                 putExtra(EXTRA_STOP_APP, true)
             })
         } catch (t: Throwable) {
-            // ponytail: can't launch main activity; app already stopped.
+            // Playback and the overlay are already stopped if the Activity cannot launch.
         }
     }
 
     private fun buildView() {
         root = FrameLayout(this)
-        // ponytail: black translucent so video letterboxing looks clean; audio mode swaps to the light chip
+        // Dark translucency keeps video letterboxing clean; audio mode uses the chip drawable.
         root?.setBackgroundColor(0xCC0A0C0B.toInt())
         val pad = dp(4)
         root?.setPadding(pad, pad, pad, pad)
@@ -250,32 +258,37 @@ class MiniWindowOverlayService : Service() {
     private fun buildCross() {
         crossView = FrameLayout(this)
         crossImg = ImageView(this).apply { setImageResource(R.drawable.ic_red_cross) }
-        crossView?.addView(crossImg!!, FrameLayout.LayoutParams(dp(CROSS_SIZE), dp(CROSS_SIZE)).apply { gravity = Gravity.CENTER })
+        crossView?.addView(crossImg!!, FrameLayout.LayoutParams(dp(crossSize), dp(crossSize)).apply { gravity = Gravity.CENTER })
         crossView?.visibility = View.GONE
         val cp = WindowManager.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT,
+            dp(crossSize), dp(crossSize),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
             PixelFormat.TRANSLUCENT,
-        ).apply { gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL; y = dp(CROSS_BOTTOM) }
+        ).apply { gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL; y = dp(crossBottom) }
         try {
             crossView?.let { wm?.addView(it, cp) }
         } catch (t: Throwable) {
-            // ponytail: cross overlay failed; app still works without it.
-            sendFallbackCompact()
-            stopSelf()
-            return
+            // Some OEMs reject a second overlay window. The player is still useful
+            // without the drag-to-close target, so keep it alive.
+            crossView = null
+            crossImg = null
         }
     }
 
     private fun connect() {
         val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
-        future = MediaController.Builder(this, token).buildAsync()
-        future?.addListener({
-            runCatching { future?.get() }.onSuccess { c ->
+        val pending = MediaController.Builder(this, token).buildAsync()
+        future = pending
+        pending.addListener({
+            if (future !== pending) {
+                MediaController.releaseFuture(pending)
+                return@addListener
+            }
+            runCatching { pending.get() }.onSuccess { c ->
                 controller = c
-                c?.addListener(listener)
-                if (c != null) push(c)
+                c.addListener(listener)
+                push(c)
             }
         }, ContextCompat.getMainExecutor(this))
     }
@@ -289,13 +302,12 @@ class MiniWindowOverlayService : Service() {
         title.value = p.mediaMetadata.title?.toString()
             ?: path?.substringAfterLast('/')?.substringBeforeLast('.') ?: ""
         playing.value = p.isPlaying
-        isVideo.value = path?.substringAfterLast('.').orEmpty().lowercase() in VIDEO_EXTENSIONS
-        if (isVideo.value) {
-            videoView?.player = controller
-        }
+        isVideo.value = p.currentMediaItem?.mediaMetadata?.mediaType == MediaMetadata.MEDIA_TYPE_VIDEO ||
+            path?.substringAfterLast('.').orEmpty().lowercase() in videoExtensions
+        videoView?.player = if (isVideo.value) controller else null
     }
 
-    private fun drag(event: MotionEvent): Boolean {
+    private fun drag(view: View, event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 downX = event.rawX
@@ -303,7 +315,7 @@ class MiniWindowOverlayService : Service() {
                 startX = params?.x ?: 0
                 startY = params?.y ?: 0
                 dragging = false
-                return false
+                return true
             }
             MotionEvent.ACTION_MOVE -> {
                 val dx = event.rawX - downX
@@ -315,18 +327,19 @@ class MiniWindowOverlayService : Service() {
                 if (dragging) {
                     params?.x = startX + dx.toInt()
                     params?.y = startY + dy.toInt()
-                    params?.let { wm?.updateViewLayout(root!!, it) }
+                    clampPosition()
+                    updateRootLayout()
                     // highlight cross when the mini window overlaps the bottom-center drop zone
                     val cx = (params?.x ?: 0) + (params?.width ?: 0) / 2
                     val cy = (params?.y ?: 0) + (params?.height ?: 0) / 2
                     val sc = resources.displayMetrics
-                    val targetY = sc.heightPixels - dp(CROSS_BOTTOM) - dp(CROSS_SIZE) / 2
-                    val overlap = abs(cx - sc.widthPixels / 2) < dp(CROSS_HIT) &&
-                        abs(cy - targetY) < dp(CROSS_HIT)
+                    val targetY = sc.heightPixels - dp(crossBottom) - dp(crossSize) / 2
+                    val overlap = abs(cx - sc.widthPixels / 2) < dp(crossHit) &&
+                        abs(cy - targetY) < dp(crossHit)
                     crossImg?.alpha = if (overlap) 1f else 0.5f
                     return true
                 }
-                return false
+                return true
             }
             MotionEvent.ACTION_UP -> {
                 val was = dragging
@@ -335,17 +348,36 @@ class MiniWindowOverlayService : Service() {
                     val cx = (params?.x ?: 0) + (params?.width ?: 0) / 2
                     val cy = (params?.y ?: 0) + (params?.height ?: 0) / 2
                     val sc = resources.displayMetrics
-                    val targetY = sc.heightPixels - dp(CROSS_BOTTOM) - dp(CROSS_SIZE) / 2
-                    val overlap = abs(cx - sc.widthPixels / 2) < dp(CROSS_HIT) &&
-                        abs(cy - targetY) < dp(CROSS_HIT)
+                    val targetY = sc.heightPixels - dp(crossBottom) - dp(crossSize) / 2
+                    val overlap = abs(cx - sc.widthPixels / 2) < dp(crossHit) &&
+                        abs(cy - targetY) < dp(crossHit)
                     crossView?.visibility = View.GONE
                     if (overlap) closeAndStopApp()
                     return true
                 }
-                return false
+                view.performClick()
+                return true
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                dragging = false
+                crossView?.visibility = View.GONE
+                return true
             }
         }
         return false
+    }
+
+    private fun clampPosition() {
+        val layout = params ?: return
+        val metrics = resources.displayMetrics
+        layout.x = layout.x.coerceIn(0, (metrics.widthPixels - layout.width).coerceAtLeast(0))
+        layout.y = layout.y.coerceIn(0, (metrics.heightPixels - layout.height).coerceAtLeast(0))
+    }
+
+    private fun updateRootLayout() {
+        val view = root ?: return
+        val layout = params ?: return
+        runCatching { wm?.updateViewLayout(view, layout) }
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
@@ -354,9 +386,14 @@ class MiniWindowOverlayService : Service() {
         scope.cancel()
         root?.let { runCatching { wm?.removeViewImmediate(it) } }
         crossView?.let { runCatching { wm?.removeViewImmediate(it) } }
+        videoView?.player = null
         controller?.removeListener(listener)
         controller = null
+        future?.let(MediaController::releaseFuture)
         future = null
+        root = null
+        crossView = null
+        wm = null
         super.onDestroy()
     }
 

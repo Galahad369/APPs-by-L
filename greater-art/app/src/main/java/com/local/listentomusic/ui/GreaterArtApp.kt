@@ -3,12 +3,10 @@ package com.local.listentomusic.ui
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Rect
-import android.net.Uri
-import android.os.Build
-import android.provider.Settings
 
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
@@ -19,10 +17,11 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,13 +29,16 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.ui.platform.LocalContext
 import com.local.listentomusic.MainViewModel
 import com.local.listentomusic.ui.components.MiniPlayer
-import com.local.listentomusic.playback.MiniWindowOverlayService
+import com.local.listentomusic.ui.components.AppBackground
+import com.local.listentomusic.data.AppBackgroundMode
 import com.local.listentomusic.ui.theme.GreaterArtTheme
 
 private enum class Screen { LIBRARY, NOW_PLAYING, SETTINGS }
@@ -54,7 +56,31 @@ fun GreaterArtApp(
     val playback by viewModel.playback.collectAsStateWithLifecycle()
     val controller by viewModel.controller.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
-    val miniWindow by viewModel.miniWindowVisible.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val imageBackgroundPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        runCatching {
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+        }
+        viewModel.setCustomBackgroundImage(uri.toString())
+    }
+    val videoBackgroundPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        runCatching {
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+        }
+        viewModel.setCustomBackgroundVideo(uri.toString())
+    }
     val artwork by produceState<Bitmap?>(initialValue = null, key1 = playback.currentPath) {
         value = viewModel.loadCurrentArtwork(playback.currentPath)
     }
@@ -67,12 +93,23 @@ fun GreaterArtApp(
     BackHandler(enabled = screen != Screen.LIBRARY) { screen = Screen.LIBRARY }
 
     GreaterArtTheme(themeMode = settings.themeMode) {
-        Surface(modifier = Modifier.fillMaxSize()) {
+        val lightPalette = MaterialTheme.colorScheme.background.luminance() > 0.5f
+        Box(modifier = Modifier.fillMaxSize()) {
+            AppBackground(preferences = settings, playback = playback)
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                // A light palette needs an opaque-enough base over black/custom media.
+                // Dark mode keeps the liquid-metal wallpaper fully visible.
+                color = if (lightPalette) {
+                    MaterialTheme.colorScheme.background.copy(alpha = 0.94f)
+                } else Color.Transparent,
+                contentColor = MaterialTheme.colorScheme.onBackground,
+            ) {
             AnimatedContent(
                 targetState = screen,
                 transitionSpec = {
                     val spring = spring<IntOffset>(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy)
-                    // ponytail: iOS-style horizontal push; forward pushes in from right, back from left.
+                    // A restrained horizontal push keeps screen changes spatially clear.
                     if (targetState > initialState) {
                         slideInHorizontally(spring, initialOffsetX = { it }) + fadeIn() togetherWith
                             slideOutHorizontally(spring, targetOffsetX = { -it / 3 }) + fadeOut()
@@ -85,6 +122,8 @@ fun GreaterArtApp(
             ) { scr ->
                 when (scr) {
                 Screen.LIBRARY -> Scaffold(
+                    containerColor = Color.Transparent,
+                    contentColor = MaterialTheme.colorScheme.onBackground,
                     bottomBar = {
                         if (playback.hasMedia) {
                             MiniPlayer(
@@ -120,9 +159,6 @@ fun GreaterArtApp(
                         onOpenSettings = { screen = Screen.SETTINGS },
                         onPlay = {
                             viewModel.play(it)
-                            if (settings.floatingWindowMode == com.local.listentomusic.data.FloatingWindowMode.MINI_WINDOW) {
-                                viewModel.setMiniWindowVisible(true)
-                            }
                             screen = Screen.NOW_PLAYING
                         },
                     )
@@ -159,6 +195,24 @@ fun GreaterArtApp(
                     onAutoPictureInPicture = viewModel::setAutoPictureInPicture,
                     onFloatingWindowMode = viewModel::setFloatingWindowMode,
                     onAppLanguage = viewModel::setAppLanguage,
+                    onBackgroundMode = { mode ->
+                        when {
+                            mode == AppBackgroundMode.CUSTOM_IMAGE && settings.customBackgroundImageUri == null ->
+                                imageBackgroundPicker.launch(arrayOf("image/*"))
+                            mode == AppBackgroundMode.CUSTOM_VIDEO && settings.customBackgroundVideoUri == null ->
+                                videoBackgroundPicker.launch(arrayOf("video/mp4"))
+                            else -> viewModel.setBackgroundMode(mode)
+                        }
+                    },
+                    onChooseBackgroundImage = {
+                        imageBackgroundPicker.launch(arrayOf("image/*"))
+                    },
+                    onChooseBackgroundVideo = {
+                        videoBackgroundPicker.launch(arrayOf("video/mp4"))
+                    },
+                    onClearBackgroundImage = { viewModel.setCustomBackgroundImage(null) },
+                    onClearBackgroundVideo = { viewModel.setCustomBackgroundVideo(null) },
+                    onBackgroundDim = viewModel::setBackgroundDim,
                     onCreatePlaylist = viewModel::createPlaylist,
                     onCreatePlaylistAndSeed = viewModel::createPlaylistAndSeed,
                     onPlayPlaylist = viewModel::playPlaylist,
@@ -173,32 +227,7 @@ fun GreaterArtApp(
                 )
             }
             }
-            MiniWindowEffect(
-                enabled = settings.floatingWindowMode == com.local.listentomusic.data.FloatingWindowMode.MINI_WINDOW
-                    && playback.hasMedia && !isPictureInPicture && screen != Screen.LIBRARY,
-                viewModel = viewModel,
-            )
         }
-    }
-}
-
-@Composable
-private fun MiniWindowEffect(enabled: Boolean, viewModel: MainViewModel) {
-    val context = LocalContext.current
-    val launcher = rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
-    ) { /* re-checked on next settings toggle */ }
-    LaunchedEffect(enabled) {
-        if (!enabled) {
-            context.stopService(Intent(context, MiniWindowOverlayService::class.java))
-            return@LaunchedEffect
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) {
-            launcher.launch(
-                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}")),
-            )
-            return@LaunchedEffect
-        }
-        context.startForegroundService(Intent(context, MiniWindowOverlayService::class.java))
     }
 }

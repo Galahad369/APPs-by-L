@@ -76,6 +76,7 @@ import com.local.listentomusic.data.UserPreferences
 import com.local.listentomusic.model.MediaFile
 import com.local.listentomusic.model.MediaKind
 import com.local.listentomusic.model.SortMode
+import com.local.listentomusic.ui.components.LiquidMetalSurface
 import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -113,17 +114,25 @@ fun LibraryScreen(
 
     Scaffold(
         modifier = Modifier.padding(contentPadding),
+        containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onBackground,
         topBar = {
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         val markShape = RoundedCornerShape(9.dp)
-                        Box(
-                            modifier = Modifier.size(36.dp).clip(markShape).background(Color(0xFFF3F5F0))
+                        LiquidMetalSurface(
+                            modifier = Modifier.size(36.dp)
                                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant, markShape),
+                            shape = markShape,
                             contentAlignment = Alignment.Center,
                         ) {
-                            Icon(Icons.Rounded.MusicNote, null, Modifier.size(22.dp), Color(0xFF0A0C0B))
+                            Icon(
+                                Icons.Rounded.MusicNote,
+                                null,
+                                Modifier.size(22.dp),
+                                MaterialTheme.colorScheme.onSurface,
+                            )
                         }
                         Spacer(Modifier.width(11.dp))
                         Column {
@@ -162,7 +171,9 @@ fun LibraryScreen(
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background.copy(alpha = 0.88f),
+                ),
             )
         },
     ) { innerPadding ->
@@ -476,7 +487,7 @@ private fun MediaFileRow(
     }
 }
 
-// ponytail: hoisted so the brush isn't reallocated per-row during scroll
+// Hoisted so the brush is not reallocated for every row during scrolling.
 private val thumbnailBrush @androidx.compose.runtime.Composable get() =
     Brush.linearGradient(listOf(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.primaryContainer))
 
@@ -489,7 +500,7 @@ private fun MediaThumbnail(file: MediaFile, bitmap: Bitmap?, rowSize: LibraryRow
     ) {
         if (bitmap != null) {
             Image(bitmap.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            // ponytail: subtle play glyph, never a blocking circle — the thumbnail stays visible
+            // Keep the play glyph subtle so the thumbnail remains visible.
             if (file.kind == MediaKind.VIDEO) {
                 val badge = Modifier.align(Alignment.Center).clip(RoundedCornerShape(50))
                 Box(badge.background(Color(0xFF0A0C0B).copy(alpha = 0.26f))) {

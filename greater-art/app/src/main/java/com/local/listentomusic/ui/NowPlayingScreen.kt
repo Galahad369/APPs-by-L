@@ -60,7 +60,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -102,6 +101,7 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.local.listentomusic.PlaybackUiState
 import com.local.listentomusic.data.AppLanguage
+import com.local.listentomusic.ui.components.LiquidMetalSurface
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -140,7 +140,7 @@ fun NowPlayingScreen(
 
     BoxWithConstraints(
         modifier = Modifier.fillMaxSize().padding(contentPadding)
-            .background(MaterialTheme.colorScheme.background),
+            .background(Color.Transparent),
     ) {
         val landscape = maxWidth > maxHeight
         val immersiveVideo = playback.isVideo && (fullscreen || landscape)
@@ -192,6 +192,7 @@ fun NowPlayingScreen(
                 artwork = artwork,
                 language = language,
                 onBack = onBack,
+                onPictureInPicture = onPictureInPicture,
                 onTogglePlay = onTogglePlay,
                 onPrevious = onPrevious,
                 onNext = onNext,
@@ -296,7 +297,7 @@ private fun VideoPlayerStage(
                     OverlayIconButton(onClick = onPrevious, enabled = playback.hasPrevious) {
                         Icon(Icons.Rounded.SkipPrevious, "Previous", tint = Color.White, modifier = Modifier.size(31.dp))
                     }
-                    // ponytail: translucent center control, always available while controls show; taps toggle play/pause
+                    // Keep the center play control available whenever controls are visible.
                     Box(
                         modifier = Modifier.size(52.dp).clip(CircleShape)
                             .background(Color.White.copy(alpha = 0.2f)).clickable(onClick = onTogglePlay),
@@ -352,6 +353,7 @@ private fun AudioPlayer(
     artwork: Bitmap?,
     language: AppLanguage,
     onBack: () -> Unit,
+    onPictureInPicture: () -> Unit,
     onTogglePlay: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
@@ -373,14 +375,16 @@ private fun AudioPlayer(
                     uiText(language, "Back to library", "返回音樂庫"),
                 )
             }
-        }
-        Box(
-            modifier = Modifier.padding(horizontal = 30.dp, vertical = 4.dp).fillMaxWidth().aspectRatio(1f)
-                .clip(RoundedCornerShape(22.dp)).background(
-                    Brush.linearGradient(
-                        listOf(Color(0xFF111413), Color(0xFF29423C), Color(0xFF1A211F))
-                    )
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = onPictureInPicture) {
+                Icon(
+                    Icons.Rounded.PictureInPictureAlt,
+                    uiText(language, "Open floating player", "開啟浮動播放器"),
                 )
+            }
+        }
+        LiquidMetalSurface(
+            modifier = Modifier.padding(horizontal = 30.dp, vertical = 4.dp).fillMaxWidth().aspectRatio(1f)
                 .pointerInput(Unit) {
                     detectTapGestures(
                         onDoubleTap = { offset ->
@@ -388,6 +392,7 @@ private fun AudioPlayer(
                         },
                     )
                 },
+            shape = RoundedCornerShape(22.dp),
             contentAlignment = Alignment.Center,
         ) {
             if (artwork != null) {
@@ -395,7 +400,7 @@ private fun AudioPlayer(
                     bitmap = artwork.asImageBitmap(),
                     contentDescription = uiText(language, "Album artwork", "專輯封面"),
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().padding(2.dp).clip(RoundedCornerShape(20.dp)),
                 )
             } else {
                 Icon(
@@ -484,22 +489,28 @@ private fun WaveformTimeline(
     language: AppLanguage,
 ) {
     var seeking by remember(playback.currentPath) { mutableStateOf(false) }
-    var seekPosition by remember(playback.currentPath) { mutableFloatStateOf(0f) }
+    var seekFraction by remember(playback.currentPath) { mutableFloatStateOf(0f) }
     val hasDuration = playback.durationMs > 0L
-    val maximum = if (hasDuration) playback.durationMs.toFloat() else 1f
-    val position = if (seeking) seekPosition else if (hasDuration) playback.positionMs.toFloat() else 0f
-    val fraction = if (hasDuration) (position / maximum).coerceIn(0f, 1f) else 0f
+    // Keep the Slider in a stable 0..1 range. Feeding millisecond-sized Float
+    // ranges into Material Slider can lose precision on long audio and leave the
+    // thumb visually pinned at the end even while playback is healthy.
+    val playbackFraction = if (hasDuration) {
+        playback.positionMs.toDouble().div(playback.durationMs.toDouble()).toFloat().coerceIn(0f, 1f)
+    } else 0f
+    val fraction = if (seeking) seekFraction else playbackFraction
     val active = MaterialTheme.colorScheme.secondary
     val inactive = MaterialTheme.colorScheme.outlineVariant
 
     Slider(
-        value = position.coerceIn(0f, maximum),
-        onValueChange = { seeking = true; seekPosition = it },
+        value = fraction,
+        onValueChange = { seeking = true; seekFraction = it.coerceIn(0f, 1f) },
         onValueChangeFinished = {
-            if (hasDuration) onSeek(seekPosition.toLong())
+            if (hasDuration) {
+                onSeek((playback.durationMs.toDouble() * seekFraction).toLong())
+            }
             seeking = false
         },
-        valueRange = 0f..maximum,
+        valueRange = 0f..1f,
         enabled = hasDuration,
         modifier = Modifier.fillMaxWidth().height(56.dp),
         thumb = {
@@ -526,7 +537,13 @@ private fun WaveformTimeline(
     )
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(
-            formatDuration(if (seeking) seekPosition.toLong() else playback.positionMs),
+            formatDuration(
+                if (seeking && hasDuration) {
+                    (playback.durationMs.toDouble() * seekFraction).toLong()
+                } else {
+                    playback.positionMs
+                },
+            ),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.secondary,
         )
@@ -553,7 +570,7 @@ private fun CompactSlider(
     val fraction = if (range > 0f) {
         ((value - valueRange.start) / range).coerceIn(0f, 1f)
     } else 0f
-    // ponytail: spring-animate the fill so dragging feels liquid, not steppy
+    // Spring-animate the fill so dragging feels fluid rather than stepped.
     val animatedFraction by animateFloatAsState(
         targetValue = fraction,
         animationSpec = spring(dampingRatio = 0.85f, stiffness = 340f),
@@ -567,7 +584,7 @@ private fun CompactSlider(
         enabled = enabled,
         modifier = Modifier.fillMaxWidth().height(22.dp),
         thumb = { _ ->
-            // ponytail: half-transparent liquid ball — soft glow + radial-gradient core
+            // Soft glow and radial-gradient core keep the thumb visible without visual bulk.
             Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
                 Box(Modifier.size(20.dp).clip(CircleShape).background(activeColor.copy(alpha = 0.22f)))
                 Box(
@@ -612,11 +629,16 @@ private fun Transport(
         IconButton(onClick = onPrevious, enabled = playback.hasPrevious) {
             Icon(Icons.Rounded.SkipPrevious, "Previous", modifier = Modifier.size(36.dp))
         }
-        FilledIconButton(onClick = onTogglePlay, modifier = Modifier.size(68.dp)) {
+        LiquidMetalSurface(
+            modifier = Modifier.size(68.dp).clickable(onClick = onTogglePlay),
+            shape = CircleShape,
+            contentAlignment = Alignment.Center,
+        ) {
             Icon(
                 if (playback.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                 if (playback.isPlaying) "Pause" else "Play",
                 modifier = Modifier.size(40.dp),
+                tint = MaterialTheme.colorScheme.onSurface,
             )
         }
         IconButton(onClick = onNext, enabled = playback.hasNext) {

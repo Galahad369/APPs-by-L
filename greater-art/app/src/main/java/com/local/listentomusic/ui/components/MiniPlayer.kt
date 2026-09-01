@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
@@ -24,8 +25,6 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -59,17 +58,19 @@ fun MiniPlayer(
     val progress = if (playback.durationMs > 0L) {
         (playback.positionMs.toFloat() / playback.durationMs).coerceIn(0f, 1f)
     } else 0f
-    // ponytail: iOS-style frosted bar — translucent scrim, no hard card edge.
+    // Translucent scrim with no hard card edge.
     Surface(
         modifier = Modifier.fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)),
         color = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
-        Box(
+        LiquidMetalSurface(
             modifier = Modifier.fillMaxWidth()
                 .padding(horizontal = 10.dp, vertical = 6.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)),
+                .heightIn(max = 62.dp)
+                .clip(RoundedCornerShape(20.dp)),
+            shape = RoundedCornerShape(20.dp),
         ) {
             Column(modifier = Modifier.clickable(onClick = onOpen)) {
                 Row(
