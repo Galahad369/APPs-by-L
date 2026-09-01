@@ -101,6 +101,8 @@ private fun DefaultMetalBackground() {
 private fun BackgroundImage(source: Uri) {
     val context = LocalContext.current
     val bitmap by produceState<Bitmap?>(initialValue = null, key1 = source) {
+        // Do not leave the previous image visible if replacement decoding fails.
+        value = null
         value = withContext(Dispatchers.IO) {
             decodeSampledBitmap(context.contentResolver, source)
         }

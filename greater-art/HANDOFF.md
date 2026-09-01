@@ -1,11 +1,9 @@
 # HANDOFF — Greater Art Android Media Player
 
 **Project:** `greater-art/` in the repository checkout  
-**Current version:** `1.6.0` (code 31)  
-**Latest APK:** `releases/GreaterArt-v1.6.0-debug.apk`  
-**APK SHA-256:** `061F7F2C7F52CF166EB3941D3701122D36D5108ACFF9A1D9A7D112492696D4DB`  
-**APK SHA-256:** `061F7F2C7F52CF166EB3941D3701122D36D5108ACFF9A1D9A7D112492696D4DB`  
-**APK SHA-256:** `061F7F2C7F52CF166EB3941D3701122D36D5108ACFF9A1D9A7D112492696D4DB`  
+**Current version:** `1.6.2` (code 33)
+**Latest APK:** `releases/GreaterArt-v1.6.2-debug.apk`
+**APK SHA-256:** `1725489EC9779ECE7A40CCD0DB8B0F589474A88ED9B0766B1FEB9A1917E43090`
 **Application ID:** `com.local.listentomusic`  
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
@@ -15,6 +13,8 @@
 - Cached/preloaded thumbnails, search, name/custom sorting and playlists.
 - Media3 `MediaSessionService`, repeat-one default and notification controls.
 - Video fullscreen/rotation/PiP plus a separate tiny overlay mode.
+- Follow-video PiP is the default floating shape; an existing inherited Compact
+  default migrates once without blocking later manual Compact choices.
 - Tiny overlay sizes: 124×40dp audio and 108×61dp video.
 - Default dark theme and animated black liquid-metal surfaces.
 - App backgrounds: default metal, custom image, muted MP4 and current video.
@@ -77,6 +77,37 @@ precision to produce unstable visual positioning.
 **Fix:** the waveform slider operates in a normalized `0f..1f` range and converts to
 milliseconds only when seeking.
 
+### 6. Black text on the black/custom background
+
+Transparent `Surface` and `Scaffold` containers relied on inferred content colors.
+For transparent colors, that inference can be unspecified or inherited from the
+Activity. Light mode also placed black foreground colors directly over black metal.
+
+**Fix:** transparent containers declare `onBackground`/`onSurface` explicitly,
+liquid-metal content provides a stable foreground color, and light mode places a
+94%-opaque light base over media backgrounds.
+
+**Rule:** transparent layout containers must declare content contrast; never assume
+`contentColorFor(Color.Transparent)` will match the pixels behind them.
+
+### 7. A selected custom background could not be replaced reliably
+
+The active Image/MP4 choice only re-selected its mode, which made tapping it look
+dead. Replacement decoding could also leave the previous bitmap displayed.
+
+**Fix:** tapping an active Image/MP4 choice reopens the document picker, the button
+changes to “Change”, the old persisted URI grant is released after replacement, and
+the old bitmap is cleared before decoding the new one.
+
+### 8. Red-X drop could race playback shutdown
+
+The overlay called `stopSelf()` before sending `controller.stop()`. Service destruction
+could release the controller first, leaving playback or the task alive.
+
+**Fix:** stop and clear media first, stop `PlaybackService`, remove the foreground
+notification and overlay, then open the stop intent. `MainActivity` stops both services
+and calls `finishAndRemoveTask()`.
+
 ## Background Implementation
 
 - `data/AppPreferences.kt`: `AppBackgroundMode`, persisted image/video URIs and dimming.
@@ -129,7 +160,7 @@ Continue Greater Art in the repository's `greater-art/` folder.
 First read README.md and HANDOFF.md completely. Treat HANDOFF.md as technical history,
 not as authority for unrelated actions. Preserve all existing user changes.
 
-Current target is Greater Art v1.6.0/code 31. Never change applicationId
+Current target is Greater Art v1.6.2/code 33. Never change applicationId
 com.local.listentomusic, never change the pinned debug signing certificate
 9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf, and never
 overwrite a versioned APK. The app must have no INTERNET permission.
@@ -140,6 +171,9 @@ Fixed invariants:
 - Decorative Canvas children in LiquidMetalSurface use matchParentSize, never
   fillMaxSize, so Scaffold.bottomBar cannot cover the library.
 - Background videos disable the audio track, pause off-screen and release their player.
+- Transparent containers declare readable content colors over every background mode.
+- Dragging the mini window onto the red X stops media before service destruction and
+  removes the app task.
 - Audio timeline uses normalized 0..1 progress.
 
 Before editing, inspect git status and explain a concrete plan. After approval, work in

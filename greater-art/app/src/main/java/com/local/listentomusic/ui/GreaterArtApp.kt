@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.net.toUri
 import com.local.listentomusic.MainViewModel
 import com.local.listentomusic.ui.components.MiniPlayer
 import com.local.listentomusic.ui.components.AppBackground
@@ -61,25 +62,39 @@ fun GreaterArtApp(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
         uri ?: return@rememberLauncherForActivityResult
-        runCatching {
+        val previousUri = settings.customBackgroundImageUri
+        val grantPersisted = runCatching {
             context.contentResolver.takePersistableUriPermission(
                 uri,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION,
             )
-        }
+        }.isSuccess
         viewModel.setCustomBackgroundImage(uri.toString())
+        if (grantPersisted && previousUri != null && previousUri != uri.toString()) runCatching {
+            context.contentResolver.releasePersistableUriPermission(
+                previousUri.toUri(),
+                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+        }
     }
     val videoBackgroundPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
         uri ?: return@rememberLauncherForActivityResult
-        runCatching {
+        val previousUri = settings.customBackgroundVideoUri
+        val grantPersisted = runCatching {
             context.contentResolver.takePersistableUriPermission(
                 uri,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION,
             )
-        }
+        }.isSuccess
         viewModel.setCustomBackgroundVideo(uri.toString())
+        if (grantPersisted && previousUri != null && previousUri != uri.toString()) runCatching {
+            context.contentResolver.releasePersistableUriPermission(
+                previousUri.toUri(),
+                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+        }
     }
     val artwork by produceState<Bitmap?>(initialValue = null, key1 = playback.currentPath) {
         value = viewModel.loadCurrentArtwork(playback.currentPath)
@@ -197,9 +212,13 @@ fun GreaterArtApp(
                     onAppLanguage = viewModel::setAppLanguage,
                     onBackgroundMode = { mode ->
                         when {
-                            mode == AppBackgroundMode.CUSTOM_IMAGE && settings.customBackgroundImageUri == null ->
+                            mode == AppBackgroundMode.CUSTOM_IMAGE &&
+                                (settings.customBackgroundImageUri == null ||
+                                    settings.backgroundMode == AppBackgroundMode.CUSTOM_IMAGE) ->
                                 imageBackgroundPicker.launch(arrayOf("image/*"))
-                            mode == AppBackgroundMode.CUSTOM_VIDEO && settings.customBackgroundVideoUri == null ->
+                            mode == AppBackgroundMode.CUSTOM_VIDEO &&
+                                (settings.customBackgroundVideoUri == null ||
+                                    settings.backgroundMode == AppBackgroundMode.CUSTOM_VIDEO) ->
                                 videoBackgroundPicker.launch(arrayOf("video/mp4"))
                             else -> viewModel.setBackgroundMode(mode)
                         }

@@ -13,7 +13,7 @@ ads, analytics, accounts, telemetry, or network access.
 - Full video playback, rotation, fullscreen mode and Android picture-in-picture.
 - Three floating modes:
   - `COMPACT` — Android-controlled compact picture-in-picture.
-  - `FOLLOW_VIDEO` — picture-in-picture following the video's aspect ratio.
+  - `FOLLOW_VIDEO` — default; picture-in-picture following the video's aspect ratio.
   - `MINI_WINDOW` — 124×40dp audio or 108×61dp video system overlay.
 - Four app backgrounds:
   - Animated black liquid metal (default).
@@ -51,8 +51,8 @@ $env:GRADLE_USER_HOME = Join-Path $env:USERPROFILE '.gradle'
 Current release artifact:
 
 ```text
-releases/GreaterArt-v1.6.0-debug.apk
-SHA-256: 061F7F2C7F52CF166EB3941D3701122D36D5108ACFF9A1D9A7D112492696D4DB
+releases/GreaterArt-v1.6.2-debug.apk
+SHA-256: 1725489EC9779ECE7A40CCD0DB8B0F589474A88ED9B0766B1FEB9A1917E43090
 ```
 
 Versioned APKs are never overwritten. Builds remain signed by the pinned personal
@@ -92,6 +92,10 @@ app/src/main/java/com/local/listentomusic/
 - Decorative children inside size-sensitive Compose containers must not participate
   in measurement. `LiquidMetalSurface` uses `BoxScope.matchParentSize()`, not
   `fillMaxSize()`. The latter expanded `Scaffold.bottomBar` over the entire library.
+- Transparent `Surface`/`Scaffold` containers declare `contentColor`; otherwise a
+  dark wallpaper can inherit a light-theme black foreground.
+- The mini-window red-X path stops playback before destroying its controller, then
+  removes both services and the Activity task.
 - Every overlay view and controller future is nullable, guarded and released. A
   rejected optional close target must not kill an otherwise working mini player.
 - Keep the application ID and signing certificate unchanged. Current certificate

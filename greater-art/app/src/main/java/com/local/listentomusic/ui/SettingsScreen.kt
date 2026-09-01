@@ -174,7 +174,9 @@ fun SettingsScreen(
                     AppBackgroundMode.CUSTOM_IMAGE -> BackgroundFileSetting(
                         title = uiText(language, "Custom image", "自訂圖片"),
                         selected = preferences.customBackgroundImageUri != null,
-                        chooseLabel = uiText(language, "Choose image", "選擇圖片"),
+                        chooseLabel = if (preferences.customBackgroundImageUri != null) {
+                            uiText(language, "Change image", "更換圖片")
+                        } else uiText(language, "Choose image", "選擇圖片"),
                         clearLabel = uiText(language, "Remove", "移除"),
                         onChoose = onChooseBackgroundImage,
                         onClear = onClearBackgroundImage,
@@ -183,7 +185,9 @@ fun SettingsScreen(
                     AppBackgroundMode.CUSTOM_VIDEO -> BackgroundFileSetting(
                         title = uiText(language, "Custom background video", "自訂背景影片"),
                         selected = preferences.customBackgroundVideoUri != null,
-                        chooseLabel = uiText(language, "Choose MP4", "選擇 MP4"),
+                        chooseLabel = if (preferences.customBackgroundVideoUri != null) {
+                            uiText(language, "Change MP4", "更換 MP4")
+                        } else uiText(language, "Choose MP4", "選擇 MP4"),
                         clearLabel = uiText(language, "Remove", "移除"),
                         onChoose = onChooseBackgroundVideo,
                         onClear = onClearBackgroundVideo,

@@ -32,6 +32,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.local.listentomusic.ui.GreaterArtApp
 import com.local.listentomusic.data.FloatingWindowMode
 import com.local.listentomusic.playback.MiniWindowOverlayService
+import com.local.listentomusic.playback.PlaybackService
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -202,7 +203,9 @@ class MainActivity : ComponentActivity() {
             return false
         }
         intent.removeExtra(MiniWindowOverlayService.EXTRA_STOP_APP)
-        finishAffinity()
+        stopService(Intent(this, MiniWindowOverlayService::class.java))
+        stopService(Intent(this, PlaybackService::class.java))
+        finishAndRemoveTask()
         return true
     }
 
