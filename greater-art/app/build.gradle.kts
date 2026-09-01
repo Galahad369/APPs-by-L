@@ -11,15 +11,15 @@ android {
         applicationId = "com.local.listentomusic"
         minSdk = 26
         targetSdk = 37
-        versionCode = 29
-                versionName = "1.5.21"
+        versionCode = 32
+        versionName = "1.6.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
     }
 
     signingConfigs {
-        // ponytail: pin the exact debug keystore already on the device so sideload updates keep the same signature
+        // Pin the existing sideload keystore so updates retain the same signature.
         create("release") {
             storeFile = File(System.getProperty("user.home"), ".android/debug.keystore")
             storePassword = "android"

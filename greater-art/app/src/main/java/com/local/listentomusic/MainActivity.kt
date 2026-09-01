@@ -25,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.WindowCompat
 import androidx.core.net.toUri
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -42,26 +43,26 @@ class MainActivity : ComponentActivity() {
     private var isPictureInPicture by mutableStateOf(false)
     private var playerScreenVisible = false
     private var videoSourceRect = Rect()
-    // ponytail: fallback receiver lives on MainActivity so it catches the broadcast
+    // The fallback receiver lives on MainActivity so it catches the broadcast
     // even if the Composable isn't composed yet (e.g., service starts in background).
     private var fallbackReceiver: BroadcastReceiver? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        if (intent?.getBooleanExtra(MiniWindowOverlayService.EXTRA_STOP_APP, false) == true) {
-            // ponytail: mini window dragged onto the red cross -> the service already stopped
-            // playback; just exit the app here.
-            finishAffinity()
-            return
-        }
+        if (handleStopIntent(intent)) return
         // Register fallback receiver early
         fallbackReceiver = object : BroadcastReceiver() {
             override fun onReceive(c: Context?, i: Intent?) {
                 viewModel.setFloatingWindowMode(FloatingWindowMode.COMPACT)
             }
         }
-        registerReceiver(fallbackReceiver, IntentFilter(MiniWindowOverlayService.ACTION_FALLBACK_COMPACT))
+        ContextCompat.registerReceiver(
+            this,
+            fallbackReceiver,
+            IntentFilter(MiniWindowOverlayService.ACTION_FALLBACK_COMPACT),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 combine(viewModel.playback, viewModel.settings) { playback, settings ->
@@ -97,17 +98,34 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // The Activity owns the foreground UI. Never leave a stale overlay above it.
+        stopService(Intent(this, MiniWindowOverlayService::class.java))
         viewModel.rescan()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleStopIntent(intent)
     }
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         val playback = viewModel.playback.value
+        val settings = viewModel.settings.value
+        if (
+            playback.hasMedia &&
+            settings.autoPictureInPicture &&
+            settings.floatingWindowMode == FloatingWindowMode.MINI_WINDOW
+        ) {
+            startMiniWindowIfAllowed()
+            return
+        }
         if (
             playerScreenVisible &&
             playback.isVideo &&
             playback.isPlaying &&
-            viewModel.settings.value.autoPictureInPicture &&
+            settings.autoPictureInPicture &&
             !isInPictureInPictureMode
         ) {
             updatePictureInPictureParams()
@@ -134,11 +152,58 @@ class MainActivity : ComponentActivity() {
 
     private fun enterVideoPictureInPicture() {
         val playback = viewModel.playback.value
-        if (!playerScreenVisible || !playback.isVideo || isInPictureInPictureMode) return
+        if (!playback.hasMedia || isInPictureInPictureMode) return
+        if (
+            !playback.isVideo ||
+            viewModel.settings.value.floatingWindowMode == FloatingWindowMode.MINI_WINDOW
+        ) {
+            if (startMiniWindowIfAllowed(openSettingsWhenMissing = true)) {
+                moveTaskToBack(true)
+            }
+            return
+        }
+        if (!playerScreenVisible || !playback.isVideo) return
         updatePictureInPictureParams()
         runCatching {
             enterPictureInPictureMode(buildPictureInPictureParams(autoEnter = false))
         }
+    }
+
+    private fun startMiniWindowIfAllowed(openSettingsWhenMissing: Boolean = false): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            if (openSettingsWhenMissing) {
+                runCatching {
+                    startActivity(
+                        Intent(
+                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            "package:$packageName".toUri(),
+                        ),
+                    )
+                }
+            } else {
+                viewModel.setFloatingWindowMode(FloatingWindowMode.COMPACT)
+            }
+            return false
+        }
+        return runCatching {
+            ContextCompat.startForegroundService(
+                this,
+                Intent(this, MiniWindowOverlayService::class.java),
+            )
+            true
+        }.getOrElse {
+            viewModel.setFloatingWindowMode(FloatingWindowMode.COMPACT)
+            false
+        }
+    }
+
+    private fun handleStopIntent(intent: Intent?): Boolean {
+        if (intent?.getBooleanExtra(MiniWindowOverlayService.EXTRA_STOP_APP, false) != true) {
+            return false
+        }
+        intent.removeExtra(MiniWindowOverlayService.EXTRA_STOP_APP)
+        finishAffinity()
+        return true
     }
 
     private fun buildPictureInPictureParams(autoEnter: Boolean): PictureInPictureParams {
@@ -161,7 +226,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        fallbackReceiver?.let { unregisterReceiver(it) }
+        fallbackReceiver?.let { receiver -> runCatching { unregisterReceiver(receiver) } }
+        fallbackReceiver = null
         super.onDestroy()
     }
 }

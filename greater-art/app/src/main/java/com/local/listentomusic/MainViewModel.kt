@@ -25,6 +25,7 @@ import com.local.listentomusic.data.UserPreferences
 import com.local.listentomusic.data.LibraryRowSize
 import com.local.listentomusic.data.ThemeMode
 import com.local.listentomusic.data.AppLanguage
+import com.local.listentomusic.data.AppBackgroundMode
 import com.local.listentomusic.data.FloatingWindowMode
 import com.local.listentomusic.model.MediaFile
 import com.local.listentomusic.model.SortMode
@@ -99,8 +100,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val probedDurations = mutableMapOf<String, Long>()
     private var pendingPlay: MediaFile? = null
     private var lastPlaybackError: String? = null
-    private val _miniWindowVisible = MutableStateFlow(false)
-    val miniWindowVisible: StateFlow<Boolean> = _miniWindowVisible.asStateFlow()
 
     private val playerListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) = publishPlayback(player)
@@ -272,6 +271,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setFloatingWindowMode(value: FloatingWindowMode) =
         updatePreference { preferences.setFloatingWindowMode(value) }
     fun setAppLanguage(value: AppLanguage) = updatePreference { preferences.setAppLanguage(value) }
+    fun setBackgroundMode(value: AppBackgroundMode) =
+        updatePreference { preferences.setBackgroundMode(value) }
+    fun setCustomBackgroundImage(uri: String?) = updatePreference {
+        preferences.setCustomBackgroundImageUri(uri)
+        if (uri != null) preferences.setBackgroundMode(AppBackgroundMode.CUSTOM_IMAGE)
+    }
+    fun setCustomBackgroundVideo(uri: String?) = updatePreference {
+        preferences.setCustomBackgroundVideoUri(uri)
+        if (uri != null) preferences.setBackgroundMode(AppBackgroundMode.CUSTOM_VIDEO)
+    }
+    fun setBackgroundDim(value: Float) = updatePreference { preferences.setBackgroundDim(value) }
     fun setSeekOffset(value: Long) = updatePreference { preferences.setSeekOffsetMs(value) }
     fun setActivePlaylist(id: String?) = updatePreference { preferences.setActivePlaylist(id) }
     fun createPlaylist(name: String) {
@@ -321,10 +331,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun removeFromActivePlaylist(path: String) {
         val id = userPreferences.activePlaylistId ?: return
         updatePreference { preferences.removeFromPlaylist(id, path) }
-    }
-
-    fun setMiniWindowVisible(visible: Boolean) {
-        _miniWindowVisible.value = visible
     }
 
     fun setPreloadThumbnails(value: Boolean) {

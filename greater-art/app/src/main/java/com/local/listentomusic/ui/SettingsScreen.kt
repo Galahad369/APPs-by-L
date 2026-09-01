@@ -31,6 +31,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -53,6 +54,7 @@ import androidx.media3.common.Player
 import com.local.listentomusic.BuildConfig
 import com.local.listentomusic.PlaybackUiState
 import com.local.listentomusic.data.AppLanguage
+import com.local.listentomusic.data.AppBackgroundMode
 import com.local.listentomusic.data.FloatingWindowMode
 import com.local.listentomusic.data.LibraryRowSize
 import com.local.listentomusic.data.LocalPlaylist
@@ -61,6 +63,7 @@ import com.local.listentomusic.data.UserPreferences
 
 private val speeds = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f, 2.5f, 3f)
 private val seekOffsets = listOf(1000L, 2000L, 3000L, 5000L, 10000L, 20000L, 30000L, 60000L)
+private val backgroundDims = listOf(0.35f, 0.50f, 0.65f, 0.80f)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,6 +80,12 @@ fun SettingsScreen(
     onAutoPictureInPicture: (Boolean) -> Unit,
     onFloatingWindowMode: (FloatingWindowMode) -> Unit,
     onAppLanguage: (AppLanguage) -> Unit,
+    onBackgroundMode: (AppBackgroundMode) -> Unit,
+    onChooseBackgroundImage: () -> Unit,
+    onChooseBackgroundVideo: () -> Unit,
+    onClearBackgroundImage: () -> Unit,
+    onClearBackgroundVideo: () -> Unit,
+    onBackgroundDim: (Float) -> Unit,
     onCreatePlaylist: (String) -> Unit,
     onCreatePlaylistAndSeed: (String, String?, String?) -> Unit,
     onPlayPlaylist: (String) -> Unit,
@@ -102,6 +111,8 @@ fun SettingsScreen(
     )
 
     Scaffold(
+        containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onBackground,
         topBar = {
             TopAppBar(
                 title = {
@@ -113,7 +124,9 @@ fun SettingsScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, uiText(language, "Back", "返回")) }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background.copy(alpha = 0.88f),
+                ),
             )
         },
     ) { padding ->
@@ -142,6 +155,58 @@ fun SettingsScreen(
                     },
                     onThemeMode,
                 )
+                ChoiceSetting(
+                    uiText(language, "App background", "應用程式背景"),
+                    uiText(language, "Default is animated black liquid metal. Custom video backgrounds are always muted.", "預設為黑色液態金屬動畫。自訂影片背景永遠靜音。"),
+                    AppBackgroundMode.entries,
+                    preferences.backgroundMode,
+                    {
+                        when (it) {
+                            AppBackgroundMode.DEFAULT -> uiText(language, "Default", "預設")
+                            AppBackgroundMode.CUSTOM_IMAGE -> uiText(language, "Image", "圖片")
+                            AppBackgroundMode.CUSTOM_VIDEO -> uiText(language, "Silent MP4", "靜音 MP4")
+                            AppBackgroundMode.CURRENT_VIDEO -> uiText(language, "Now-playing video", "播放中影片")
+                        }
+                    },
+                    onBackgroundMode,
+                )
+                when (preferences.backgroundMode) {
+                    AppBackgroundMode.CUSTOM_IMAGE -> BackgroundFileSetting(
+                        title = uiText(language, "Custom image", "自訂圖片"),
+                        selected = preferences.customBackgroundImageUri != null,
+                        chooseLabel = uiText(language, "Choose image", "選擇圖片"),
+                        clearLabel = uiText(language, "Remove", "移除"),
+                        onChoose = onChooseBackgroundImage,
+                        onClear = onClearBackgroundImage,
+                        language = language,
+                    )
+                    AppBackgroundMode.CUSTOM_VIDEO -> BackgroundFileSetting(
+                        title = uiText(language, "Custom background video", "自訂背景影片"),
+                        selected = preferences.customBackgroundVideoUri != null,
+                        chooseLabel = uiText(language, "Choose MP4", "選擇 MP4"),
+                        clearLabel = uiText(language, "Remove", "移除"),
+                        onChoose = onChooseBackgroundVideo,
+                        onClear = onClearBackgroundVideo,
+                        language = language,
+                    )
+                    AppBackgroundMode.CURRENT_VIDEO -> Text(
+                        uiText(language, "When the current track is a video, a muted synchronized copy appears behind the interface. Audio tracks fall back to liquid metal.", "目前曲目為影片時，介面後方會顯示同步的靜音副本；播放純音訊時則回復液態金屬背景。"),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    AppBackgroundMode.DEFAULT -> Unit
+                }
+                if (preferences.backgroundMode != AppBackgroundMode.DEFAULT) {
+                    ChoiceSetting(
+                        uiText(language, "Background dimming", "背景暗度"),
+                        uiText(language, "Darkens custom media so titles and controls remain readable.", "調暗自訂媒體，讓標題與控制按鈕保持清晰。"),
+                        backgroundDims,
+                        backgroundDims.minBy { kotlin.math.abs(it - preferences.backgroundDim) },
+                        { "${(it * 100).toInt()}%" },
+                        onBackgroundDim,
+                    )
+                }
                 ChoiceSetting(
                     uiText(language, "Library row size", "音樂庫列大小"),
                     uiText(language, "Changes the full row and thumbnail. Small is the default.", "調整完整列與縮圖大小。預設為小。"),
@@ -178,10 +243,10 @@ fun SettingsScreen(
                     onSeekOffset,
                 )
                 SwitchSetting(uiText(language, "Resume last position", "接續上次位置"), uiText(language, "Continue the last file where you stopped.", "從上次停止的位置繼續播放。"), preferences.resumePlayback, onResumePlayback)
-                SwitchSetting(uiText(language, "Automatic floating video", "自動浮動影片"), uiText(language, "Enter picture-in-picture when leaving a playing video.", "離開正在播放的影片時進入子母畫面。"), preferences.autoPictureInPicture, onAutoPictureInPicture)
+                SwitchSetting(uiText(language, "Automatic floating playback", "自動浮動播放"), uiText(language, "Keep playing in the selected floating mode when leaving the app.", "離開應用程式時，以所選浮動模式繼續播放。"), preferences.autoPictureInPicture, onAutoPictureInPicture)
                 ChoiceSetting(
                     uiText(language, "Floating window shape", "浮動視窗形狀"),
-                    uiText(language, "Compact is the smallest default. Android still controls final size and pinch resizing.", "「精簡」為最小預設。最終大小與縮放仍由 Android 控制。"),
+                    uiText(language, "Mini window is the tiniest option. Compact and Follow video use Android's resizable picture-in-picture.", "「迷你視窗」尺寸最小；「精簡」與「跟隨影片」使用 Android 可縮放子母畫面。"),
                     FloatingWindowMode.entries,
                     preferences.floatingWindowMode,
                     { if (it == FloatingWindowMode.COMPACT) uiText(language, "Compact", "精簡")
@@ -211,6 +276,7 @@ fun SettingsScreen(
                                 IconButton(onClick = { deletePlaylist = playlist }) { Icon(Icons.Rounded.Delete, uiText(language, "Delete", "刪除")) }
                             }
                         },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     )
                 }
                 OutlinedButton(onClick = { playlistName = ""; createOpen = true }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -279,7 +345,38 @@ private fun NameDialog(language: AppLanguage, playlist: LocalPlaylist?, name: St
 
 @Composable
 private fun SwitchSetting(title: String, description: String, checked: Boolean, onChecked: (Boolean) -> Unit, enabled: Boolean = true) {
-    ListItem(headlineContent = { Text(title, fontWeight = FontWeight.SemiBold) }, supportingContent = { Text(description) }, trailingContent = { Switch(checked, onChecked, enabled = enabled) })
+    ListItem(
+        headlineContent = { Text(title, fontWeight = FontWeight.SemiBold) },
+        supportingContent = { Text(description) },
+        trailingContent = { Switch(checked, onChecked, enabled = enabled) },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+    )
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+}
+
+@Composable
+private fun BackgroundFileSetting(
+    title: String,
+    selected: Boolean,
+    chooseLabel: String,
+    clearLabel: String,
+    onChoose: () -> Unit,
+    onClear: () -> Unit,
+    language: AppLanguage,
+) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Text(title, fontWeight = FontWeight.SemiBold)
+        Text(
+            if (selected) uiText(language, "File selected — access is saved locally.", "已選擇檔案，存取權限只儲存在本機。")
+            else uiText(language, "No file selected; the default background is used.", "尚未選擇檔案，將使用預設背景。"),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = onChoose) { Text(chooseLabel) }
+            if (selected) TextButton(onClick = onClear) { Text(clearLabel) }
+        }
+    }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
 }
 

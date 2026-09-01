@@ -5,9 +5,12 @@ import com.local.listentomusic.data.AppLanguage
 import com.local.listentomusic.data.FloatingWindowMode
 import com.local.listentomusic.data.LibraryRowSize
 import com.local.listentomusic.data.UserPreferences
+import com.local.listentomusic.data.ThemeMode
+import com.local.listentomusic.data.AppBackgroundMode
 import com.local.listentomusic.model.SortMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Test
 import androidx.media3.common.C
 import androidx.media3.common.Player
@@ -30,9 +33,13 @@ class FormattingTest {
     @Test fun requestedPlaybackAndPresentationDefaultsRemainStable() {
         val defaults = UserPreferences()
         assertEquals(Player.REPEAT_MODE_ONE, defaults.repeatMode)
-        assertEquals(FloatingWindowMode.COMPACT, defaults.floatingWindowMode)
+        assertEquals(FloatingWindowMode.FOLLOW_VIDEO, defaults.floatingWindowMode)
+        assertEquals(ThemeMode.DARK, defaults.themeMode)
         assertEquals(AppLanguage.ENGLISH, defaults.appLanguage)
         assertTrue(defaults.preloadThumbnails)
+        assertFalse(defaults.showFileDetails)
+        assertEquals(AppBackgroundMode.DEFAULT, defaults.backgroundMode)
+        assertEquals(0.55f, defaults.backgroundDim, 0.001f)
         assertEquals(
             setOf(SortMode.CUSTOM, SortMode.NAME_ASC, SortMode.NAME_DESC),
             SortMode.entries.toSet(),

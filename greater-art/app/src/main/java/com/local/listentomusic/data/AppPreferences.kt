@@ -25,7 +25,7 @@ data class UserPreferences(
     val playbackSpeed: Float = 1f,
     val repeatMode: Int = Player.REPEAT_MODE_ONE,
     val libraryRowSize: LibraryRowSize = LibraryRowSize.SMALL,
-    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val themeMode: ThemeMode = ThemeMode.DARK,
     val showThumbnails: Boolean = true,
     val showFileDetails: Boolean = false,
     val preloadThumbnails: Boolean = true,
@@ -33,6 +33,10 @@ data class UserPreferences(
     val autoPictureInPicture: Boolean = true,
     val floatingWindowMode: FloatingWindowMode = FloatingWindowMode.FOLLOW_VIDEO,
     val appLanguage: AppLanguage = AppLanguage.ENGLISH,
+    val backgroundMode: AppBackgroundMode = AppBackgroundMode.DEFAULT,
+    val customBackgroundImageUri: String? = null,
+    val customBackgroundVideoUri: String? = null,
+    val backgroundDim: Float = 0.55f,
     val playlists: List<LocalPlaylist> = emptyList(),
     val activePlaylistId: String? = null,
     val seekOffsetMs: Long = 5_000L,
@@ -42,6 +46,7 @@ enum class LibraryRowSize(val label: String) { SMALL("Small"), MEDIUM("Medium"),
 enum class ThemeMode(val label: String) { SYSTEM("System"), LIGHT("Light"), DARK("Dark") }
 enum class FloatingWindowMode { COMPACT, FOLLOW_VIDEO, MINI_WINDOW }
 enum class AppLanguage { ENGLISH, TRADITIONAL_CHINESE }
+enum class AppBackgroundMode { DEFAULT, CUSTOM_IMAGE, CUSTOM_VIDEO, CURRENT_VIDEO }
 
 data class LocalPlaylist(
     val id: String,
@@ -65,7 +70,13 @@ class AppPreferences(private val context: Context) {
         val resumePlayback = booleanPreferencesKey("resume_playback")
         val autoPictureInPicture = booleanPreferencesKey("auto_picture_in_picture")
         val floatingWindowMode = stringPreferencesKey("floating_window_mode")
+        // Distinguishes a deliberate Compact choice from the pre-1.6.1 Compact default.
+        val floatingWindowDefaultV2 = booleanPreferencesKey("floating_window_default_v2")
         val appLanguage = stringPreferencesKey("app_language")
+        val backgroundMode = stringPreferencesKey("background_mode")
+        val customBackgroundImageUri = stringPreferencesKey("custom_background_image_uri")
+        val customBackgroundVideoUri = stringPreferencesKey("custom_background_video_uri")
+        val backgroundDim = floatPreferencesKey("background_dim")
         val playlists = stringPreferencesKey("playlists")
         val activePlaylistId = stringPreferencesKey("active_playlist_id")
         val seekOffsetMs = longPreferencesKey("seek_offset_ms")
@@ -85,17 +96,30 @@ class AppPreferences(private val context: Context) {
                 prefs[Keys.libraryRowSize],
                 LibraryRowSize.SMALL,
             ),
-            themeMode = enumValueOrDefault(prefs[Keys.themeMode], ThemeMode.SYSTEM),
+            themeMode = enumValueOrDefault(prefs[Keys.themeMode], ThemeMode.DARK),
             showThumbnails = prefs[Keys.showThumbnails] ?: true,
-            showFileDetails = prefs[Keys.showFileDetails] ?: true,
+            showFileDetails = prefs[Keys.showFileDetails] ?: false,
             preloadThumbnails = prefs[Keys.preloadThumbnails] ?: true,
             resumePlayback = prefs[Keys.resumePlayback] ?: true,
             autoPictureInPicture = prefs[Keys.autoPictureInPicture] ?: true,
             floatingWindowMode = enumValueOrDefault(
                 prefs[Keys.floatingWindowMode],
                 FloatingWindowMode.FOLLOW_VIDEO,
-            ),
+            ).let { savedMode ->
+                // Existing installs inherited Compact without choosing it. Migrate that
+                // old default once; future explicit Compact selections remain respected.
+                if (prefs[Keys.floatingWindowDefaultV2] != true &&
+                    savedMode == FloatingWindowMode.COMPACT
+                ) FloatingWindowMode.FOLLOW_VIDEO else savedMode
+            },
             appLanguage = enumValueOrDefault(prefs[Keys.appLanguage], AppLanguage.ENGLISH),
+            backgroundMode = enumValueOrDefault(
+                prefs[Keys.backgroundMode],
+                AppBackgroundMode.DEFAULT,
+            ),
+            customBackgroundImageUri = prefs[Keys.customBackgroundImageUri],
+            customBackgroundVideoUri = prefs[Keys.customBackgroundVideoUri],
+            backgroundDim = (prefs[Keys.backgroundDim] ?: 0.55f).coerceIn(0.25f, 0.85f),
             playlists = decodePlaylists(prefs[Keys.playlists].orEmpty()),
             activePlaylistId = prefs[Keys.activePlaylistId],
             seekOffsetMs = prefs[Keys.seekOffsetMs] ?: 5_000L,
@@ -133,9 +157,23 @@ class AppPreferences(private val context: Context) {
     suspend fun setPreloadThumbnails(value: Boolean) = edit { it[Keys.preloadThumbnails] = value }
     suspend fun setResumePlayback(value: Boolean) = edit { it[Keys.resumePlayback] = value }
     suspend fun setAutoPictureInPicture(value: Boolean) = edit { it[Keys.autoPictureInPicture] = value }
-    suspend fun setFloatingWindowMode(value: FloatingWindowMode) =
-        edit { it[Keys.floatingWindowMode] = value.name }
+    suspend fun setFloatingWindowMode(value: FloatingWindowMode) = edit {
+        it[Keys.floatingWindowMode] = value.name
+        it[Keys.floatingWindowDefaultV2] = true
+    }
     suspend fun setAppLanguage(value: AppLanguage) = edit { it[Keys.appLanguage] = value.name }
+    suspend fun setBackgroundMode(value: AppBackgroundMode) =
+        edit { it[Keys.backgroundMode] = value.name }
+    suspend fun setCustomBackgroundImageUri(value: String?) = edit { prefs ->
+        if (value == null) prefs.remove(Keys.customBackgroundImageUri)
+        else prefs[Keys.customBackgroundImageUri] = value
+    }
+    suspend fun setCustomBackgroundVideoUri(value: String?) = edit { prefs ->
+        if (value == null) prefs.remove(Keys.customBackgroundVideoUri)
+        else prefs[Keys.customBackgroundVideoUri] = value
+    }
+    suspend fun setBackgroundDim(value: Float) =
+        edit { it[Keys.backgroundDim] = value.coerceIn(0.25f, 0.85f) }
     suspend fun setSeekOffsetMs(value: Long) = edit { it[Keys.seekOffsetMs] = value }
 
     suspend fun setActivePlaylist(id: String?) = edit { prefs ->
@@ -202,7 +240,12 @@ class AppPreferences(private val context: Context) {
             it.remove(Keys.resumePlayback)
             it.remove(Keys.autoPictureInPicture)
             it.remove(Keys.floatingWindowMode)
+            it.remove(Keys.floatingWindowDefaultV2)
             it.remove(Keys.appLanguage)
+            it.remove(Keys.backgroundMode)
+            it.remove(Keys.customBackgroundImageUri)
+            it.remove(Keys.customBackgroundVideoUri)
+            it.remove(Keys.backgroundDim)
             it.remove(Keys.seekOffsetMs)
             it[Keys.speed] = 1f
             it[Keys.repeatMode] = Player.REPEAT_MODE_ONE.toLong()
