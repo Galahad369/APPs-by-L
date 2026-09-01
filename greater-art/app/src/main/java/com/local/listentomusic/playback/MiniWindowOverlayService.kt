@@ -124,7 +124,7 @@ class MiniWindowOverlayService : Service() {
                 videoView.visibility = if (v) View.VISIBLE else View.GONE
                 closeBtn.visibility = if (v) View.GONE else View.VISIBLE
                 // ponytail: video mode is pure video — no box, no chrome
-                root.background = if (v) null else ContextCompat.getDrawable(this, R.drawable.mini_player_bg)
+                root.background = if (v) null else ContextCompat.getDrawable(this@MiniWindowOverlayService, R.drawable.mini_player_bg)
                 params.width = dp(if (v) 120 else 140)
                 params.height = dp(if (v) 68 else 46)
                 wm.updateViewLayout(root, params)
