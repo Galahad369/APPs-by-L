@@ -124,7 +124,7 @@ class MiniWindowOverlayService : Service() {
                 videoView.visibility = if (v) View.VISIBLE else View.GONE
                 closeBtn.visibility = if (v) View.GONE else View.VISIBLE
                 // ponytail: video mode is pure video — no box, no chrome
-                root.background = if (v) null else getDrawable(R.drawable.mini_player_bg)
+                root.background = if (v) null else ContextCompat.getDrawable(this, R.drawable.mini_player_bg)
                 params.width = dp(if (v) 120 else 140)
                 params.height = dp(if (v) 68 else 46)
                 wm.updateViewLayout(root, params)
@@ -167,17 +167,25 @@ class MiniWindowOverlayService : Service() {
     private fun openApp() {
         // ponytail: tapping the mini window goes home and hides it (user request)
         stopSelf()
-        startActivity(Intent(this, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK })
+        try {
+            startActivity(Intent(this, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK })
+        } catch (t: Throwable) {
+            // ponytail: can't launch main activity; app already stopped.
+        }
     }
 
     // ponytail: drag onto the center red cross -> close window + stop the app
     private fun closeAndStopApp() {
         stopSelf()
         controller?.stop()
-        startActivity(Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(EXTRA_STOP_APP, true)
-        })
+        try {
+            startActivity(Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra(EXTRA_STOP_APP, true)
+            })
+        } catch (t: Throwable) {
+            // ponytail: can't launch main activity; app already stopped.
+        }
     }
 
     private fun buildView() {
@@ -249,7 +257,14 @@ class MiniWindowOverlayService : Service() {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
             PixelFormat.TRANSLUCENT,
         ).apply { gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL; y = dp(CROSS_BOTTOM) }
-        wm.addView(crossView, cp)
+        try {
+            wm.addView(crossView, cp)
+        } catch (t: Throwable) {
+            // ponytail: cross overlay failed; app still works without it.
+            sendFallbackCompact()
+            stopSelf()
+            return
+        }
     }
 
     private fun connect() {
