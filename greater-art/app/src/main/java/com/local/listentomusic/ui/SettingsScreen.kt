@@ -36,6 +36,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -65,6 +66,12 @@ private val speeds = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f, 2.5f, 3f)
 private val seekOffsets = listOf(1000L, 2000L, 3000L, 5000L, 10000L, 20000L, 30000L, 60000L)
 private val backgroundDims = listOf(0.35f, 0.50f, 0.65f, 0.80f)
 
+private data class PlaybackCycleChoice(
+    val repeatMode: Int,
+    val random: Boolean,
+    val label: String,
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -92,7 +99,7 @@ fun SettingsScreen(
     onRenamePlaylist: (String, String) -> Unit,
     onDeletePlaylist: (String) -> Unit,
     onSpeed: (Float) -> Unit,
-    onRepeatMode: (Int) -> Unit,
+    onPlaybackCycle: (Int, Boolean) -> Unit,
     onClearThumbnailCache: () -> Unit,
     onRescan: () -> Unit,
     onReset: () -> Unit,
@@ -105,9 +112,10 @@ fun SettingsScreen(
     var deletePlaylist by remember { mutableStateOf<LocalPlaylist?>(null) }
     var playlistName by remember { mutableStateOf("") }
     val repeatModes = listOf(
-        Player.REPEAT_MODE_ONE to uiText(language, "One", "單曲"),
-        Player.REPEAT_MODE_ALL to uiText(language, "All", "全部"),
-        Player.REPEAT_MODE_OFF to uiText(language, "Off", "關閉"),
+        PlaybackCycleChoice(Player.REPEAT_MODE_ONE, false, uiText(language, "One", "單曲")),
+        PlaybackCycleChoice(Player.REPEAT_MODE_ALL, false, uiText(language, "All", "全部")),
+        PlaybackCycleChoice(Player.REPEAT_MODE_ALL, true, uiText(language, "Random", "隨機")),
+        PlaybackCycleChoice(Player.REPEAT_MODE_OFF, false, uiText(language, "Off", "關閉")),
     )
 
     Scaffold(
@@ -202,12 +210,10 @@ fun SettingsScreen(
                     AppBackgroundMode.DEFAULT -> Unit
                 }
                 if (preferences.backgroundMode != AppBackgroundMode.DEFAULT) {
-                    ChoiceSetting(
+                    DimSliderSetting(
                         uiText(language, "Background dimming", "背景暗度"),
                         uiText(language, "Darkens custom media so titles and controls remain readable.", "調暗自訂媒體，讓標題與控制按鈕保持清晰。"),
-                        backgroundDims,
-                        backgroundDims.minBy { kotlin.math.abs(it - preferences.backgroundDim) },
-                        { "${(it * 100).toInt()}%" },
+                        preferences.backgroundDim,
                         onBackgroundDim,
                     )
                 }
@@ -234,9 +240,12 @@ fun SettingsScreen(
                     uiText(language, "Repeat", "循環"),
                     uiText(language, "Repeat one remains the default after reset.", "重設後仍以單曲循環為預設。"),
                     repeatModes,
-                    repeatModes.first { it.first == playback.repeatMode },
-                    { it.second },
-                    { onRepeatMode(it.first) },
+                    repeatModes.first {
+                        it.random == playback.shuffleEnabled &&
+                            (it.random || it.repeatMode == playback.repeatMode)
+                    },
+                    { it.label },
+                    { onPlaybackCycle(it.repeatMode, it.random) },
                 )
                 ChoiceSetting(
                     uiText(language, "Jump back / forward", "快退 / 快進"),
@@ -392,6 +401,32 @@ private fun <T> ChoiceSetting(title: String, description: String, values: List<T
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             values.forEach { value -> FilterChip(value == selected, { onSelect(value) }, { Text(label(value)) }) }
         }
+    }
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+}
+
+@Composable
+private fun DimSliderSetting(title: String, description: String, value: Float, onValue: (Float) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Column(Modifier.weight(1f)) {
+                Text(title, fontWeight = FontWeight.SemiBold)
+                Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text(
+                "${(value * 100).toInt()}%",
+                modifier = Modifier.padding(start = 12.dp, top = 2.dp),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.secondary,
+            )
+        }
+        Slider(
+            value = value,
+            onValueChange = onValue,
+            valueRange = 0.25f..0.85f,
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        )
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
 }

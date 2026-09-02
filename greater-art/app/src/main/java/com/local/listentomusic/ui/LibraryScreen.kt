@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Sort
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.SmartDisplay
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Refresh
@@ -51,12 +53,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -99,6 +103,7 @@ fun LibraryScreen(
     onRemoveFromPlaylist: (String) -> Unit,
     onDeletePlaylist: (String) -> Unit,
     onLoadThumbnail: suspend (MediaFile) -> Bitmap?,
+    onPreloadAhead: (Int, Int) -> Unit,
     onOpenSettings: () -> Unit,
     onPlay: (MediaFile) -> Unit,
 ) {
@@ -276,8 +281,26 @@ fun LibraryScreen(
                         onRefresh,
                     )
                 } else {
+                    val listState = rememberLazyListState()
+                    // The first 300 thumbnails warm in the background. Request later
+                    // windows only once per 100 rows; cancelling on every scroll index
+                    // previously prevented either preload from completing.
+                    LaunchedEffect(listState) {
+                        var lastRequestedStart = -1
+                        snapshotFlow { listState.firstVisibleItemIndex }
+                            .collect { index ->
+                                if (index >= 240) {
+                                    val start = 300 + ((index - 240) / 100) * 100
+                                    if (start != lastRequestedStart) {
+                                        lastRequestedStart = start
+                                        onPreloadAhead(start, 140)
+                                    }
+                                }
+                            }
+                    }
                     LazyColumn(
-                        Modifier.fillMaxSize(),
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(bottom = 12.dp),
                     ) {
                         itemsIndexed(
@@ -500,21 +523,10 @@ private fun MediaThumbnail(file: MediaFile, bitmap: Bitmap?, rowSize: LibraryRow
     ) {
         if (bitmap != null) {
             Image(bitmap.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            // Keep the play glyph subtle so the thumbnail remains visible.
-            if (file.kind == MediaKind.VIDEO) {
-                val badge = Modifier.align(Alignment.Center).clip(RoundedCornerShape(50))
-                Box(badge.background(Color(0xFF0A0C0B).copy(alpha = 0.26f))) {
-                    Icon(
-                        Icons.Rounded.PlayArrow,
-                        null,
-                        Modifier.size(rowSize.playIconSize.times(1.25f)).padding(2.dp),
-                        Color.White.copy(alpha = 0.82f),
-                    )
-                }
-            }
+            // The row itself is tappable to play; do not paint a play button on the thumbnail.
         } else {
             Icon(
-                if (file.kind == MediaKind.VIDEO) Icons.Rounded.PlayArrow else Icons.Rounded.MusicNote,
+                if (file.kind == MediaKind.VIDEO) Icons.Rounded.SmartDisplay else Icons.Rounded.MusicNote,
                 null,
                 Modifier.size(rowSize.placeholderIconSize),
                 MaterialTheme.colorScheme.onSurfaceVariant,

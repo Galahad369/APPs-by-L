@@ -27,6 +27,14 @@ class FormattingTest {
 
     @Test fun formatsHours() = assertEquals("1:02:03", formatDuration(3_723_000))
 
+    @Test fun playbackCycleIncludesRandomInOneStableLoop() {
+        assertEquals(CycleMode.ONE, nextCycleMode(CycleMode.OFF))
+        assertEquals(CycleMode.ALL, nextCycleMode(CycleMode.ONE))
+        assertEquals(CycleMode.RANDOM, nextCycleMode(CycleMode.ALL))
+        assertEquals(CycleMode.OFF, nextCycleMode(CycleMode.RANDOM))
+        assertEquals(CycleMode.RANDOM, resolveCycleMode(Player.REPEAT_MODE_ALL, random = true))
+    }
+
     @Test fun defaultsToTheSmallestLibraryRow() =
         assertEquals(LibraryRowSize.SMALL, UserPreferences().libraryRowSize)
 

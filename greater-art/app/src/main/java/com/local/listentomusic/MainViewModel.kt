@@ -40,6 +40,33 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
+private const val MAX_PRELOAD_ITEMS = 300
+
+internal enum class CycleMode { OFF, ONE, ALL, RANDOM }
+
+internal fun resolveCycleMode(repeatMode: Int, random: Boolean): CycleMode = when {
+    random -> CycleMode.RANDOM
+    repeatMode == Player.REPEAT_MODE_ONE -> CycleMode.ONE
+    repeatMode == Player.REPEAT_MODE_ALL -> CycleMode.ALL
+    else -> CycleMode.OFF
+}
+
+internal fun nextCycleMode(current: CycleMode): CycleMode = when (current) {
+    CycleMode.OFF -> CycleMode.ONE
+    CycleMode.ONE -> CycleMode.ALL
+    CycleMode.ALL -> CycleMode.RANDOM
+    CycleMode.RANDOM -> CycleMode.OFF
+}
+
+// Sleep timer: minute targets. -1L = "stop at the end of the current track".
+val sleepTimerOptions = listOf(5L, 10L, 15L, 30L, 60L, -1L)
+
+data class SleepTimerState(
+    val active: Boolean = false,
+    val remainingMs: Long = 0L,
+    val endOfTrack: Boolean = false,
+)
+
 enum class LibraryStatus { NEEDS_PERMISSION, SCANNING, READY, FOLDER_MISSING, CANNOT_READ }
 
 data class LibraryUiState(
@@ -59,10 +86,12 @@ data class PlaybackUiState(
     val durationMs: Long = 0L,
     val speed: Float = 1f,
     val repeatMode: Int = Player.REPEAT_MODE_ONE,
+    val shuffleEnabled: Boolean = false,
     val hasNext: Boolean = false,
     val hasPrevious: Boolean = false,
     val videoAspectRatio: Float = 16f / 9f,
     val errorMessage: String? = null,
+    val appLanguage: AppLanguage = AppLanguage.ENGLISH,
 ) {
     val hasMedia: Boolean get() = currentPath != null
     val isVideo: Boolean
@@ -83,8 +112,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _library = MutableStateFlow(LibraryUiState())
     val library: StateFlow<LibraryUiState> = _library.asStateFlow()
 
+    private val _queue = MutableStateFlow<List<MediaFile>>(emptyList())
+    val queue: StateFlow<List<MediaFile>> = _queue.asStateFlow()
+
     private val _playback = MutableStateFlow(PlaybackUiState())
     val playback: StateFlow<PlaybackUiState> = _playback.asStateFlow()
+
+    private val _sleepTimer = MutableStateFlow(SleepTimerState())
+    val sleepTimer: StateFlow<SleepTimerState> = _sleepTimer.asStateFlow()
+    private var sleepTimerJob: Job? = null
+    private var sleepTimerEndsAt: Long = 0L
+    // Single-job wakeup. The exact remainingMs is computed at fire time,
+    // so we never have to chase a moving target. End-of-track uses a flag, not a clock.
 
     private val _controller = MutableStateFlow<MediaController?>(null)
     val controller: StateFlow<MediaController?> = _controller.asStateFlow()
@@ -94,7 +133,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var tickerJob: Job? = null
-    private var thumbnailPreloadJob: Job? = null
+    private var thumbnailWarmupJob: Job? = null
+    private var thumbnailAheadJob: Job? = null
     private var durationProbeJob: Job? = null
     private var durationProbePath: String? = null
     private val probedDurations = mutableMapOf<String, Long>()
@@ -111,6 +151,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             if (playbackState == Player.STATE_READY) lastPlaybackError = null
+        }
+
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            // Sleep timer in "end of track" mode fires when the next item lands.
+            val timer = _sleepTimer.value
+            if (timer.active && timer.endOfTrack) cancelSleepTimer()
         }
     }
 
@@ -138,10 +184,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     scannedFiles = result.files
                     applySortingAndFilter()
                     _library.value = _library.value.copy(status = LibraryStatus.READY)
-                    thumbnailPreloadJob?.cancel()
-                    thumbnailPreloadJob = if (userPreferences.preloadThumbnails) viewModelScope.launch {
-                        // A recursive Download scan can find hundreds of files. Warm the first
-                        // library page eagerly; every other preview still loads on demand.
+                    thumbnailWarmupJob?.cancel()
+                    thumbnailAheadJob?.cancel()
+                    thumbnailWarmupJob = if (userPreferences.preloadThumbnails) viewModelScope.launch {
+                        // Warm a generous initial window while decoding remains bounded.
+                        // Visible rows still bypass the preload throttle.
                         thumbnailRepository.preload(orderedFiles.take(MAX_PRELOAD_ITEMS))
                     } else null
                 }
@@ -197,7 +244,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun play(file: MediaFile) {
-        thumbnailPreloadJob?.cancel()
+        thumbnailWarmupJob?.cancel()
+        thumbnailAheadJob?.cancel()
         val player = _controller.value
         if (player == null) {
             // A tap can arrive while the MediaSession connection is still starting.
@@ -255,9 +303,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _controller.value?.let(::publishPlayback)
     }
 
-    fun setRepeatMode(mode: Int) {
+    fun setPlaybackCycle(mode: Int, random: Boolean) {
         _controller.value?.let {
-            it.repeatMode = mode
+            it.shuffleModeEnabled = random
+            it.repeatMode = if (random) Player.REPEAT_MODE_ALL else mode
             publishPlayback(it)
         }
     }
@@ -336,12 +385,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setPreloadThumbnails(value: Boolean) {
         updatePreference { preferences.setPreloadThumbnails(value) }
         if (value) {
-            thumbnailPreloadJob?.cancel()
-            thumbnailPreloadJob = viewModelScope.launch {
+            thumbnailWarmupJob?.cancel()
+            thumbnailWarmupJob = viewModelScope.launch {
                 thumbnailRepository.preload(orderedFiles.take(MAX_PRELOAD_ITEMS))
             }
         } else {
-            thumbnailPreloadJob?.cancel()
+            thumbnailWarmupJob?.cancel()
+            thumbnailAheadJob?.cancel()
+        }
+    }
+
+    // Pre-warm later windows without cancelling the initial 300-item warmup.
+    fun preloadThumbnailsStartingAt(startIndex: Int, count: Int) {
+        if (!userPreferences.preloadThumbnails) return
+        val window = orderedFiles.drop(startIndex).take(count)
+        if (window.isEmpty()) return
+        thumbnailAheadJob?.cancel()
+        thumbnailAheadJob = viewModelScope.launch {
+            thumbnailRepository.preload(window)
         }
     }
 
@@ -355,20 +416,72 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _controller.value?.let {
                 it.playbackParameters = PlaybackParameters(1f)
                 it.repeatMode = Player.REPEAT_MODE_ONE
+                it.shuffleModeEnabled = false
                 publishPlayback(it)
             }
         }
     }
 
     fun cycleRepeatMode() {
-        _controller.value?.let {
-            it.repeatMode = when (it.repeatMode) {
-                Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ONE
-                Player.REPEAT_MODE_ONE -> Player.REPEAT_MODE_ALL
-                else -> Player.REPEAT_MODE_OFF
-            }
-            publishPlayback(it)
+        _controller.value?.let { player ->
+            val current = resolveCycleMode(player.repeatMode, player.shuffleModeEnabled)
+            val next = nextCycleMode(current)
+            applyCycleMode(player, next)
+            publishPlayback(player)
         }
+    }
+
+    // One control owns the full cycle: Off → One → All → Random → Off.
+    private fun applyCycleMode(player: Player, mode: CycleMode) {
+        when (mode) {
+            CycleMode.OFF -> {
+                player.repeatMode = Player.REPEAT_MODE_OFF
+                player.shuffleModeEnabled = false
+            }
+            CycleMode.ONE -> {
+                player.repeatMode = Player.REPEAT_MODE_ONE
+                player.shuffleModeEnabled = false
+            }
+            CycleMode.ALL -> {
+                player.repeatMode = Player.REPEAT_MODE_ALL
+                player.shuffleModeEnabled = false
+            }
+            CycleMode.RANDOM -> {
+                player.repeatMode = Player.REPEAT_MODE_ALL
+                player.shuffleModeEnabled = true
+            }
+        }
+    }
+
+    // -1L minute target = pause at the end of the current track.
+    fun setSleepTimer(minutes: Long) {
+        sleepTimerJob?.cancel()
+        if (minutes == 0L) {
+            cancelSleepTimer()
+            return
+        }
+        if (minutes == -1L) {
+            _sleepTimer.value = SleepTimerState(active = true, endOfTrack = true)
+            return
+        }
+        sleepTimerEndsAt = System.currentTimeMillis() + minutes * 60_000L
+        _sleepTimer.value = SleepTimerState(active = true, remainingMs = minutes * 60_000L)
+        sleepTimerJob = viewModelScope.launch {
+            while (true) {
+                val remaining = (sleepTimerEndsAt - System.currentTimeMillis()).coerceAtLeast(0L)
+                _sleepTimer.value = _sleepTimer.value.copy(remainingMs = remaining)
+                if (remaining == 0L) break
+                delay(1_000L)
+            }
+            _controller.value?.pause()
+            _sleepTimer.value = SleepTimerState()
+        }
+    }
+
+    fun cancelSleepTimer() {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        _sleepTimer.value = SleepTimerState()
     }
 
     private fun connectController() {
@@ -393,9 +506,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun startTicker() {
         tickerJob?.cancel()
         tickerJob = viewModelScope.launch {
+            // Four updates per second keep the timeline visually smooth without
+            // driving Compose at video-frame rate.
             while (true) {
                 _controller.value?.let(::publishPlayback)
-                delay(500)
+                delay(250L)
             }
         }
     }
@@ -426,22 +541,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             16f / 9f
         }
-        _playback.value = PlaybackUiState(
+        // Match the 250ms UI cadence so identical events do not cause extra emissions.
+        val quantizedPosition = (player.currentPosition / 250L) * 250L
+        val next = PlaybackUiState(
             connected = true,
             currentPath = path,
             title = player.mediaMetadata.title?.toString()
                 ?: player.currentMediaItem?.mediaId?.substringAfterLast('/')
                 ?: "Nothing playing",
             isPlaying = player.isPlaying,
-            positionMs = player.currentPosition.coerceAtLeast(0L),
+            positionMs = quantizedPosition.coerceAtLeast(0L),
             durationMs = duration,
             speed = player.playbackParameters.speed,
             repeatMode = player.repeatMode,
+            shuffleEnabled = player.shuffleModeEnabled,
             hasNext = player.hasNextMediaItem(),
             hasPrevious = player.hasPreviousMediaItem() || player.currentPosition > 0,
             videoAspectRatio = videoAspectRatio,
             errorMessage = lastPlaybackError,
         )
+        // Skip identical emits. Every StateFlow update triggers a
+        // recomposition storm across every screen that reads `playback`.
+        if (next == _playback.value) return
+        _playback.value = next
     }
 
     private fun applySortingAndFilter() {
@@ -463,6 +585,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 playlist.paths.mapNotNull(byPath::get)
             }
             ?: sortedLibrary
+        _queue.value = orderedFiles
         val query = _library.value.query.trim()
         val shown = if (query.isBlank()) orderedFiles else orderedFiles.filter {
             it.name.contains(query, ignoreCase = true)
@@ -513,17 +636,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         tickerJob?.cancel()
-        thumbnailPreloadJob?.cancel()
+        thumbnailWarmupJob?.cancel()
+        thumbnailAheadJob?.cancel()
         durationProbeJob?.cancel()
+        sleepTimerJob?.cancel()
         _controller.value?.removeListener(playerListener)
         controllerFuture?.let(MediaController::releaseFuture)
         _controller.value = null
         super.onCleared()
     }
 
-    private companion object {
-        const val MAX_PRELOAD_ITEMS = 120
-    }
 }
 
 internal fun resolveDurationMs(vararg candidates: Long): Long =

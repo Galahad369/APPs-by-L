@@ -38,20 +38,25 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PictureInPictureAlt
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.RepeatOne
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Speed
@@ -62,6 +67,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -71,6 +77,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -100,7 +107,11 @@ import androidx.media3.session.MediaController
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.local.listentomusic.PlaybackUiState
+import com.local.listentomusic.SleepTimerState
 import com.local.listentomusic.data.AppLanguage
+import com.local.listentomusic.model.MediaFile
+import com.local.listentomusic.model.MediaKind
+import com.local.listentomusic.sleepTimerOptions
 import com.local.listentomusic.ui.components.LiquidMetalSurface
 import kotlinx.coroutines.delay
 import kotlin.math.abs
@@ -113,6 +124,7 @@ private val playbackSpeeds = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 
 fun NowPlayingScreen(
     playback: PlaybackUiState,
     artwork: Bitmap?,
+    queue: List<MediaFile>,
     language: AppLanguage,
     controller: MediaController?,
     contentPadding: PaddingValues,
@@ -126,8 +138,12 @@ fun NowPlayingScreen(
     onSeek: (Long) -> Unit,
     onSpeed: (Float) -> Unit,
     onRepeat: () -> Unit,
+    onSleepTimer: (Long) -> Unit,
+    sleepTimer: SleepTimerState,
     seekOffsetMs: Long = 5_000L,
     onSeekBy: (Long) -> Unit,
+    onPlayQueueItem: (MediaFile) -> Unit,
+    onLoadThumbnail: suspend (MediaFile) -> Bitmap?,
 ) {
     var fullscreen by rememberSaveable { mutableStateOf(false) }
 
@@ -148,14 +164,17 @@ fun NowPlayingScreen(
         BackHandler(enabled = fullscreen) { fullscreen = false }
 
         if (playback.isVideo) {
-            val videoPageModifier = if (immersiveVideo) {
-                Modifier.fillMaxSize()
+            val (pageBg, pageInsets) = if (immersiveVideo) {
+                Color.Black to WindowInsets(0)
             } else {
-                // Normal portrait playback reserves a black system-bar strip. Only true
-                // fullscreen/landscape video is allowed to draw edge to edge.
-                Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)
+                // Portrait playback: gutters use the theme so light mode does not
+                // turn the whole page into a black slab. The video stage itself
+                // keeps its black backdrop below for letterboxing the frame.
+                MaterialTheme.colorScheme.background to WindowInsets.statusBars
             }
-            Column(videoPageModifier.background(Color(0xFF090B0A))) {
+            val videoPageModifier = Modifier.fillMaxSize().background(pageBg)
+                .windowInsetsPadding(pageInsets)
+            Column(videoPageModifier) {
                 VideoPlayerStage(
                     playback = playback,
                     controller = controller,
@@ -179,17 +198,24 @@ fun NowPlayingScreen(
                 )
                 if (!immersiveVideo) {
                     SecondaryControls(
-                        playback = playback,
+                        playback = playback.copy(appLanguage = language),
+                        queue = queue,
+                        language = language,
                         onSpeed = onSpeed,
                         onRepeat = onRepeat,
+                        onSleepTimer = onSleepTimer,
+                        sleepTimer = sleepTimer,
+                        onPlayQueueItem = onPlayQueueItem,
+                        onLoadThumbnail = onLoadThumbnail,
                         modifier = Modifier.fillMaxWidth().weight(1f),
                     )
                 }
             }
         } else {
             AudioPlayer(
-                playback = playback,
+                playback = playback.copy(appLanguage = language),
                 artwork = artwork,
+                queue = queue,
                 language = language,
                 onBack = onBack,
                 onPictureInPicture = onPictureInPicture,
@@ -199,8 +225,12 @@ fun NowPlayingScreen(
                 onSeek = onSeek,
                 onSpeed = onSpeed,
                 onRepeat = onRepeat,
+                onSleepTimer = onSleepTimer,
+                sleepTimer = sleepTimer,
                 seekOffsetMs = seekOffsetMs,
                 onSeekBy = onSeekBy,
+                onPlayQueueItem = onPlayQueueItem,
+                onLoadThumbnail = onLoadThumbnail,
             )
         }
     }
@@ -351,6 +381,7 @@ private fun VideoPlayerStage(
 private fun AudioPlayer(
     playback: PlaybackUiState,
     artwork: Bitmap?,
+    queue: List<MediaFile>,
     language: AppLanguage,
     onBack: () -> Unit,
     onPictureInPicture: () -> Unit,
@@ -360,14 +391,19 @@ private fun AudioPlayer(
     onSeek: (Long) -> Unit,
     onSpeed: (Float) -> Unit,
     onRepeat: () -> Unit,
+    onSleepTimer: (Long) -> Unit,
+    sleepTimer: SleepTimerState,
     seekOffsetMs: Long = 5_000L,
     onSeekBy: (Long) -> Unit,
+    onPlayQueueItem: (MediaFile) -> Unit,
+    onLoadThumbnail: suspend (MediaFile) -> Bitmap?,
 ) {
-    Column(
+    BoxWithConstraints(
         modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)
-            .windowInsetsPadding(WindowInsets.navigationBars).verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .windowInsetsPadding(WindowInsets.navigationBars),
     ) {
+        val artSize = minOf(maxWidth * 0.68f, maxHeight * 0.30f)
+        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
                 Icon(
@@ -384,7 +420,7 @@ private fun AudioPlayer(
             }
         }
         LiquidMetalSurface(
-            modifier = Modifier.padding(horizontal = 30.dp, vertical = 4.dp).fillMaxWidth().aspectRatio(1f)
+            modifier = Modifier.padding(vertical = 4.dp).size(artSize)
                 .pointerInput(Unit) {
                     detectTapGestures(
                         onDoubleTap = { offset ->
@@ -412,7 +448,7 @@ private fun AudioPlayer(
             }
         }
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 18.dp),
+            modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 20.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
@@ -426,8 +462,24 @@ private fun AudioPlayer(
             Spacer(Modifier.height(12.dp))
             WaveformTimeline(playback, onSeek, language)
             Transport(playback, onPrevious, onTogglePlay, onNext)
-            SecondaryControlRow(playback, onSpeed, onRepeat)
+            SecondaryControlRow(
+                playback = playback,
+                onSpeed = onSpeed,
+                onRepeat = onRepeat,
+                onSleepTimer = onSleepTimer,
+                sleepTimer = sleepTimer,
+            )
             PlaybackError(playback.errorMessage)
+            Spacer(Modifier.height(10.dp))
+            NowPlayingQueue(
+                queue = queue,
+                currentPath = playback.currentPath,
+                language = language,
+                onPlay = onPlayQueueItem,
+                onLoadThumbnail = onLoadThumbnail,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+            )
+        }
         }
     }
 }
@@ -435,12 +487,19 @@ private fun AudioPlayer(
 @Composable
 private fun SecondaryControls(
     playback: PlaybackUiState,
+    queue: List<MediaFile>,
+    language: AppLanguage,
     onSpeed: (Float) -> Unit,
     onRepeat: () -> Unit,
+    onSleepTimer: (Long) -> Unit,
+    sleepTimer: SleepTimerState,
+    onPlayQueueItem: (MediaFile) -> Unit,
+    onLoadThumbnail: suspend (MediaFile) -> Bitmap?,
     modifier: Modifier,
 ) {
+    val onSurface = MaterialTheme.colorScheme.onSurface
     Column(
-        modifier = modifier.background(Color(0xFF090B0A))
+        modifier = modifier.background(MaterialTheme.colorScheme.background)
             .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(horizontal = 20.dp, vertical = 18.dp),
         horizontalAlignment = Alignment.Start,
@@ -451,11 +510,151 @@ private fun SecondaryControls(
             fontWeight = FontWeight.Bold,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            color = Color(0xFFF3F5F0),
+            color = onSurface,
         )
         Spacer(Modifier.height(18.dp))
-        SecondaryControlRow(playback, onSpeed, onRepeat, dark = true)
+        SecondaryControlRow(
+            playback = playback,
+            onSpeed = onSpeed,
+            onRepeat = onRepeat,
+            onSleepTimer = onSleepTimer,
+            sleepTimer = sleepTimer,
+        )
         PlaybackError(playback.errorMessage)
+        Spacer(Modifier.height(12.dp))
+        NowPlayingQueue(
+            queue = queue,
+            currentPath = playback.currentPath,
+            language = language,
+            onPlay = onPlayQueueItem,
+            onLoadThumbnail = onLoadThumbnail,
+            modifier = Modifier.fillMaxWidth().weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun NowPlayingQueue(
+    queue: List<MediaFile>,
+    currentPath: String?,
+    language: AppLanguage,
+    onPlay: (MediaFile) -> Unit,
+    onLoadThumbnail: suspend (MediaFile) -> Bitmap?,
+    modifier: Modifier = Modifier,
+) {
+    val currentIndex = queue.indexOfFirst { it.path == currentPath }
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = currentIndex.coerceAtLeast(0),
+    )
+    LaunchedEffect(currentPath, currentIndex, queue.size) {
+        if (currentIndex >= 0) listState.animateScrollToItem(currentIndex)
+    }
+    Column(modifier) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                uiText(language, "Song list", "歌曲列表"),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                if (currentIndex >= 0) "${currentIndex + 1} / ${queue.size}" else queue.size.toString(),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+        if (queue.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    uiText(language, "No songs in this list", "這個列表沒有歌曲"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                state = listState,
+                contentPadding = PaddingValues(vertical = 4.dp),
+            ) {
+                itemsIndexed(queue, key = { _, file -> file.path }) { index, file ->
+                    val selected = file.path == currentPath
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                            .background(
+                                if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f)
+                                else Color.Transparent,
+                            )
+                            .clickable { onPlay(file) }
+                            .padding(horizontal = 7.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        QueueThumbnail(file = file, onLoadThumbnail = onLoadThumbnail)
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                file.name.substringBeforeLast('.', file.name),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+                                    else MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                "${index + 1}  •  ${file.name.substringAfterLast('.', "").uppercase()}",
+                                maxLines = 1,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        if (selected) {
+                            Box(
+                                Modifier.size(7.dp).clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.secondary),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QueueThumbnail(
+    file: MediaFile,
+    onLoadThumbnail: suspend (MediaFile) -> Bitmap?,
+) {
+    val thumbnail by produceState<Bitmap?>(null, file.path, file.modifiedMs) {
+        value = onLoadThumbnail(file)
+    }
+    Box(
+        modifier = Modifier.size(44.dp).clip(RoundedCornerShape(9.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (thumbnail != null) {
+            Image(
+                bitmap = thumbnail!!.asImageBitmap(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Icon(
+                if (file.kind == MediaKind.VIDEO) Icons.Rounded.Movie else Icons.Rounded.MusicNote,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.secondary,
+                modifier = Modifier.size(22.dp),
+            )
+        }
     }
 }
 
@@ -652,30 +851,45 @@ private fun SecondaryControlRow(
     playback: PlaybackUiState,
     onSpeed: (Float) -> Unit,
     onRepeat: () -> Unit,
-    dark: Boolean = false,
+    onSleepTimer: (Long) -> Unit,
+    sleepTimer: SleepTimerState,
 ) {
     var speedMenuOpen by remember { mutableStateOf(false) }
-    val buttonColors = if (dark) {
-        ButtonDefaults.buttonColors(
-            containerColor = Color(0xFF202624),
-            contentColor = Color(0xFFF3F5F0),
-        )
-    } else {
-        ButtonDefaults.buttonColors()
+    var sleepMenuOpen by remember { mutableStateOf(false) }
+    val outline = MaterialTheme.colorScheme.outline
+    val activeColor = MaterialTheme.colorScheme.secondary
+    val controlColors = ButtonDefaults.buttonColors(
+        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f),
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+    )
+    val cycleLabel = when {
+        playback.shuffleEnabled -> uiText(playback.appLanguage, "Random", "隨機")
+        playback.repeatMode == Player.REPEAT_MODE_ONE -> uiText(playback.appLanguage, "One", "單曲")
+        playback.repeatMode == Player.REPEAT_MODE_ALL -> uiText(playback.appLanguage, "All", "全部")
+        else -> uiText(playback.appLanguage, "Off", "關閉")
+    }
+    val sleepLabel = when {
+        sleepTimer.endOfTrack -> uiText(playback.appLanguage, "End", "播完")
+        sleepTimer.active -> formatSleepRemaining(sleepTimer.remainingMs)
+        else -> uiText(playback.appLanguage, "Sleep", "睡眠")
     }
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.weight(1f)) {
             Button(
                 onClick = { speedMenuOpen = true },
-                modifier = Modifier.fillMaxWidth(),
-                colors = buttonColors,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                colors = controlColors,
+                contentPadding = PaddingValues(horizontal = 10.dp),
             ) {
-                Icon(Icons.Rounded.Speed, null)
-                Text("  ${speedLabel(playback.speed)}")
+                Icon(Icons.Rounded.Speed, null, tint = activeColor, modifier = Modifier.size(19.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(speedLabel(playback.speed), maxLines = 1)
             }
             DropdownMenu(expanded = speedMenuOpen, onDismissRequest = { speedMenuOpen = false }) {
                 playbackSpeeds.forEach { speed ->
@@ -686,20 +900,68 @@ private fun SecondaryControlRow(
                 }
             }
         }
-        Button(onClick = onRepeat, modifier = Modifier.weight(1f), colors = buttonColors) {
+        Button(
+            onClick = onRepeat,
+            modifier = Modifier.weight(1f).height(48.dp),
+            colors = controlColors,
+            contentPadding = PaddingValues(horizontal = 10.dp),
+        ) {
             Icon(
-                if (playback.repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                when {
+                    playback.shuffleEnabled -> Icons.Rounded.Shuffle
+                    playback.repeatMode == Player.REPEAT_MODE_ONE -> Icons.Rounded.RepeatOne
+                    else -> Icons.Rounded.Repeat
+                },
                 null,
+                tint = if (playback.repeatMode == Player.REPEAT_MODE_OFF && !playback.shuffleEnabled) outline else activeColor,
+                modifier = Modifier.size(19.dp),
             )
-            Text(
-                "  " + when (playback.repeatMode) {
-                    Player.REPEAT_MODE_ONE -> "One"
-                    Player.REPEAT_MODE_ALL -> "All"
-                    else -> "Off"
+            Spacer(Modifier.width(6.dp))
+            Text(cycleLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Box(Modifier.weight(1f)) {
+            Button(
+                onClick = { sleepMenuOpen = true },
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                colors = controlColors,
+                contentPadding = PaddingValues(horizontal = 10.dp),
+            ) {
+                Icon(
+                    Icons.Rounded.Bedtime,
+                    null,
+                    tint = if (sleepTimer.active) activeColor else outline,
+                    modifier = Modifier.size(19.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(sleepLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            DropdownMenu(expanded = sleepMenuOpen, onDismissRequest = { sleepMenuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text(uiText(playback.appLanguage, "Off", "關閉")) },
+                    onClick = { sleepMenuOpen = false; onSleepTimer(0L) },
+                )
+                sleepTimerOptions.forEach { minutes ->
+                    DropdownMenuItem(
+                        text = {
+                            val text = when (minutes) {
+                                -1L -> uiText(playback.appLanguage, "End of track", "播完這首")
+                                else -> uiText(playback.appLanguage, "$minutes min", "$minutes 分鐘")
+                            }
+                            Text(text)
+                        },
+                        onClick = { sleepMenuOpen = false; onSleepTimer(minutes) },
+                    )
                 }
-            )
+            }
         }
     }
+}
+
+private fun formatSleepRemaining(ms: Long): String {
+    val totalSeconds = (ms / 1000L).coerceAtLeast(0L)
+    val m = totalSeconds / 60
+    val s = totalSeconds % 60
+    return "%d:%02d".format(m, s)
 }
 
 @Composable

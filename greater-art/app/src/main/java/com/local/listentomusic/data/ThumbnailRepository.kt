@@ -24,6 +24,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.math.max
 
 /**
@@ -67,14 +68,15 @@ class ThumbnailRepository(context: Context) {
     }
 
     suspend fun preload(files: List<MediaFile>) = supervisorScope {
-        files
-            .sortedByDescending { it.kind == MediaKind.VIDEO }
-            .map { file ->
-                async(Dispatchers.IO) {
+        val queue = ConcurrentLinkedQueue(files.sortedByDescending { it.kind == MediaKind.VIDEO })
+        List(PRELOAD_COROUTINES) {
+            async(Dispatchers.IO) {
+                while (true) {
+                    val file = queue.poll() ?: break
                     preloadWorkers.withPermit { load(file) }
                 }
             }
-            .awaitAll()
+        }.awaitAll()
         Unit
     }
 
@@ -213,5 +215,6 @@ class ThumbnailRepository(context: Context) {
         const val ARTWORK_SIZE = 512
         const val MAX_DISK_FILES = 600
         const val MAX_DISK_BYTES = 256L * 1024L * 1024L
+        const val PRELOAD_COROUTINES = 2
     }
 }

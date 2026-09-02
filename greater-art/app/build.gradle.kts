@@ -8,11 +8,11 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.local.listentomusic"
-        minSdk = 26
-        targetSdk = 37
-        versionCode = 33
-        versionName = "1.6.2"
+            applicationId = "com.local.listentomusic"
+            minSdk = 26
+            targetSdk = 37
+            versionCode = 41
+            versionName = "1.6.10"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
