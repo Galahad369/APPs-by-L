@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -70,23 +71,30 @@ fun AppBackground(
                 )
             }
         }
+        val isLight = androidx.compose.material3.MaterialTheme.colorScheme.background.luminance() > 0.5f
         val dim = if (mode == AppBackgroundMode.DEFAULT) 0.08f else preferences.backgroundDim
-        Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = dim)))
+        val veil = if (mode == AppBackgroundMode.DEFAULT && isLight) Color.White else Color.Black
+        Box(Modifier.matchParentSize().background(veil.copy(alpha = dim)))
     }
 }
 
 @Composable
 private fun DefaultMetalBackground() {
+    val isLight = androidx.compose.material3.MaterialTheme.colorScheme.background.luminance() > 0.5f
     LiquidMetalSurface(
         modifier = Modifier.fillMaxSize(),
         shape = RectangleShape,
-        baseColor = Color(0xFF080A09),
-        accentColor = Color(0xFF72D7C0),
+        baseColor = if (isLight) Color(0xFFF2F4F2) else Color(0xFF080A09),
+        accentColor = if (isLight) Color(0xFF94BFB5) else Color(0xFF72D7C0),
     ) {
         Box(
             Modifier.matchParentSize().background(
                 Brush.verticalGradient(
-                    listOf(
+                    if (isLight) listOf(
+                        Color.White.copy(alpha = 0.82f),
+                        Color(0xFFD7DFDC).copy(alpha = 0.42f),
+                        Color.White.copy(alpha = 0.70f),
+                    ) else listOf(
                         Color(0xFF07100E).copy(alpha = 0.70f),
                         Color(0xFF0B0D0C).copy(alpha = 0.34f),
                         Color.Black.copy(alpha = 0.58f),

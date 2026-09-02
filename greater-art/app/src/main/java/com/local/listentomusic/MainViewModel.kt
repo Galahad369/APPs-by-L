@@ -21,6 +21,7 @@ import com.local.listentomusic.data.AppPreferences
 import com.local.listentomusic.data.MediaScanner
 import com.local.listentomusic.data.ScanResult
 import com.local.listentomusic.data.ThumbnailRepository
+import com.local.listentomusic.data.WaveformRepository
 import com.local.listentomusic.data.UserPreferences
 import com.local.listentomusic.data.LibraryRowSize
 import com.local.listentomusic.data.ThemeMode
@@ -41,6 +42,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import android.net.Uri
+import android.provider.OpenableColumns
+import java.io.File
 
 private const val MAX_PRELOAD_ITEMS = 300
 
@@ -107,6 +111,7 @@ data class PlaybackUiState(
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val preferences = AppPreferences(application)
     private val thumbnailRepository = ThumbnailRepository(application)
+    private val waveformRepository = WaveformRepository(application)
     private var userPreferences = UserPreferences()
     private var scannedFiles: List<MediaFile> = emptyList()
     private var orderedFiles: List<MediaFile> = emptyList()
@@ -137,6 +142,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var tickerJob: Job? = null
     private var thumbnailWarmupJob: Job? = null
     private var thumbnailAheadJob: Job? = null
+    private var scanJob: Job? = null
     private var durationProbeJob: Job? = null
     private var durationProbePath: String? = null
     private val probedDurations = mutableMapOf<String, Long>()
@@ -179,7 +185,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _library.value = _library.value.copy(status = LibraryStatus.NEEDS_PERMISSION)
             return
         }
-        viewModelScope.launch {
+        if (scanJob?.isActive == true) return
+        scanJob = viewModelScope.launch {
             _library.value = _library.value.copy(status = LibraryStatus.SCANNING)
             when (val result = MediaScanner.scan()) {
                 is ScanResult.Success -> {
@@ -191,7 +198,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     thumbnailWarmupJob = if (userPreferences.preloadThumbnails) viewModelScope.launch {
                         // Warm a generous initial window while decoding remains bounded.
                         // Visible rows still bypass the preload throttle.
-                        thumbnailRepository.preload(orderedFiles.take(MAX_PRELOAD_ITEMS))
+                        warmThumbnailsInStages(orderedFiles.take(MAX_PRELOAD_ITEMS))
                     } else null
                 }
                 is ScanResult.FolderMissing -> {
@@ -271,6 +278,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     suspend fun loadThumbnail(file: MediaFile): Bitmap? = thumbnailRepository.load(file)
+    suspend fun loadWaveform(path: String): FloatArray? {
+        val file = scannedFiles.firstOrNull { it.path == path }
+        return waveformRepository.load(path, file?.sizeBytes ?: 0L, file?.modifiedMs ?: 0L)
+    }
+
+    fun playQueueItem(file: MediaFile) {
+        val player = _controller.value
+        val index = player?.let { current ->
+            (0 until current.mediaItemCount).firstOrNull { current.getMediaItemAt(it).mediaId == file.path }
+        }
+        if (player != null && index != null) {
+            player.seekToDefaultPosition(index)
+            player.play()
+        } else {
+            play(file)
+        }
+    }
 
     suspend fun loadCurrentArtwork(path: String?): Bitmap? {
         val file = scannedFiles.firstOrNull { it.path == path } ?: return null
@@ -338,7 +362,47 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun setBackgroundDim(value: Float) = updatePreference { preferences.setBackgroundDim(value) }
     fun setSeekOffset(value: Long) = updatePreference { preferences.setSeekOffsetMs(value) }
+    fun setAppFont(value: com.local.listentomusic.data.AppFont) =
+        updatePreference { preferences.setAppFont(value) }
+    fun setDeveloperMode(value: Boolean) = updatePreference { preferences.setDeveloperMode(value) }
+    fun setEditableQueue(value: Boolean) = updatePreference { preferences.setEditableQueue(value) }
     fun setActivePlaylist(id: String?) = updatePreference { preferences.setActivePlaylist(id) }
+
+    fun importM3u(uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val resolver = getApplication<Application>().contentResolver
+            val raw = runCatching { resolver.openInputStream(uri)?.bufferedReader()?.use { it.readLines() } }.getOrNull() ?: return@launch
+            val byPath = scannedFiles.associateBy { File(it.path).canonicalPath }
+            val byName = scannedFiles.groupBy { File(it.path).name.lowercase(Locale.ROOT) }
+            val paths = raw.asSequence().map(String::trim).filter { it.isNotBlank() && !it.startsWith("#") }
+                .mapNotNull { line ->
+                    val decoded = Uri.decode(line.removePrefix("file://"))
+                    runCatching { File(decoded).canonicalPath }.getOrNull()?.let(byPath::get)?.path
+                        ?: byName[File(decoded).name.lowercase(Locale.ROOT)]?.singleOrNull()?.path
+                }.distinct().toList()
+            if (paths.isEmpty()) return@launch
+            val displayName = runCatching {
+                resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) cursor.getString(0).substringBeforeLast('.') else null
+                }
+            }.getOrNull().orEmpty().ifBlank { "Imported playlist" }
+            val id = preferences.createPlaylistWithPaths(displayName.take(60), paths)
+            preferences.setActivePlaylist(id)
+        }
+    }
+
+    fun exportActiveM3u(uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val lines = buildString {
+                appendLine("#EXTM3U")
+                orderedFiles.forEach { appendLine(it.path) }
+            }
+            runCatching {
+                getApplication<Application>().contentResolver.openOutputStream(uri, "wt")
+                    ?.bufferedWriter()?.use { it.write(lines) }
+            }
+        }
+    }
     fun createPlaylist(name: String) {
         if (name.isBlank()) return
         viewModelScope.launch {
@@ -393,7 +457,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (value) {
             thumbnailWarmupJob?.cancel()
             thumbnailWarmupJob = viewModelScope.launch {
-                thumbnailRepository.preload(orderedFiles.take(MAX_PRELOAD_ITEMS))
+                warmThumbnailsInStages(orderedFiles.take(MAX_PRELOAD_ITEMS))
             }
         } else {
             thumbnailWarmupJob?.cancel()
@@ -434,6 +498,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val next = nextCycleMode(current)
             applyCycleMode(player, next)
             publishPlayback(player)
+        }
+    }
+
+    fun moveQueueItem(fromIndex: Int, toIndex: Int) {
+        val player = _controller.value ?: return
+        if (fromIndex !in _queue.value.indices || toIndex !in _queue.value.indices) return
+        player.moveMediaItem(fromIndex, toIndex)
+        _queue.value = _queue.value.toMutableList().apply { add(toIndex, removeAt(fromIndex)) }
+    }
+
+    fun removeQueueItem(index: Int) {
+        val player = _controller.value ?: return
+        if (index !in _queue.value.indices || player.mediaItemCount <= 1) return
+        player.removeMediaItem(index)
+        _queue.value = _queue.value.toMutableList().apply { removeAt(index) }
+    }
+
+    private suspend fun warmThumbnailsInStages(files: List<MediaFile>) {
+        // Make the first viewport ready quickly, then yield between disk-heavy chunks.
+        thumbnailRepository.preload(files.take(24))
+        files.drop(24).chunked(24).forEach { chunk ->
+            delay(45)
+            thumbnailRepository.preload(chunk)
         }
     }
 
@@ -644,6 +731,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         tickerJob?.cancel()
         thumbnailWarmupJob?.cancel()
         thumbnailAheadJob?.cancel()
+        scanJob?.cancel()
         durationProbeJob?.cancel()
         sleepTimerJob?.cancel()
         _controller.value?.removeListener(playerListener)

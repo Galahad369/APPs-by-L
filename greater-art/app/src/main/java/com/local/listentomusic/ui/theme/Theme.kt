@@ -3,13 +3,18 @@ package com.local.listentomusic.ui.theme
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import com.local.listentomusic.data.AppFont
 import com.local.listentomusic.data.ThemeMode
+import com.local.listentomusic.R
 private val LightColors = lightColorScheme(
     primary = Color(0xFF176B5B),
     onPrimary = Color(0xFFF5FFFB),
@@ -57,7 +62,11 @@ private val RoundedShapes = Shapes(
 )
 
 @Composable
-fun GreaterArtTheme(themeMode: ThemeMode = ThemeMode.DARK, content: @Composable () -> Unit) {
+fun GreaterArtTheme(
+    themeMode: ThemeMode = ThemeMode.DARK,
+    appFont: AppFont = AppFont.SYSTEM,
+    content: @Composable () -> Unit,
+) {
     val dark = when (themeMode) {
         ThemeMode.SYSTEM -> isSystemInDarkTheme()
         ThemeMode.LIGHT -> false
@@ -66,6 +75,41 @@ fun GreaterArtTheme(themeMode: ThemeMode = ThemeMode.DARK, content: @Composable 
     MaterialTheme(
         colorScheme = if (dark) DarkColors else LightColors,
         shapes = RoundedShapes,
+        typography = typographyFor(appFont),
         content = content,
+    )
+}
+
+private fun typographyFor(font: AppFont): Typography {
+    val family = when (font) {
+        AppFont.SYSTEM -> FontFamily.Default
+        AppFont.SANS_SERIF -> FontFamily.SansSerif
+        AppFont.SERIF -> FontFamily.Serif
+        AppFont.MONOSPACE -> FontFamily.Monospace
+        AppFont.CURSIVE -> FontFamily.Cursive
+        AppFont.INTER -> FontFamily(Font(R.font.inter))
+        AppFont.NUNITO -> FontFamily(Font(R.font.nunito))
+        AppFont.OSWALD -> FontFamily(Font(R.font.oswald))
+        AppFont.PLAYFAIR_DISPLAY -> FontFamily(Font(R.font.playfair_display))
+        AppFont.ROBOTO_SLAB -> FontFamily(Font(R.font.roboto_slab))
+        AppFont.SOURCE_CODE_PRO -> FontFamily(Font(R.font.source_code_pro))
+    }
+    val base = Typography()
+    return base.copy(
+        displayLarge = base.displayLarge.copy(fontFamily = family),
+        displayMedium = base.displayMedium.copy(fontFamily = family),
+        displaySmall = base.displaySmall.copy(fontFamily = family),
+        headlineLarge = base.headlineLarge.copy(fontFamily = family),
+        headlineMedium = base.headlineMedium.copy(fontFamily = family),
+        headlineSmall = base.headlineSmall.copy(fontFamily = family),
+        titleLarge = base.titleLarge.copy(fontFamily = family),
+        titleMedium = base.titleMedium.copy(fontFamily = family),
+        titleSmall = base.titleSmall.copy(fontFamily = family),
+        bodyLarge = base.bodyLarge.copy(fontFamily = family),
+        bodyMedium = base.bodyMedium.copy(fontFamily = family),
+        bodySmall = base.bodySmall.copy(fontFamily = family),
+        labelLarge = base.labelLarge.copy(fontFamily = family),
+        labelMedium = base.labelMedium.copy(fontFamily = family),
+        labelSmall = base.labelSmall.copy(fontFamily = family),
     )
 }

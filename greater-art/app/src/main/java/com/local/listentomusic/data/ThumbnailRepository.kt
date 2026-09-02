@@ -87,8 +87,8 @@ class ThumbnailRepository(context: Context) {
     }
 
     private fun generate(file: MediaFile): Bitmap? = when (file.kind) {
-        MediaKind.VIDEO -> createVideoThumbnail(file)
-        MediaKind.AUDIO -> createEmbeddedArtwork(file)
+        MediaKind.VIDEO -> createVideoThumbnail(file) ?: createSiblingArtwork(file)
+        MediaKind.AUDIO -> createEmbeddedArtwork(file) ?: createSiblingArtwork(file)
     }
 
     private fun createVideoThumbnail(media: MediaFile): Bitmap? {
@@ -127,6 +127,33 @@ class ThumbnailRepository(context: Context) {
         } finally {
             runCatching { retriever.release() }
         }
+    }
+
+    /** Same-name cover first, then conventional folder artwork. Entirely local. */
+    private fun createSiblingArtwork(media: MediaFile): Bitmap? {
+        val artwork = findSiblingArtwork(File(media.path)) ?: return null
+        return decodeSampledFile(artwork, ARTWORK_SIZE, ARTWORK_SIZE)
+    }
+
+    private fun findSiblingArtwork(source: File): File? {
+        val parent = source.parentFile ?: return null
+        val candidates = buildList {
+            IMAGE_EXTENSIONS.forEach { ext -> add(File(parent, "${source.nameWithoutExtension}.$ext")) }
+            FOLDER_ART_NAMES.forEach { name -> IMAGE_EXTENSIONS.forEach { ext -> add(File(parent, "$name.$ext")) } }
+        }
+        return candidates.firstOrNull { it.isFile && it.canRead() }
+    }
+
+    private fun decodeSampledFile(file: File, width: Int, height: Int): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        var sample = 1
+        while (bounds.outWidth / sample > width * 2 || bounds.outHeight / sample > height * 2) sample *= 2
+        return BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply {
+            inSampleSize = sample
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+        })
     }
 
     private fun decodeSampled(bytes: ByteArray, width: Int, height: Int): Bitmap? {
@@ -188,7 +215,9 @@ class ThumbnailRepository(context: Context) {
     }
 
     private fun cacheKey(file: MediaFile): String {
-        val fingerprint = "${file.path}|${file.sizeBytes}|${file.modifiedMs}"
+        val source = File(file.path)
+        val artStamp = findSiblingArtwork(source)?.lastModified() ?: 0L
+        val fingerprint = "${file.path}|${file.sizeBytes}|${file.modifiedMs}|$artStamp"
         return MessageDigest.getInstance("SHA-256")
             .digest(fingerprint.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
@@ -216,5 +245,7 @@ class ThumbnailRepository(context: Context) {
         const val MAX_DISK_FILES = 600
         const val MAX_DISK_BYTES = 256L * 1024L * 1024L
         const val PRELOAD_COROUTINES = 2
+        val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "bmp")
+        val FOLDER_ART_NAMES = setOf("cover", "folder", "front", "album", "artwork")
     }
 }

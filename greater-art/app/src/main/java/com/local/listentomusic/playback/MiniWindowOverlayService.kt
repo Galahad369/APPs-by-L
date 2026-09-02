@@ -58,7 +58,9 @@ class MiniWindowOverlayService : Service() {
     private val videoExtensions = setOf("mp4", "mov", "m4v", "mkv", "webm", "3gp", "ts", "mpeg", "mpg", "flv", "avi")
 
     // The visible target sits immediately above the real navigation-bar inset.
-    private val crossSize = 64
+    // A larger invisible hit box makes the drop reliable while the visible X stays compact.
+    private val crossHitSize = 92
+    private val crossSize = 56
     private val crossMargin = 12
 
     private var downX = 0f
@@ -276,13 +278,15 @@ class MiniWindowOverlayService : Service() {
         crossView?.addView(crossImg!!, FrameLayout.LayoutParams(dp(crossSize), dp(crossSize)).apply { gravity = Gravity.CENTER })
         crossView?.visibility = View.INVISIBLE
         val layout = WindowManager.LayoutParams(
-            dp(crossSize), dp(crossSize),
+            dp(crossHitSize), dp(crossHitSize),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-            y = navigationBarInsetBottom() + dp(crossMargin)
+            // Overlay bounds are already inset from system bars on affected Samsung builds.
+            // Adding the navigation inset again placed the X too high and broke collision.
+            y = dp(crossMargin)
         }
         crossParams = layout
         try {
@@ -424,7 +428,7 @@ class MiniWindowOverlayService : Service() {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         crossParams?.let { layout ->
-            layout.y = navigationBarInsetBottom() + dp(crossMargin)
+            layout.y = dp(crossMargin)
             crossView?.let { view -> runCatching { wm?.updateViewLayout(view, layout) } }
         }
         clampPosition()

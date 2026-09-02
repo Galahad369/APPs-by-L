@@ -55,6 +55,7 @@ import androidx.media3.common.Player
 import com.local.listentomusic.BuildConfig
 import com.local.listentomusic.PlaybackUiState
 import com.local.listentomusic.data.AppLanguage
+import com.local.listentomusic.data.AppFont
 import com.local.listentomusic.data.AppBackgroundMode
 import com.local.listentomusic.data.FloatingWindowMode
 import com.local.listentomusic.data.LibraryRowSize
@@ -87,6 +88,11 @@ fun SettingsScreen(
     onAutoPictureInPicture: (Boolean) -> Unit,
     onFloatingWindowMode: (FloatingWindowMode) -> Unit,
     onAppLanguage: (AppLanguage) -> Unit,
+    onAppFont: (AppFont) -> Unit,
+    onDeveloperMode: (Boolean) -> Unit,
+    onEditableQueue: (Boolean) -> Unit,
+    onImportM3u: () -> Unit,
+    onExportM3u: () -> Unit,
     onBackgroundMode: (AppBackgroundMode) -> Unit,
     onChooseBackgroundImage: () -> Unit,
     onChooseBackgroundVideo: () -> Unit,
@@ -111,6 +117,7 @@ fun SettingsScreen(
     var editPlaylist by remember { mutableStateOf<LocalPlaylist?>(null) }
     var deletePlaylist by remember { mutableStateOf<LocalPlaylist?>(null) }
     var playlistName by remember { mutableStateOf("") }
+    var resetConfirmOpen by remember { mutableStateOf(false) }
     val repeatModes = listOf(
         PlaybackCycleChoice(Player.REPEAT_MODE_ONE, false, uiText(language, "One", "單曲")),
         PlaybackCycleChoice(Player.REPEAT_MODE_ALL, false, uiText(language, "All", "全部")),
@@ -162,6 +169,14 @@ fun SettingsScreen(
                         }
                     },
                     onThemeMode,
+                )
+                ChoiceSetting(
+                    uiText(language, "Text style", "文字字型"),
+                    uiText(language, "System follows your device. Other choices are offline Android font families; availability can vary by phone.", "系統字型會跟隨裝置；其他選項使用離線 Android 字型，不同手機的效果可能略有不同。"),
+                    AppFont.entries,
+                    preferences.appFont,
+                    { it.label },
+                    onAppFont,
                 )
                 ChoiceSetting(
                     uiText(language, "App background", "應用程式背景"),
@@ -269,6 +284,12 @@ fun SettingsScreen(
                 )
 
                 SectionTitle(uiText(language, "Song lists", "歌曲清單"))
+                SwitchSetting(
+                    uiText(language, "Editable play queue", "可編輯播放佇列"),
+                    uiText(language, "Show queue editing controls on the player. Off by default to keep playback clean.", "在播放器顯示佇列編輯控制。預設關閉，保持介面簡潔。"),
+                    preferences.editableQueue,
+                    onEditableQueue,
+                )
                 Text(
                     uiText(language, "Create local playlists, then add songs with the ⋮ button in the library.", "建立本機播放清單，然後使用音樂庫中的 ⋮ 按鈕加入歌曲。"),
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -308,7 +329,11 @@ fun SettingsScreen(
                 ) { onClearThumbnailCache(); cacheCleared = true }
 
                 SectionTitle(uiText(language, "Privacy", "私隱"))
-                Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+                Card(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.42f)),
+                ) {
                     Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         Icon(Icons.Rounded.PrivacyTip, null)
                         Column {
@@ -318,8 +343,30 @@ fun SettingsScreen(
                         }
                     }
                 }
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(onClick = onImportM3u, modifier = Modifier.weight(1f)) {
+                        Text(uiText(language, "Import M3U", "匯入 M3U"))
+                    }
+                    OutlinedButton(onClick = onExportM3u, modifier = Modifier.weight(1f)) {
+                        Text(uiText(language, "Export list", "匯出清單"))
+                    }
+                }
+                SwitchSetting(
+                    uiText(language, "Developer diagnostics", "開發者診斷"),
+                    uiText(language, "Adds a local DEV panel with live screen, player, queue and permission details. Nothing is transmitted.", "加入本機 DEV 面板，顯示畫面、播放器、佇列及權限資料；不會傳送任何內容。"),
+                    preferences.developerMode,
+                    onDeveloperMode,
+                )
                 Spacer(Modifier.height(12.dp))
-                OutlinedButton(onClick = { onReset(); cacheCleared = false }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                OutlinedButton(
+                    onClick = { resetConfirmOpen = true },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                ) {
                     Icon(Icons.Rounded.RestartAlt, null)
                     Text("  ${uiText(language, "Reset app settings", "重設應用程式設定")}")
                 }
@@ -339,6 +386,21 @@ fun SettingsScreen(
             text = { Text(uiText(language, "${playlist.name} will be removed. Media files stay untouched.", "將移除「${playlist.name}」，媒體檔案不會被刪除。")) },
             confirmButton = { TextButton(onClick = { onDeletePlaylist(playlist.id); deletePlaylist = null }) { Text(uiText(language, "Delete", "刪除")) } },
             dismissButton = { TextButton(onClick = { deletePlaylist = null }) { Text(uiText(language, "Cancel", "取消")) } },
+        )
+    }
+    if (resetConfirmOpen) {
+        AlertDialog(
+            onDismissRequest = { resetConfirmOpen = false },
+            icon = { Icon(Icons.Rounded.RestartAlt, null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text(uiText(language, "Reset every setting?", "重設所有設定？"), color = MaterialTheme.colorScheme.error) },
+            text = { Text(uiText(language, "This restores Mini window, dark theme, Repeat One and every other preference. Playlists and media files stay safe.", "這會還原迷你視窗、深色主題、單曲循環及所有偏好。播放清單與媒體檔案不受影響。")) },
+            confirmButton = {
+                Button(
+                    onClick = { onReset(); cacheCleared = false; resetConfirmOpen = false },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                ) { Text(uiText(language, "Yes, reset settings", "確認重設設定")) }
+            },
+            dismissButton = { TextButton(onClick = { resetConfirmOpen = false }) { Text(uiText(language, "Keep settings", "保留設定")) } },
         )
     }
 }

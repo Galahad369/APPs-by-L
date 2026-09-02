@@ -155,7 +155,8 @@ class MainActivity : ComponentActivity() {
     private fun updatePictureInPictureParams() {
         val playback = viewModel.playback.value
         val autoEnter = playerScreenVisible && playback.isVideo && playback.isPlaying &&
-            viewModel.settings.value.autoPictureInPicture
+            viewModel.settings.value.autoPictureInPicture &&
+            viewModel.settings.value.floatingWindowMode != FloatingWindowMode.MINI_WINDOW
         setPictureInPictureParams(buildPictureInPictureParams(autoEnter))
     }
 

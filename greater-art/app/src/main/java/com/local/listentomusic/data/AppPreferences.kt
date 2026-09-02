@@ -31,7 +31,7 @@ data class UserPreferences(
     val preloadThumbnails: Boolean = true,
     val resumePlayback: Boolean = true,
     val autoPictureInPicture: Boolean = true,
-    val floatingWindowMode: FloatingWindowMode = FloatingWindowMode.FOLLOW_VIDEO,
+    val floatingWindowMode: FloatingWindowMode = FloatingWindowMode.MINI_WINDOW,
     val appLanguage: AppLanguage = AppLanguage.ENGLISH,
     val backgroundMode: AppBackgroundMode = AppBackgroundMode.DEFAULT,
     val customBackgroundImageUri: String? = null,
@@ -40,6 +40,9 @@ data class UserPreferences(
     val playlists: List<LocalPlaylist> = emptyList(),
     val activePlaylistId: String? = null,
     val seekOffsetMs: Long = 5_000L,
+    val appFont: AppFont = AppFont.SYSTEM,
+    val developerMode: Boolean = false,
+    val editableQueue: Boolean = false,
 )
 
 enum class LibraryRowSize(val label: String) { SMALL("Small"), MEDIUM("Medium"), LARGE("Large") }
@@ -47,6 +50,11 @@ enum class ThemeMode(val label: String) { SYSTEM("System"), LIGHT("Light"), DARK
 enum class FloatingWindowMode { COMPACT, FOLLOW_VIDEO, MINI_WINDOW }
 enum class AppLanguage { ENGLISH, TRADITIONAL_CHINESE }
 enum class AppBackgroundMode { DEFAULT, CUSTOM_IMAGE, CUSTOM_VIDEO, CURRENT_VIDEO }
+enum class AppFont(val label: String) {
+    SYSTEM("System"), SANS_SERIF("Sans serif"), SERIF("Serif"), MONOSPACE("Monospace"),
+    CURSIVE("Cursive"), INTER("Inter"), NUNITO("Nunito"), OSWALD("Oswald"),
+    PLAYFAIR_DISPLAY("Playfair Display"), ROBOTO_SLAB("Roboto Slab"), SOURCE_CODE_PRO("Source Code Pro")
+}
 
 data class LocalPlaylist(
     val id: String,
@@ -80,6 +88,9 @@ class AppPreferences(private val context: Context) {
         val playlists = stringPreferencesKey("playlists")
         val activePlaylistId = stringPreferencesKey("active_playlist_id")
         val seekOffsetMs = longPreferencesKey("seek_offset_ms")
+        val appFont = stringPreferencesKey("app_font")
+        val developerMode = booleanPreferencesKey("developer_mode")
+        val editableQueue = booleanPreferencesKey("editable_queue")
     }
 
     val values: Flow<UserPreferences> = context.dataStore.data.map { prefs ->
@@ -104,13 +115,13 @@ class AppPreferences(private val context: Context) {
             autoPictureInPicture = prefs[Keys.autoPictureInPicture] ?: true,
             floatingWindowMode = enumValueOrDefault(
                 prefs[Keys.floatingWindowMode],
-                FloatingWindowMode.FOLLOW_VIDEO,
+                FloatingWindowMode.MINI_WINDOW,
             ).let { savedMode ->
                 // Existing installs inherited Compact without choosing it. Migrate that
                 // old default once; future explicit Compact selections remain respected.
                 if (prefs[Keys.floatingWindowDefaultV2] != true &&
                     savedMode == FloatingWindowMode.COMPACT
-                ) FloatingWindowMode.FOLLOW_VIDEO else savedMode
+                ) FloatingWindowMode.MINI_WINDOW else savedMode
             },
             appLanguage = enumValueOrDefault(prefs[Keys.appLanguage], AppLanguage.ENGLISH),
             backgroundMode = enumValueOrDefault(
@@ -123,6 +134,9 @@ class AppPreferences(private val context: Context) {
             playlists = decodePlaylists(prefs[Keys.playlists].orEmpty()),
             activePlaylistId = prefs[Keys.activePlaylistId],
             seekOffsetMs = prefs[Keys.seekOffsetMs] ?: 5_000L,
+            appFont = enumValueOrDefault(prefs[Keys.appFont], AppFont.SYSTEM),
+            developerMode = prefs[Keys.developerMode] ?: false,
+            editableQueue = prefs[Keys.editableQueue] ?: false,
         )
     }
 
@@ -175,6 +189,9 @@ class AppPreferences(private val context: Context) {
     suspend fun setBackgroundDim(value: Float) =
         edit { it[Keys.backgroundDim] = value.coerceIn(0.25f, 0.85f) }
     suspend fun setSeekOffsetMs(value: Long) = edit { it[Keys.seekOffsetMs] = value }
+    suspend fun setAppFont(value: AppFont) = edit { it[Keys.appFont] = value.name }
+    suspend fun setDeveloperMode(value: Boolean) = edit { it[Keys.developerMode] = value }
+    suspend fun setEditableQueue(value: Boolean) = edit { it[Keys.editableQueue] = value }
 
     suspend fun setActivePlaylist(id: String?) = edit { prefs ->
         if (id == null) prefs.remove(Keys.activePlaylistId) else prefs[Keys.activePlaylistId] = id
@@ -183,6 +200,12 @@ class AppPreferences(private val context: Context) {
     suspend fun createPlaylist(name: String): String {
         val id = UUID.randomUUID().toString()
         updatePlaylists { current -> current + LocalPlaylist(id, name.trim(), emptyList()) }
+        return id
+    }
+
+    suspend fun createPlaylistWithPaths(name: String, paths: List<String>): String {
+        val id = UUID.randomUUID().toString()
+        updatePlaylists { current -> current + LocalPlaylist(id, name.trim(), paths.distinct()) }
         return id
     }
 
@@ -247,6 +270,9 @@ class AppPreferences(private val context: Context) {
             it.remove(Keys.customBackgroundVideoUri)
             it.remove(Keys.backgroundDim)
             it.remove(Keys.seekOffsetMs)
+            it.remove(Keys.appFont)
+            it.remove(Keys.developerMode)
+            it.remove(Keys.editableQueue)
             it[Keys.speed] = 1f
             it[Keys.repeatMode] = Player.REPEAT_MODE_ONE.toLong()
         }
