@@ -43,6 +43,7 @@ data class UserPreferences(
     val appFont: AppFont = AppFont.SYSTEM,
     val developerMode: Boolean = false,
     val editableQueue: Boolean = false,
+    val silianRail: Boolean = false,
 )
 
 enum class LibraryRowSize(val label: String) { SMALL("Small"), MEDIUM("Medium"), LARGE("Large") }
@@ -91,6 +92,7 @@ class AppPreferences(private val context: Context) {
         val appFont = stringPreferencesKey("app_font")
         val developerMode = booleanPreferencesKey("developer_mode")
         val editableQueue = booleanPreferencesKey("editable_queue")
+        val silianRail = booleanPreferencesKey("silian_rail")
     }
 
     val values: Flow<UserPreferences> = context.dataStore.data.map { prefs ->
@@ -137,6 +139,7 @@ class AppPreferences(private val context: Context) {
             appFont = enumValueOrDefault(prefs[Keys.appFont], AppFont.SYSTEM),
             developerMode = prefs[Keys.developerMode] ?: false,
             editableQueue = prefs[Keys.editableQueue] ?: false,
+            silianRail = prefs[Keys.silianRail] ?: false,
         )
     }
 
@@ -192,6 +195,7 @@ class AppPreferences(private val context: Context) {
     suspend fun setAppFont(value: AppFont) = edit { it[Keys.appFont] = value.name }
     suspend fun setDeveloperMode(value: Boolean) = edit { it[Keys.developerMode] = value }
     suspend fun setEditableQueue(value: Boolean) = edit { it[Keys.editableQueue] = value }
+    suspend fun setSilianRail(value: Boolean) = edit { it[Keys.silianRail] = value }
 
     suspend fun setActivePlaylist(id: String?) = edit { prefs ->
         if (id == null) prefs.remove(Keys.activePlaylistId) else prefs[Keys.activePlaylistId] = id

@@ -366,6 +366,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         updatePreference { preferences.setAppFont(value) }
     fun setDeveloperMode(value: Boolean) = updatePreference { preferences.setDeveloperMode(value) }
     fun setEditableQueue(value: Boolean) = updatePreference { preferences.setEditableQueue(value) }
+    fun setSilianRail(value: Boolean) = updatePreference { preferences.setSilianRail(value) }
     fun setActivePlaylist(id: String?) = updatePreference { preferences.setActivePlaylist(id) }
 
     fun importM3u(uri: Uri) {
