@@ -42,6 +42,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -67,7 +68,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -111,6 +111,7 @@ import com.local.listentomusic.SleepTimerState
 import com.local.listentomusic.data.AppLanguage
 import com.local.listentomusic.model.MediaFile
 import com.local.listentomusic.model.MediaKind
+import com.local.listentomusic.model.LocalLyrics
 import com.local.listentomusic.sleepTimerOptions
 import com.local.listentomusic.ui.components.LiquidMetalSurface
 import kotlinx.coroutines.delay
@@ -125,6 +126,8 @@ fun NowPlayingScreen(
     playback: PlaybackUiState,
     artwork: Bitmap?,
     queue: List<MediaFile>,
+    lyrics: LocalLyrics?,
+    showFileDetails: Boolean,
     language: AppLanguage,
     controller: MediaController?,
     contentPadding: PaddingValues,
@@ -200,6 +203,8 @@ fun NowPlayingScreen(
                     SecondaryControls(
                         playback = playback.copy(appLanguage = language),
                         queue = queue,
+                        lyrics = lyrics,
+                        showFileDetails = showFileDetails,
                         language = language,
                         onSpeed = onSpeed,
                         onRepeat = onRepeat,
@@ -207,6 +212,7 @@ fun NowPlayingScreen(
                         sleepTimer = sleepTimer,
                         onPlayQueueItem = onPlayQueueItem,
                         onLoadThumbnail = onLoadThumbnail,
+                        onSeek = onSeek,
                         modifier = Modifier.fillMaxWidth().weight(1f),
                     )
                 }
@@ -216,6 +222,8 @@ fun NowPlayingScreen(
                 playback = playback.copy(appLanguage = language),
                 artwork = artwork,
                 queue = queue,
+                lyrics = lyrics,
+                showFileDetails = showFileDetails,
                 language = language,
                 onBack = onBack,
                 onPictureInPicture = onPictureInPicture,
@@ -382,6 +390,8 @@ private fun AudioPlayer(
     playback: PlaybackUiState,
     artwork: Bitmap?,
     queue: List<MediaFile>,
+    lyrics: LocalLyrics?,
+    showFileDetails: Boolean,
     language: AppLanguage,
     onBack: () -> Unit,
     onPictureInPicture: () -> Unit,
@@ -473,9 +483,13 @@ private fun AudioPlayer(
             Spacer(Modifier.height(10.dp))
             NowPlayingQueue(
                 queue = queue,
+                lyrics = lyrics,
+                showFileDetails = showFileDetails,
+                positionMs = playback.positionMs,
                 currentPath = playback.currentPath,
                 language = language,
                 onPlay = onPlayQueueItem,
+                onSeek = onSeek,
                 onLoadThumbnail = onLoadThumbnail,
                 modifier = Modifier.fillMaxWidth().weight(1f),
             )
@@ -488,6 +502,8 @@ private fun AudioPlayer(
 private fun SecondaryControls(
     playback: PlaybackUiState,
     queue: List<MediaFile>,
+    lyrics: LocalLyrics?,
+    showFileDetails: Boolean,
     language: AppLanguage,
     onSpeed: (Float) -> Unit,
     onRepeat: () -> Unit,
@@ -495,6 +511,7 @@ private fun SecondaryControls(
     sleepTimer: SleepTimerState,
     onPlayQueueItem: (MediaFile) -> Unit,
     onLoadThumbnail: suspend (MediaFile) -> Bitmap?,
+    onSeek: (Long) -> Unit,
     modifier: Modifier,
 ) {
     val onSurface = MaterialTheme.colorScheme.onSurface
@@ -512,7 +529,7 @@ private fun SecondaryControls(
             overflow = TextOverflow.Ellipsis,
             color = onSurface,
         )
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(12.dp))
         SecondaryControlRow(
             playback = playback,
             onSpeed = onSpeed,
@@ -524,9 +541,13 @@ private fun SecondaryControls(
         Spacer(Modifier.height(12.dp))
         NowPlayingQueue(
             queue = queue,
+            lyrics = lyrics,
+            showFileDetails = showFileDetails,
+            positionMs = playback.positionMs,
             currentPath = playback.currentPath,
             language = language,
             onPlay = onPlayQueueItem,
+            onSeek = onSeek,
             onLoadThumbnail = onLoadThumbnail,
             modifier = Modifier.fillMaxWidth().weight(1f),
         )
@@ -538,7 +559,11 @@ private fun NowPlayingQueue(
     queue: List<MediaFile>,
     currentPath: String?,
     language: AppLanguage,
+    lyrics: LocalLyrics?,
+    showFileDetails: Boolean,
+    positionMs: Long,
     onPlay: (MediaFile) -> Unit,
+    onSeek: (Long) -> Unit,
     onLoadThumbnail: suspend (MediaFile) -> Bitmap?,
     modifier: Modifier = Modifier,
 ) {
@@ -550,24 +575,15 @@ private fun NowPlayingQueue(
         if (currentIndex >= 0) listState.animateScrollToItem(currentIndex)
     }
     Column(modifier) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                uiText(language, "Song list", "歌曲列表"),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
+        if (lyrics != null) {
+            SyncedLyricsPanel(
+                lyrics = lyrics,
+                positionMs = positionMs,
+                onSeek = onSeek,
+                modifier = Modifier.fillMaxWidth().height(118.dp),
             )
-            Spacer(Modifier.weight(1f))
-            Text(
-                if (currentIndex >= 0) "${currentIndex + 1} / ${queue.size}" else queue.size.toString(),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Spacer(Modifier.height(6.dp))
         }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
         if (queue.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
@@ -582,7 +598,7 @@ private fun NowPlayingQueue(
                 state = listState,
                 contentPadding = PaddingValues(vertical = 4.dp),
             ) {
-                itemsIndexed(queue, key = { _, file -> file.path }) { index, file ->
+                items(queue, key = MediaFile::path) { file ->
                     val selected = file.path == currentPath
                     Row(
                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
@@ -606,13 +622,15 @@ private fun NowPlayingQueue(
                                 color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
                                     else MaterialTheme.colorScheme.onSurface,
                             )
-                            Text(
-                                "${index + 1}  •  ${file.name.substringAfterLast('.', "").uppercase()}",
-                                maxLines = 1,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
-                                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            if (showFileDetails) {
+                                Text(
+                                    queueDetails(file),
+                                    maxLines = 1,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                         if (selected) {
                             Box(
@@ -625,6 +643,59 @@ private fun NowPlayingQueue(
             }
         }
     }
+}
+
+@Composable
+private fun SyncedLyricsPanel(
+    lyrics: LocalLyrics,
+    positionMs: Long,
+    onSeek: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val activeIndex = lyrics.lines.indexOfLast { it.timeMs <= positionMs }
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = activeIndex.coerceAtLeast(0))
+    LaunchedEffect(activeIndex, lyrics.sourcePath) {
+        if (activeIndex >= 0) listState.animateScrollToItem(activeIndex, scrollOffset = -24)
+    }
+    LazyColumn(
+        modifier = modifier.clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f)),
+        state = listState,
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 38.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        itemsIndexed(
+            lyrics.lines,
+            key = { index, line -> "${line.timeMs}:$index" },
+        ) { index, line ->
+            Text(
+                text = line.text,
+                modifier = Modifier.fillMaxWidth().clickable { onSeek(line.timeMs) }
+                    .padding(vertical = 5.dp),
+                color = if (index == activeIndex) MaterialTheme.colorScheme.secondary
+                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.64f),
+                style = if (index == activeIndex) MaterialTheme.typography.titleMedium
+                    else MaterialTheme.typography.bodyMedium,
+                fontWeight = if (index == activeIndex) FontWeight.SemiBold else FontWeight.Normal,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+private fun queueDetails(file: MediaFile): String = buildList {
+    file.name.substringAfterLast('.', "").takeIf { it.isNotBlank() }?.uppercase()?.let(::add)
+    file.durationMs.takeIf { it > 0L }?.let { add(formatDuration(it)) }
+    file.sizeBytes.takeIf { it > 0L }?.let { add(formatBytes(it)) }
+}.joinToString("  •  ")
+
+private fun formatBytes(bytes: Long): String = when {
+    bytes >= 1_073_741_824L -> "%.1f GB".format(bytes / 1_073_741_824.0)
+    bytes >= 1_048_576L -> "%.1f MB".format(bytes / 1_048_576.0)
+    bytes >= 1_024L -> "%.1f KB".format(bytes / 1_024.0)
+    else -> "$bytes B"
 }
 
 @Composable
@@ -876,20 +947,21 @@ private fun SecondaryControlRow(
         else -> uiText(playback.appLanguage, "Sleep", "睡眠")
     }
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.weight(1f)) {
             Button(
                 onClick = { speedMenuOpen = true },
-                modifier = Modifier.fillMaxWidth().height(48.dp),
+                modifier = Modifier.fillMaxWidth().height(40.dp),
                 colors = controlColors,
-                contentPadding = PaddingValues(horizontal = 10.dp),
+                shape = RoundedCornerShape(14.dp),
+                contentPadding = PaddingValues(horizontal = 7.dp),
             ) {
-                Icon(Icons.Rounded.Speed, null, tint = activeColor, modifier = Modifier.size(19.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(speedLabel(playback.speed), maxLines = 1)
+                Icon(Icons.Rounded.Speed, null, tint = activeColor, modifier = Modifier.size(17.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(speedLabel(playback.speed), maxLines = 1, style = MaterialTheme.typography.labelMedium)
             }
             DropdownMenu(expanded = speedMenuOpen, onDismissRequest = { speedMenuOpen = false }) {
                 playbackSpeeds.forEach { speed ->
@@ -902,9 +974,10 @@ private fun SecondaryControlRow(
         }
         Button(
             onClick = onRepeat,
-            modifier = Modifier.weight(1f).height(48.dp),
+            modifier = Modifier.weight(1f).height(40.dp),
             colors = controlColors,
-            contentPadding = PaddingValues(horizontal = 10.dp),
+            shape = RoundedCornerShape(14.dp),
+            contentPadding = PaddingValues(horizontal = 7.dp),
         ) {
             Icon(
                 when {
@@ -914,26 +987,27 @@ private fun SecondaryControlRow(
                 },
                 null,
                 tint = if (playback.repeatMode == Player.REPEAT_MODE_OFF && !playback.shuffleEnabled) outline else activeColor,
-                modifier = Modifier.size(19.dp),
+                modifier = Modifier.size(17.dp),
             )
-            Spacer(Modifier.width(6.dp))
-            Text(cycleLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.width(4.dp))
+            Text(cycleLabel, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
         }
         Box(Modifier.weight(1f)) {
             Button(
                 onClick = { sleepMenuOpen = true },
-                modifier = Modifier.fillMaxWidth().height(48.dp),
+                modifier = Modifier.fillMaxWidth().height(40.dp),
                 colors = controlColors,
-                contentPadding = PaddingValues(horizontal = 10.dp),
+                shape = RoundedCornerShape(14.dp),
+                contentPadding = PaddingValues(horizontal = 7.dp),
             ) {
                 Icon(
                     Icons.Rounded.Bedtime,
                     null,
                     tint = if (sleepTimer.active) activeColor else outline,
-                    modifier = Modifier.size(19.dp),
+                    modifier = Modifier.size(17.dp),
                 )
-                Spacer(Modifier.width(6.dp))
-                Text(sleepLabel, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.width(4.dp))
+                Text(sleepLabel, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
             }
             DropdownMenu(expanded = sleepMenuOpen, onDismissRequest = { sleepMenuOpen = false }) {
                 DropdownMenuItem(

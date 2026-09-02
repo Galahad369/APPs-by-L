@@ -1,6 +1,11 @@
 package com.local.listentomusic.playback
 
 import android.content.Intent
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
+import android.os.Build
+import android.os.Handler
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -35,6 +40,16 @@ class PlaybackService : MediaSessionService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var saveJob: Job? = null
     private var retriedPath: String? = null
+    private val audioManager by lazy { getSystemService(AudioManager::class.java) }
+    private val audioDeviceCallback = object : AudioDeviceCallback() {
+        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) {
+            if (::player.isInitialized && player.isPlaying && removedDevices.any(::isBluetoothOutput)) {
+                // Never spill private playback through the phone speaker after a
+                // Bluetooth headset/speaker disappears.
+                player.pause()
+            }
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -69,6 +84,7 @@ class PlaybackService : MediaSessionService() {
             .build()
 
         player.skipSilenceEnabled = false
+        audioManager.registerAudioDeviceCallback(audioDeviceCallback, Handler(mainLooper))
         val saved = runBlocking(Dispatchers.IO) {
             runCatching { preferences.current() }.getOrDefault(UserPreferences())
         }
@@ -119,6 +135,7 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         saveJob?.cancel()
+        runCatching { audioManager.unregisterAudioDeviceCallback(audioDeviceCallback) }
         runBlocking(Dispatchers.IO) {
             preferences.savePlayback(
                 path = player.currentMediaItem?.mediaId?.takeIf { it.isNotBlank() },
@@ -167,5 +184,13 @@ class PlaybackService : MediaSessionService() {
         serviceScope.launch(Dispatchers.IO) {
             preferences.savePlayback(path, position, speed, repeat)
         }
+    }
+
+    private fun isBluetoothOutput(device: AudioDeviceInfo): Boolean = when (device.type) {
+        AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+        AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+        AudioDeviceInfo.TYPE_HEARING_AID -> device.isSink
+        else -> Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && device.isSink &&
+            device.type in setOf(AudioDeviceInfo.TYPE_BLE_HEADSET, AudioDeviceInfo.TYPE_BLE_SPEAKER)
     }
 }

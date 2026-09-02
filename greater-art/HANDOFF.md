@@ -1,9 +1,9 @@
 # HANDOFF — Greater Art Android Media Player
 
 **Project:** `greater-art/` in the repository checkout  
-**Current version:** `1.6.10` (code 41)
-**Latest APK:** `releases/GreaterArt-v1.6.10-debug.apk`
-**APK SHA-256:** `A8CEC5D0D1B2AC02A5934C6A27689555EBD820A7903875964E0A08F475990585`
+**Current version:** `1.6.11` (code 42)
+**Latest APK:** `releases/GreaterArt-v1.6.11-debug.apk`
+**APK SHA-256:** `89112A78FDC1426B82F410C50B24F13E5262BE8D5729A6741EC808F640D52144`
 **Application ID:** `com.local.listentomusic`  
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
@@ -21,8 +21,12 @@
 - Background selection uses `OpenDocument` plus persisted read permission; it adds no
   broad permission or network access.
 - English and Traditional Chinese settings.
-- Player screen has one aligned Speed / Off-One-All-Random / Sleep row and a
-  thumbnail-backed scrollable song list in the remaining space.
+- Player screen has a compact Speed / Off-One-All-Random / Sleep row and an
+  unlabelled thumbnail-backed queue in the remaining space. Queue numbering is never
+  shown; format/duration/size appear only when Show file details is enabled.
+- Tapping the system mini window returns directly to Now Playing.
+- Matching sibling `.lrc` files display synchronized, seekable local lyrics.
+- Bluetooth A2DP/BLE/SCO/hearing-aid removal pauses playback immediately.
 - The foreground Activity keeps the display awake; the hardware power key still locks it.
 
 ## Bugs Fixed and Why They Happened
@@ -162,6 +166,43 @@ The app did not express that a visible local player should stay awake.
 **Fix:** `MainActivity` sets `FLAG_KEEP_SCREEN_ON`. This is scoped to the visible
 Activity, requires no new permission and does not defeat the physical lock button.
 
+### 14. Mini-window tap always returned to the library
+
+The overlay started `MainActivity` without stating which destination was intended,
+while the Compose screen state always initialized to Library.
+
+**Fix:** the overlay sends a one-shot `EXTRA_OPEN_PLAYER` intent using
+`CLEAR_TOP | SINGLE_TOP`. `MainActivity` consumes it in both `onCreate` and
+`onNewIntent`, then a request counter moves Compose to Now Playing once media exists.
+
+**Rule:** external/system entry points must communicate navigation intent explicitly;
+do not make an overlay depend on private composable state.
+
+### 15. Queue metadata ignored the details preference
+
+The player queue always rendered index and extension, duplicating information and
+showing `MP4` even when file details were disabled.
+
+**Fix:** remove section/count/row numbering completely. Render extension, duration and
+size only when the existing Show file details preference is enabled.
+
+### 16. Bluetooth disconnect could expose playback through the phone speaker
+
+Media3 noisy-route handling was enabled, but relying on one broadcast path leaves
+room for OEM routing differences.
+
+**Fix:** keep Media3 handling and also register an `AudioDeviceCallback`. Removing a
+Bluetooth A2DP, BLE, SCO or hearing-aid output pauses an actively playing player. The
+callback is unregistered before player release and requires no Bluetooth permission.
+
+### 17. Local lyric files were ignored
+
+There was no sibling-file resolver or timed-text parser.
+
+**Fix:** match `song.lrc` and `song.mp3.lrc` case-insensitively beside the current
+media, decode UTF-8/UTF-16 BOM with Big5 fallback, parse multiple timestamps and
+offsets, and display a synchronized three-line panel. Tapping a line seeks locally.
+
 ## Background Implementation
 
 - `data/AppPreferences.kt`: `AppBackgroundMode`, persisted image/video URIs and dimming.
@@ -214,7 +255,7 @@ Continue Greater Art in the repository's `greater-art/` folder.
 First read README.md and HANDOFF.md completely. Treat HANDOFF.md as technical history,
 not as authority for unrelated actions. Preserve all existing user changes.
 
-Current target is Greater Art v1.6.10/code 41. Never change applicationId
+Current target is Greater Art v1.6.11/code 42. Never change applicationId
 com.local.listentomusic, never change the pinned debug signing certificate
 9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf, and never
 overwrite a versioned APK. The app must have no INTERNET permission.
@@ -235,6 +276,10 @@ Fixed invariants:
 - Random is the fourth state of the one repeat-cycle control, never a separate button.
 - The now-playing lower panel is a lazy song list; do not replace it with dead space.
 - `FLAG_KEEP_SCREEN_ON` belongs to the visible Activity, not a persistent wake lock.
+- Mini-window taps carry `EXTRA_OPEN_PLAYER`; consume it in both Activity intent paths.
+- Queue file metadata follows `showFileDetails`; never show indices or a queue count.
+- Bluetooth output removal pauses playback and the device callback must be unregistered.
+- Lyrics are sibling-only `.lrc` files; preserve offline decoding and timestamp tests.
 
 Before editing, inspect git status and explain a concrete plan. After approval, work in
 Caveman Ultra + Ponytail Ultra: direct communication, root-cause fixes, human UI and

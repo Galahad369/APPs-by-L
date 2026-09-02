@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.view.WindowCompat
@@ -43,6 +44,7 @@ import kotlin.math.roundToInt
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
     private var isPictureInPicture by mutableStateOf(false)
+    private var openPlayerRequest by mutableIntStateOf(0)
     private var playerScreenVisible = false
     private var videoSourceRect = Rect()
     // The fallback receiver lives on MainActivity so it catches the broadcast
@@ -56,6 +58,7 @@ class MainActivity : ComponentActivity() {
         // honors the physical power/lock key, and no wake lock survives the Activity.
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         if (handleStopIntent(intent)) return
+        handleOpenPlayerIntent(intent)
         // Register fallback receiver early
         fallbackReceiver = object : BroadcastReceiver() {
             override fun onReceive(c: Context?, i: Intent?) {
@@ -85,6 +88,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             PermissionAwareApp(
                 viewModel = viewModel,
+                openPlayerRequest = openPlayerRequest,
                 isPictureInPicture = isPictureInPicture,
                 onPlayerScreenChanged = {
                     playerScreenVisible = it
@@ -111,7 +115,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        handleStopIntent(intent)
+        if (!handleStopIntent(intent)) handleOpenPlayerIntent(intent)
     }
 
     override fun onUserLeaveHint() {
@@ -213,6 +217,12 @@ class MainActivity : ComponentActivity() {
         return true
     }
 
+    private fun handleOpenPlayerIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(MiniWindowOverlayService.EXTRA_OPEN_PLAYER, false) != true) return
+        intent.removeExtra(MiniWindowOverlayService.EXTRA_OPEN_PLAYER)
+        openPlayerRequest++
+    }
+
     private fun buildPictureInPictureParams(autoEnter: Boolean): PictureInPictureParams {
         val ratio = when (viewModel.settings.value.floatingWindowMode) {
             FloatingWindowMode.COMPACT -> 16f / 9f
@@ -242,6 +252,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun PermissionAwareApp(
     viewModel: MainViewModel,
+    openPlayerRequest: Int,
     isPictureInPicture: Boolean,
     onPlayerScreenChanged: (Boolean) -> Unit,
     onVideoBoundsChanged: (Rect) -> Unit,
@@ -264,6 +275,7 @@ private fun PermissionAwareApp(
 
     GreaterArtApp(
         viewModel = viewModel,
+        openPlayerRequest = openPlayerRequest,
         isPictureInPicture = isPictureInPicture,
         onPlayerScreenChanged = onPlayerScreenChanged,
         onVideoBoundsChanged = onVideoBoundsChanged,
