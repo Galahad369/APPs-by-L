@@ -6,28 +6,32 @@ ads, analytics, accounts, telemetry, or network access.
 
 ## Features
 
-- Recursive local scan of `Download` with a 300-item thumbnail warmup and bounded
-  two-worker cache pipeline.
+- Recursive local scan of `Download` with a staged 300-item thumbnail warmup, bounded
+  two-worker cache pipeline, embedded artwork and same-name/folder-cover fallback.
 - Media3 playback for audio and video through one `MediaSessionService`.
-- Library search, custom drag order, name sorting, and local playlists.
+- Library search, custom drag order, name sorting, local playlists and M3U/M3U8 import/export.
 - Repeat-one default, gapless-friendly queues, speed controls, seek, next and previous.
 - One-line playback controls: speed, Off/One/All/Random cycle and sleep timer.
 - Compact one-line playback controls and an unlabelled scrollable queue with
   thumbnails and current-track highlight.
-- Synchronized local lyrics from a matching `.lrc` file beside the media file.
+- Synchronized local lyrics from a matching `.lrc`, with embedded MP3/FLAC/Opus lyrics fallback.
+- Real PCM-decoded audio waveform, generated off the UI thread and cached locally.
+- Optional queue editor for moving/removing upcoming items; disabled by default.
 - Bluetooth output removal pauses playback before audio can spill to the phone speaker.
 - Full video playback, rotation, fullscreen mode and Android picture-in-picture.
 - Three floating modes:
   - `COMPACT` — Android-controlled compact picture-in-picture.
-  - `FOLLOW_VIDEO` — default; picture-in-picture following the video's aspect ratio.
-  - `MINI_WINDOW` — 124×40dp audio or 108×61dp video system overlay.
+  - `FOLLOW_VIDEO` — picture-in-picture following the video's aspect ratio.
+  - `MINI_WINDOW` — default; 124×40dp audio or 108×61dp video system overlay.
 - Four app backgrounds:
   - Animated black liquid metal (default).
   - User-selected image (`image/*`, including PNG/JPEG/WebP supported by Android).
   - User-selected muted looping MP4.
   - A muted, synchronized copy of the currently playing video.
 - English and Traditional Chinese interface options.
-- Dark theme by default; system and light themes remain selectable.
+- Dark/black liquid metal by default; light mode uses white liquid metal.
+- System text style by default plus platform families and six bundled open-licensed fonts.
+- Optional copyable developer diagnostics panel; disabled by default and fully local.
 - The visible app keeps the display awake while still honoring the hardware lock key.
 
 Custom backgrounds use Android's document picker and persist only the selected file's
@@ -58,8 +62,8 @@ $env:GRADLE_USER_HOME = Join-Path $env:USERPROFILE '.gradle'
 Current release artifact:
 
 ```text
-releases/GreaterArt-v1.6.11-debug.apk
-SHA-256: 89112A78FDC1426B82F410C50B24F13E5262BE8D5729A6741EC808F640D52144
+releases/GreaterArt-v1.7.1-debug.apk
+SHA-256: C766164730CAAFCAC7DB84A2AA47617B29A550AAF5A2401C459BDD96AE5ED648
 ```
 
 Versioned APKs are never overwritten. Builds remain signed by the pinned personal
@@ -74,7 +78,8 @@ app/src/main/java/com/local/listentomusic/
 ├── data/
 │   ├── AppPreferences.kt             DataStore settings and playlists
 │   ├── MediaScanner.kt               Recursive Download scan
-│   └── ThumbnailRepository.kt        Memory/disk thumbnail cache
+│   ├── ThumbnailRepository.kt        Memory/disk thumbnail and cover-art cache
+│   └── WaveformRepository.kt         Background PCM peak decoder/cache
 ├── playback/
 │   ├── PlaybackService.kt            Media3 MediaSessionService
 │   └── MiniWindowOverlayService.kt   Tiny WindowManager overlay
@@ -83,6 +88,7 @@ app/src/main/java/com/local/listentomusic/
     ├── LibraryScreen.kt
     ├── NowPlayingScreen.kt
     ├── SettingsScreen.kt
+    ├── DeveloperDiagnostics.kt       Copyable local debug facts
     └── components/
         ├── AppBackground.kt           Image and muted-video backgrounds
         ├── LiquidMetalSurface.kt      Non-measuring animated metal decoration
@@ -105,8 +111,17 @@ app/src/main/java/com/local/listentomusic/
   removes both services and the Activity task.
 - The red-X hit test reads both attached overlay bounds from Android; never rebuild
   its position from raw display metrics, which drift around gesture navigation bars.
+- Android overlay coordinates are already constrained around Samsung system bars;
+  adding the navigation inset twice placed the red X too high. Keep the target at the
+  overlay frame's bottom margin and compare actual attached rectangles.
+- Android 12 automatic PiP must be disabled whenever Mini window is selected. If it
+  remains armed, system PiP wins before `onUserLeaveHint` can launch the tiny overlay.
 - Thumbnail warmup and visible-list lookahead use separate jobs. Reusing one job made
   every scroll event cancel the previous preload before it could finish.
+- Startup scan requests are deduplicated, and the 300-thumbnail pass is staged after
+  the visible 24 rows to prevent first-launch layout/I/O shaking.
+- Real waveforms decode on a worker and keep only normalized peaks; playback never
+  waits for waveform generation.
 - The player owns one repeat cycle (`Off → One → All → Random`). Random is Media3
   shuffle state inside that cycle, not a second button or a queue rebuild.
 - Mini-window launch intents carry an explicit open-player request. Activity intent
@@ -126,3 +141,5 @@ Unit tests, Android lint, compilation, manifest permissions and APK signature ar
 checked locally. This computer currently has no connected Android device or emulator,
 so installation, OEM overlay behavior and real codec playback still require a phone
 smoke test.
+
+Bundled font licenses are packaged under `app/src/main/assets/font_licenses/`.

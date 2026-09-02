@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.Alignment
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.net.toUri
 import com.local.listentomusic.MainViewModel
@@ -104,6 +105,12 @@ fun GreaterArtApp(
     val artwork by produceState<Bitmap?>(initialValue = null, key1 = playback.currentPath) {
         value = viewModel.loadCurrentArtwork(playback.currentPath)
     }
+    val m3uImporter = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let(viewModel::importM3u)
+    }
+    val m3uExporter = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("audio/x-mpegurl"),
+    ) { uri -> uri?.let(viewModel::exportActiveM3u) }
     val lyrics by produceState<LocalLyrics?>(initialValue = null, key1 = playback.currentPath) {
         value = viewModel.loadLyrics(playback.currentPath)
     }
@@ -119,7 +126,7 @@ fun GreaterArtApp(
 
     BackHandler(enabled = screen != Screen.LIBRARY) { screen = Screen.LIBRARY }
 
-    GreaterArtTheme(themeMode = settings.themeMode) {
+    GreaterArtTheme(themeMode = settings.themeMode, appFont = settings.appFont) {
         val lightPalette = MaterialTheme.colorScheme.background.luminance() > 0.5f
         Box(modifier = Modifier.fillMaxSize()) {
             if (screen == Screen.NOW_PLAYING && playback.isVideo) {
@@ -206,6 +213,7 @@ fun GreaterArtApp(
                         queue = queue,
                         lyrics = lyrics,
                         showFileDetails = settings.showFileDetails,
+                        editableQueue = settings.editableQueue,
                         language = settings.appLanguage,
                         controller = controller,
                         contentPadding = PaddingValues(0.dp),
@@ -223,8 +231,11 @@ fun GreaterArtApp(
                         sleepTimer = sleepTimer,
                         seekOffsetMs = settings.seekOffsetMs,
                         onSeekBy = viewModel::seekBy,
-                        onPlayQueueItem = viewModel::play,
+                        onPlayQueueItem = viewModel::playQueueItem,
                         onLoadThumbnail = viewModel::loadThumbnail,
+                        onLoadWaveform = viewModel::loadWaveform,
+                        onMoveQueueItem = viewModel::moveQueueItem,
+                        onRemoveQueueItem = viewModel::removeQueueItem,
                     )
                 Screen.SETTINGS -> SettingsScreen(
                     preferences = settings,
@@ -239,6 +250,11 @@ fun GreaterArtApp(
                     onAutoPictureInPicture = viewModel::setAutoPictureInPicture,
                     onFloatingWindowMode = viewModel::setFloatingWindowMode,
                     onAppLanguage = viewModel::setAppLanguage,
+                    onAppFont = viewModel::setAppFont,
+                    onDeveloperMode = viewModel::setDeveloperMode,
+                    onEditableQueue = viewModel::setEditableQueue,
+                    onImportM3u = { m3uImporter.launch(arrayOf("audio/x-mpegurl", "application/vnd.apple.mpegurl", "text/plain")) },
+                    onExportM3u = { m3uExporter.launch("Greater-Art-playlist.m3u8") },
                     onBackgroundMode = { mode ->
                         when {
                             mode == AppBackgroundMode.CUSTOM_IMAGE &&
@@ -274,6 +290,27 @@ fun GreaterArtApp(
                     onSeekOffset = viewModel::setSeekOffset,
                 )
             }
+            }
+            if (settings.developerMode) {
+                DeveloperDiagnostics(
+                    report = buildString {
+                        appendLine("version=${com.local.listentomusic.BuildConfig.VERSION_NAME}")
+                        appendLine("screen=${screen.name}")
+                        appendLine("media=${playback.currentPath ?: "none"}")
+                        appendLine("playing=${playback.isPlaying} video=${playback.isVideo}")
+                        appendLine("position=${playback.positionMs} duration=${playback.durationMs}")
+                        appendLine("queue=${queue.size} library=${library.files.size}")
+                        appendLine("repeat=${playback.repeatMode} random=${playback.shuffleEnabled}")
+                        appendLine("floating=${settings.floatingWindowMode} auto=${settings.autoPictureInPicture}")
+                        appendLine("background=${settings.backgroundMode} theme=${settings.themeMode}")
+                        appendLine("elements=${when (screen) {
+                            Screen.LIBRARY -> "search,sort,playlists,media_rows,mini_player,settings"
+                            Screen.NOW_PLAYING -> "art_or_video,title,transport,timeline,mode_controls,queue,lyrics"
+                            Screen.SETTINGS -> "appearance,playback,lists,cache,privacy,reset"
+                        }}")
+                    },
+                    modifier = Modifier.align(Alignment.TopEnd),
+                )
             }
         }
         }

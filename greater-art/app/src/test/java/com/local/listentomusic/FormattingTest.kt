@@ -41,7 +41,7 @@ class FormattingTest {
     @Test fun requestedPlaybackAndPresentationDefaultsRemainStable() {
         val defaults = UserPreferences()
         assertEquals(Player.REPEAT_MODE_ONE, defaults.repeatMode)
-        assertEquals(FloatingWindowMode.FOLLOW_VIDEO, defaults.floatingWindowMode)
+        assertEquals(FloatingWindowMode.MINI_WINDOW, defaults.floatingWindowMode)
         assertEquals(ThemeMode.DARK, defaults.themeMode)
         assertEquals(AppLanguage.ENGLISH, defaults.appLanguage)
         assertTrue(defaults.preloadThumbnails)

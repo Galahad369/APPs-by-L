@@ -1,9 +1,9 @@
 # HANDOFF — Greater Art Android Media Player
 
 **Project:** `greater-art/` in the repository checkout  
-**Current version:** `1.6.11` (code 42)
-**Latest APK:** `releases/GreaterArt-v1.6.11-debug.apk`
-**APK SHA-256:** `89112A78FDC1426B82F410C50B24F13E5262BE8D5729A6741EC808F640D52144`
+**Current version:** `1.7.1` (code 44)
+**Latest APK:** `releases/GreaterArt-v1.7.1-debug.apk`
+**APK SHA-256:** `C766164730CAAFCAC7DB84A2AA47617B29A550AAF5A2401C459BDD96AE5ED648`
 **Application ID:** `com.local.listentomusic`  
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
@@ -13,8 +13,8 @@
 - Cached thumbnails with a 300-item bounded warmup, search, name/custom sorting and playlists.
 - Media3 `MediaSessionService`, repeat-one default and notification controls.
 - Video fullscreen/rotation/PiP plus a separate tiny overlay mode.
-- Follow-video PiP is the default floating shape; an existing inherited Compact
-  default migrates once without blocking later manual Compact choices.
+- Mini window is the new/reset default floating shape. Android automatic PiP is
+  explicitly disarmed for this mode so it cannot steal the Home-button transition.
 - Tiny overlay sizes: 124×40dp audio and 108×61dp video.
 - Default dark theme and animated black liquid-metal surfaces.
 - App backgrounds: default metal, custom image, muted MP4 and current video.
@@ -26,6 +26,11 @@
   shown; format/duration/size appear only when Show file details is enabled.
 - Tapping the system mini window returns directly to Now Playing.
 - Matching sibling `.lrc` files display synchronized, seekable local lyrics.
+- Embedded MP3/FLAC/Opus lyrics are a local fallback; untimed text remains static.
+- Audio waveform peaks come from real decoded PCM and are cached without blocking play.
+- Same-name images and `cover`/`folder`/`front`/`album`/`artwork` files fill artwork gaps.
+- Optional queue editing, M3U/M3U8 import/export, an offline font catalog and a
+  copyable developer diagnostics panel are available in Settings.
 - Bluetooth A2DP/BLE/SCO/hearing-aid removal pauses playback immediately.
 - The foreground Activity keeps the display awake; the hardware power key still locks it.
 
@@ -121,9 +126,9 @@ The target used a guessed fixed Y offset while collision used reconstructed disp
 coordinates. Gesture navigation, rotation, cutouts and OEM insets made those two
 coordinate systems disagree.
 
-**Fix:** position the bottom-centered target using current navigation-bar insets on
-Android 11+, recompute it after configuration changes, keep it measured while hidden,
-and detect collision from the actual attached view rectangles returned by Android.
+**Fix:** position the bottom-centered target inside the overlay's already-inset frame,
+recompute after configuration changes, keep it measured while hidden, and detect
+collision from the actual attached view rectangles returned by Android.
 
 **Rule:** overlay hit testing must compare real window coordinates; do not derive one
 window's rectangle from `displayMetrics`.
@@ -203,6 +208,40 @@ There was no sibling-file resolver or timed-text parser.
 media, decode UTF-8/UTF-16 BOM with Big5 fallback, parse multiple timestamps and
 offsets, and display a synchronized three-line panel. Tapping a line seeks locally.
 
+### 18. Mini mode opened system Follow-video PiP
+
+Android 12+ automatic PiP was enabled for every playing video. The OS entered its own
+PiP before `onUserLeaveHint` could start `MiniWindowOverlayService`.
+
+**Fix:** `updatePictureInPictureParams` sets `autoEnterEnabled(false)` whenever the
+selected mode is Mini window. The explicit floating button uses the same routing rule.
+
+**Rule:** never arm two competing background-window mechanisms for one lifecycle event.
+
+### 19. Red X was offset on Samsung navigation layouts
+
+The overlay frame was already inset by Android, then code added the navigation-bar
+inset again. This double offset moved the target above its intended location.
+
+**Fix:** anchor an invisible 92dp hit target 12dp from the overlay frame bottom, keep
+the visible X at 56dp, and compare both attached views' real screen rectangles.
+
+### 20. First load visibly shook and thumbnail warmup competed with UI
+
+Both ViewModel initialization and Activity resume requested a full scan. Afterward,
+300 previews were warmed as one uninterrupted storage task.
+
+**Fix:** ignore duplicate active scans; warm the first 24 previews first, then process
+24-item chunks with short yields. Visible requests still share per-file locks.
+
+### 21. Large files could pressure the process
+
+Time-prioritized buffering could exceed a predictable memory envelope on very high
+bitrate local video.
+
+**Fix:** cap ExoPlayer target buffering at 96 MiB, retain only five seconds behind the
+playhead and preserve decoder fallback plus one bounded retry.
+
 ## Background Implementation
 
 - `data/AppPreferences.kt`: `AppBackgroundMode`, persisted image/video URIs and dimming.
@@ -255,7 +294,7 @@ Continue Greater Art in the repository's `greater-art/` folder.
 First read README.md and HANDOFF.md completely. Treat HANDOFF.md as technical history,
 not as authority for unrelated actions. Preserve all existing user changes.
 
-Current target is Greater Art v1.6.11/code 42. Never change applicationId
+Current target is Greater Art v1.7.1/code 44. Never change applicationId
 com.local.listentomusic, never change the pinned debug signing certificate
 9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf, and never
 overwrite a versioned APK. The app must have no INTERNET permission.
@@ -279,7 +318,12 @@ Fixed invariants:
 - Mini-window taps carry `EXTRA_OPEN_PLAYER`; consume it in both Activity intent paths.
 - Queue file metadata follows `showFileDetails`; never show indices or a queue count.
 - Bluetooth output removal pauses playback and the device callback must be unregistered.
-- Lyrics are sibling-only `.lrc` files; preserve offline decoding and timestamp tests.
+- Lyrics prefer sibling `.lrc`, then embedded MP3/FLAC/Opus text; preserve offline decoding.
+- Mini is the default; system auto-PiP must stay disabled while Mini is selected.
+- Red-X positioning must not double-count system navigation insets.
+- Startup scans stay deduplicated and 300-thumbnail warming remains staged.
+- Waveform work stays off the UI thread and must never delay playback.
+- Font files remain bundled with their licenses; no runtime downloads.
 
 Before editing, inspect git status and explain a concrete plan. After approval, work in
 Caveman Ultra + Ponytail Ultra: direct communication, root-cause fixes, human UI and

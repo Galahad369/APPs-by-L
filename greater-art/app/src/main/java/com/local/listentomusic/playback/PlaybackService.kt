@@ -66,7 +66,11 @@ class PlaybackService : MediaSessionService() {
                 100,
                 250,
             )
-            .setPrioritizeTimeOverSizeThresholds(true)
+            // Local 4K/hi-res files can be huge. Keep a useful read-ahead without
+            // letting one item grow the player buffer until the process is killed.
+            .setTargetBufferBytes(96 * 1024 * 1024)
+            .setPrioritizeTimeOverSizeThresholds(false)
+            .setBackBuffer(5_000, true)
             .build()
 
         player = ExoPlayer.Builder(this, renderersFactory)

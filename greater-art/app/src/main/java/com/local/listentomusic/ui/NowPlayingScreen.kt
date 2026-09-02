@@ -61,6 +61,9 @@ import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.RemoveCircleOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
@@ -117,7 +120,6 @@ import com.local.listentomusic.ui.components.LiquidMetalSurface
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.roundToInt
-import kotlin.math.sin
 
 private val playbackSpeeds = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f)
 
@@ -128,6 +130,7 @@ fun NowPlayingScreen(
     queue: List<MediaFile>,
     lyrics: LocalLyrics?,
     showFileDetails: Boolean,
+    editableQueue: Boolean,
     language: AppLanguage,
     controller: MediaController?,
     contentPadding: PaddingValues,
@@ -147,6 +150,9 @@ fun NowPlayingScreen(
     onSeekBy: (Long) -> Unit,
     onPlayQueueItem: (MediaFile) -> Unit,
     onLoadThumbnail: suspend (MediaFile) -> Bitmap?,
+    onLoadWaveform: suspend (String) -> FloatArray?,
+    onMoveQueueItem: (Int, Int) -> Unit,
+    onRemoveQueueItem: (Int) -> Unit,
 ) {
     var fullscreen by rememberSaveable { mutableStateOf(false) }
 
@@ -205,6 +211,7 @@ fun NowPlayingScreen(
                         queue = queue,
                         lyrics = lyrics,
                         showFileDetails = showFileDetails,
+                        editableQueue = editableQueue,
                         language = language,
                         onSpeed = onSpeed,
                         onRepeat = onRepeat,
@@ -213,6 +220,8 @@ fun NowPlayingScreen(
                         onPlayQueueItem = onPlayQueueItem,
                         onLoadThumbnail = onLoadThumbnail,
                         onSeek = onSeek,
+                        onMoveQueueItem = onMoveQueueItem,
+                        onRemoveQueueItem = onRemoveQueueItem,
                         modifier = Modifier.fillMaxWidth().weight(1f),
                     )
                 }
@@ -224,6 +233,7 @@ fun NowPlayingScreen(
                 queue = queue,
                 lyrics = lyrics,
                 showFileDetails = showFileDetails,
+                editableQueue = editableQueue,
                 language = language,
                 onBack = onBack,
                 onPictureInPicture = onPictureInPicture,
@@ -239,6 +249,9 @@ fun NowPlayingScreen(
                 onSeekBy = onSeekBy,
                 onPlayQueueItem = onPlayQueueItem,
                 onLoadThumbnail = onLoadThumbnail,
+                onLoadWaveform = onLoadWaveform,
+                onMoveQueueItem = onMoveQueueItem,
+                onRemoveQueueItem = onRemoveQueueItem,
             )
         }
     }
@@ -392,6 +405,7 @@ private fun AudioPlayer(
     queue: List<MediaFile>,
     lyrics: LocalLyrics?,
     showFileDetails: Boolean,
+    editableQueue: Boolean,
     language: AppLanguage,
     onBack: () -> Unit,
     onPictureInPicture: () -> Unit,
@@ -407,7 +421,13 @@ private fun AudioPlayer(
     onSeekBy: (Long) -> Unit,
     onPlayQueueItem: (MediaFile) -> Unit,
     onLoadThumbnail: suspend (MediaFile) -> Bitmap?,
+    onLoadWaveform: suspend (String) -> FloatArray?,
+    onMoveQueueItem: (Int, Int) -> Unit,
+    onRemoveQueueItem: (Int) -> Unit,
 ) {
+    val waveform by produceState<FloatArray?>(null, playback.currentPath) {
+        value = playback.currentPath?.let { onLoadWaveform(it) }
+    }
     BoxWithConstraints(
         modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)
             .windowInsetsPadding(WindowInsets.navigationBars),
@@ -470,7 +490,7 @@ private fun AudioPlayer(
                 textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(12.dp))
-            WaveformTimeline(playback, onSeek, language)
+            WaveformTimeline(playback, waveform, onSeek, language)
             Transport(playback, onPrevious, onTogglePlay, onNext)
             SecondaryControlRow(
                 playback = playback,
@@ -485,12 +505,15 @@ private fun AudioPlayer(
                 queue = queue,
                 lyrics = lyrics,
                 showFileDetails = showFileDetails,
+                editableQueue = editableQueue,
                 positionMs = playback.positionMs,
                 currentPath = playback.currentPath,
                 language = language,
                 onPlay = onPlayQueueItem,
                 onSeek = onSeek,
                 onLoadThumbnail = onLoadThumbnail,
+                onMoveQueueItem = onMoveQueueItem,
+                onRemoveQueueItem = onRemoveQueueItem,
                 modifier = Modifier.fillMaxWidth().weight(1f),
             )
         }
@@ -504,6 +527,7 @@ private fun SecondaryControls(
     queue: List<MediaFile>,
     lyrics: LocalLyrics?,
     showFileDetails: Boolean,
+    editableQueue: Boolean,
     language: AppLanguage,
     onSpeed: (Float) -> Unit,
     onRepeat: () -> Unit,
@@ -512,6 +536,8 @@ private fun SecondaryControls(
     onPlayQueueItem: (MediaFile) -> Unit,
     onLoadThumbnail: suspend (MediaFile) -> Bitmap?,
     onSeek: (Long) -> Unit,
+    onMoveQueueItem: (Int, Int) -> Unit,
+    onRemoveQueueItem: (Int) -> Unit,
     modifier: Modifier,
 ) {
     val onSurface = MaterialTheme.colorScheme.onSurface
@@ -543,12 +569,15 @@ private fun SecondaryControls(
             queue = queue,
             lyrics = lyrics,
             showFileDetails = showFileDetails,
+            editableQueue = editableQueue,
             positionMs = playback.positionMs,
             currentPath = playback.currentPath,
             language = language,
             onPlay = onPlayQueueItem,
             onSeek = onSeek,
             onLoadThumbnail = onLoadThumbnail,
+            onMoveQueueItem = onMoveQueueItem,
+            onRemoveQueueItem = onRemoveQueueItem,
             modifier = Modifier.fillMaxWidth().weight(1f),
         )
     }
@@ -561,10 +590,13 @@ private fun NowPlayingQueue(
     language: AppLanguage,
     lyrics: LocalLyrics?,
     showFileDetails: Boolean,
+    editableQueue: Boolean,
     positionMs: Long,
     onPlay: (MediaFile) -> Unit,
     onSeek: (Long) -> Unit,
     onLoadThumbnail: suspend (MediaFile) -> Bitmap?,
+    onMoveQueueItem: (Int, Int) -> Unit,
+    onRemoveQueueItem: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val currentIndex = queue.indexOfFirst { it.path == currentPath }
@@ -598,7 +630,7 @@ private fun NowPlayingQueue(
                 state = listState,
                 contentPadding = PaddingValues(vertical = 4.dp),
             ) {
-                items(queue, key = MediaFile::path) { file ->
+                itemsIndexed(queue, key = { _, file -> file.path }) { index, file ->
                     val selected = file.path == currentPath
                     Row(
                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
@@ -638,6 +670,17 @@ private fun NowPlayingQueue(
                                     .background(MaterialTheme.colorScheme.secondary),
                             )
                         }
+                        if (editableQueue) {
+                            IconButton(onClick = { onMoveQueueItem(index, index - 1) }, enabled = index > 0) {
+                                Icon(Icons.Rounded.KeyboardArrowUp, uiText(language, "Move up", "上移"))
+                            }
+                            IconButton(onClick = { onMoveQueueItem(index, index + 1) }, enabled = index < queue.lastIndex) {
+                                Icon(Icons.Rounded.KeyboardArrowDown, uiText(language, "Move down", "下移"))
+                            }
+                            IconButton(onClick = { onRemoveQueueItem(index) }, enabled = queue.size > 1) {
+                                Icon(Icons.Rounded.RemoveCircleOutline, uiText(language, "Remove", "移除"))
+                            }
+                        }
                     }
                 }
             }
@@ -652,7 +695,8 @@ private fun SyncedLyricsPanel(
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val activeIndex = lyrics.lines.indexOfLast { it.timeMs <= positionMs }
+    val isSynced = lyrics.lines.any { it.timeMs > 0L }
+    val activeIndex = if (isSynced) lyrics.lines.indexOfLast { it.timeMs <= positionMs } else -1
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = activeIndex.coerceAtLeast(0))
     LaunchedEffect(activeIndex, lyrics.sourcePath) {
         if (activeIndex >= 0) listState.animateScrollToItem(activeIndex, scrollOffset = -24)
@@ -670,7 +714,7 @@ private fun SyncedLyricsPanel(
         ) { index, line ->
             Text(
                 text = line.text,
-                modifier = Modifier.fillMaxWidth().clickable { onSeek(line.timeMs) }
+                modifier = Modifier.fillMaxWidth().clickable(enabled = isSynced) { onSeek(line.timeMs) }
                     .padding(vertical = 5.dp),
                 color = if (index == activeIndex) MaterialTheme.colorScheme.secondary
                     else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.64f),
@@ -755,6 +799,7 @@ private fun Timeline(playback: PlaybackUiState, onSeek: (Long) -> Unit) {
 @Composable
 private fun WaveformTimeline(
     playback: PlaybackUiState,
+    waveform: FloatArray?,
     onSeek: (Long) -> Unit,
     language: AppLanguage,
 ) {
@@ -788,11 +833,11 @@ private fun WaveformTimeline(
         },
         track = {
             Canvas(Modifier.fillMaxWidth().height(44.dp)) {
-                val bars = 72
+                val bars = waveform?.size ?: 72
                 val spacing = size.width / bars
                 repeat(bars) { index ->
-                    val wave = abs(sin(index * 0.67) * 0.62 + sin(index * 0.19) * 0.38)
-                    val barHeight = size.height * (0.18f + wave.toFloat() * 0.74f)
+                    val wave = waveform?.getOrNull(index) ?: 0.08f
+                    val barHeight = size.height * (0.16f + wave * 0.78f)
                     val x = spacing * (index + 0.5f)
                     drawLine(
                         color = if ((index + 1f) / bars <= fraction) active else inactive,
