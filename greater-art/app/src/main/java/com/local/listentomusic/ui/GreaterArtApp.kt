@@ -284,10 +284,11 @@ fun GreaterArtApp(
                     onDeletePlaylist = viewModel::deletePlaylist,
                     onSpeed = viewModel::setSpeed,
                     onPlaybackCycle = viewModel::setPlaybackCycle,
-                    onClearThumbnailCache = viewModel::clearThumbnailCache,
-                    onRescan = viewModel::rescan,
-                    onReset = viewModel::resetAppSettings,
-                    onSeekOffset = viewModel::setSeekOffset,
+                                        onClearThumbnailCache = viewModel::clearThumbnailCache,
+                                        onRescan = viewModel::rescan,
+                                        onReset = viewModel::resetAppSettings,
+                                        onSeekOffset = viewModel::setSeekOffset,
+                                        onSilianRail = viewModel::setSilianRail,
                 )
             }
             }
