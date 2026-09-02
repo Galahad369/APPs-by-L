@@ -6,10 +6,13 @@ ads, analytics, accounts, telemetry, or network access.
 
 ## Features
 
-- Recursive local scan of `Download` with cached, preloaded thumbnails.
+- Recursive local scan of `Download` with a 300-item thumbnail warmup and bounded
+  two-worker cache pipeline.
 - Media3 playback for audio and video through one `MediaSessionService`.
 - Library search, custom drag order, name sorting, and local playlists.
 - Repeat-one default, gapless-friendly queues, speed controls, seek, next and previous.
+- One-line playback controls: speed, Off/One/All/Random cycle and sleep timer.
+- Scrollable song list on the player screen with thumbnails and current-track highlight.
 - Full video playback, rotation, fullscreen mode and Android picture-in-picture.
 - Three floating modes:
   - `COMPACT` — Android-controlled compact picture-in-picture.
@@ -22,6 +25,7 @@ ads, analytics, accounts, telemetry, or network access.
   - A muted, synchronized copy of the currently playing video.
 - English and Traditional Chinese interface options.
 - Dark theme by default; system and light themes remain selectable.
+- The visible app keeps the display awake while still honoring the hardware lock key.
 
 Custom backgrounds use Android's document picker and persist only the selected file's
 read access. Background videos have their audio track disabled and pause when the app
@@ -51,8 +55,8 @@ $env:GRADLE_USER_HOME = Join-Path $env:USERPROFILE '.gradle'
 Current release artifact:
 
 ```text
-releases/GreaterArt-v1.6.2-debug.apk
-SHA-256: 1725489EC9779ECE7A40CCD0DB8B0F589474A88ED9B0766B1FEB9A1917E43090
+releases/GreaterArt-v1.6.10-debug.apk
+SHA-256: A8CEC5D0D1B2AC02A5934C6A27689555EBD820A7903875964E0A08F475990585
 ```
 
 Versioned APKs are never overwritten. Builds remain signed by the pinned personal
@@ -96,6 +100,12 @@ app/src/main/java/com/local/listentomusic/
   dark wallpaper can inherit a light-theme black foreground.
 - The mini-window red-X path stops playback before destroying its controller, then
   removes both services and the Activity task.
+- The red-X hit test reads both attached overlay bounds from Android; never rebuild
+  its position from raw display metrics, which drift around gesture navigation bars.
+- Thumbnail warmup and visible-list lookahead use separate jobs. Reusing one job made
+  every scroll event cancel the previous preload before it could finish.
+- The player owns one repeat cycle (`Off → One → All → Random`). Random is Media3
+  shuffle state inside that cycle, not a second button or a queue rebuild.
 - Every overlay view and controller future is nullable, guarded and released. A
   rejected optional close target must not kill an otherwise working mini player.
 - Keep the application ID and signing certificate unchanged. Current certificate

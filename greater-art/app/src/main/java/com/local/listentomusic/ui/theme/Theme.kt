@@ -11,8 +11,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.local.listentomusic.data.ThemeMode
 private val LightColors = lightColorScheme(
-    primary = Color(0xFF161C1A),
-    onPrimary = Color(0xFFF3F5F0),
+    primary = Color(0xFF176B5B),
+    onPrimary = Color(0xFFF5FFFB),
     primaryContainer = Color(0xFFDDF8F1),
     onPrimaryContainer = Color(0xFF10221E),
     secondary = Color(0xFF267B69),
@@ -30,12 +30,12 @@ private val LightColors = lightColorScheme(
 )
 
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFFF3F5F0),
-    onPrimary = Color(0xFF101311),
-    primaryContainer = Color(0xFF24453D),
+    primary = Color(0xFF8BE9D3),
+    onPrimary = Color(0xFF07130F),
+    primaryContainer = Color(0xFF183A32),
     onPrimaryContainer = Color(0xFFDDF8F1),
-    secondary = Color(0xFF8BE9D3),
-    tertiary = Color(0xFFD9FF68),
+    secondary = Color(0xFF72D7C0),
+    tertiary = Color(0xFFB8D6A1),
     background = Color(0xFF080A09),
     surface = Color(0xFF151918),
     surfaceVariant = Color(0xFF202624),

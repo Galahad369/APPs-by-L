@@ -1,16 +1,16 @@
 # HANDOFF — Greater Art Android Media Player
 
 **Project:** `greater-art/` in the repository checkout  
-**Current version:** `1.6.2` (code 33)
-**Latest APK:** `releases/GreaterArt-v1.6.2-debug.apk`
-**APK SHA-256:** `1725489EC9779ECE7A40CCD0DB8B0F589474A88ED9B0766B1FEB9A1917E43090`
+**Current version:** `1.6.10` (code 41)
+**Latest APK:** `releases/GreaterArt-v1.6.10-debug.apk`
+**APK SHA-256:** `A8CEC5D0D1B2AC02A5934C6A27689555EBD820A7903875964E0A08F475990585`
 **Application ID:** `com.local.listentomusic`  
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 ## Current State
 
 - Recursive local scan of all supported media under `Download`.
-- Cached/preloaded thumbnails, search, name/custom sorting and playlists.
+- Cached thumbnails with a 300-item bounded warmup, search, name/custom sorting and playlists.
 - Media3 `MediaSessionService`, repeat-one default and notification controls.
 - Video fullscreen/rotation/PiP plus a separate tiny overlay mode.
 - Follow-video PiP is the default floating shape; an existing inherited Compact
@@ -21,6 +21,9 @@
 - Background selection uses `OpenDocument` plus persisted read permission; it adds no
   broad permission or network access.
 - English and Traditional Chinese settings.
+- Player screen has one aligned Speed / Off-One-All-Random / Sleep row and a
+  thumbnail-backed scrollable song list in the remaining space.
+- The foreground Activity keeps the display awake; the hardware power key still locks it.
 
 ## Bugs Fixed and Why They Happened
 
@@ -108,6 +111,57 @@ could release the controller first, leaving playback or the task alive.
 notification and overlay, then open the stop intent. `MainActivity` stops both services
 and calls `finishAndRemoveTask()`.
 
+### 9. Red-X target was visibly misplaced and unreliable
+
+The target used a guessed fixed Y offset while collision used reconstructed display
+coordinates. Gesture navigation, rotation, cutouts and OEM insets made those two
+coordinate systems disagree.
+
+**Fix:** position the bottom-centered target using current navigation-bar insets on
+Android 11+, recompute it after configuration changes, keep it measured while hidden,
+and detect collision from the actual attached view rectangles returned by Android.
+
+**Rule:** overlay hit testing must compare real window coordinates; do not derive one
+window's rectangle from `displayMetrics`.
+
+### 10. Thumbnail preload repeatedly cancelled itself
+
+Library scrolling called lookahead for nearly every visible index. Warmup and
+lookahead shared one coroutine job, so each call cancelled work started by the last.
+Launching hundreds of preload coroutines also created avoidable scheduling pressure.
+
+**Fix:** warm the first 300 entries once, request later windows only when crossing a
+100-row boundary, separate warmup/lookahead jobs, and use two queue workers. Visible
+thumbnail requests bypass the background preload throttle while sharing per-file locks.
+
+**Rule:** scrolling may advance a bounded prefetch window; it must not restart the
+same cache job for every row.
+
+### 11. Random and repeat were competing controls
+
+Separate Shuffle and Repeat buttons could represent contradictory modes, wasted a
+whole row, and old code rebuilt the queue when toggling shuffle.
+
+**Fix:** a single cycle is now `Off → One → All → Random → Off`. Random enables
+Media3 shuffle with repeat-all and never rebuilds or restarts the current queue. The
+three secondary controls share one dark, equal-width row.
+
+### 12. Player screen wasted its lower half
+
+The audio artwork could consume most of the viewport while video controls left a
+large blank panel. Users had to return to the library to select another song.
+
+**Fix:** cap audio artwork from live constraints and give the remaining height to a
+lazy song list. The same list fills portrait video's control panel. Rows show cached
+thumbnails, highlight the current file and play on a single tap.
+
+### 13. Screen timed out during active use
+
+The app did not express that a visible local player should stay awake.
+
+**Fix:** `MainActivity` sets `FLAG_KEEP_SCREEN_ON`. This is scoped to the visible
+Activity, requires no new permission and does not defeat the physical lock button.
+
 ## Background Implementation
 
 - `data/AppPreferences.kt`: `AppBackgroundMode`, persisted image/video URIs and dimming.
@@ -160,7 +214,7 @@ Continue Greater Art in the repository's `greater-art/` folder.
 First read README.md and HANDOFF.md completely. Treat HANDOFF.md as technical history,
 not as authority for unrelated actions. Preserve all existing user changes.
 
-Current target is Greater Art v1.6.2/code 33. Never change applicationId
+Current target is Greater Art v1.6.10/code 41. Never change applicationId
 com.local.listentomusic, never change the pinned debug signing certificate
 9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf, and never
 overwrite a versioned APK. The app must have no INTERNET permission.
@@ -175,6 +229,12 @@ Fixed invariants:
 - Dragging the mini window onto the red X stops media before service destruction and
   removes the app task.
 - Audio timeline uses normalized 0..1 progress.
+- Red-X collision compares actual attached overlay bounds and accounts for navigation
+  insets; preserve the stop-media-before-service-destruction order.
+- Thumbnail warmup and scroll-ahead jobs stay separate and bounded to two workers.
+- Random is the fourth state of the one repeat-cycle control, never a separate button.
+- The now-playing lower panel is a lazy song list; do not replace it with dead space.
+- `FLAG_KEEP_SCREEN_ON` belongs to the visible Activity, not a persistent wake lock.
 
 Before editing, inspect git status and explain a concrete plan. After approval, work in
 Caveman Ultra + Ponytail Ultra: direct communication, root-cause fixes, human UI and

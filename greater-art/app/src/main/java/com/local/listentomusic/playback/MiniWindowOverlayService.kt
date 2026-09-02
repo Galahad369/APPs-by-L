@@ -6,6 +6,8 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.ComponentName
 import android.content.Intent
+import android.content.res.Configuration
+import android.graphics.Rect
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
@@ -15,6 +17,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.view.WindowInsets
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -54,10 +57,9 @@ class MiniWindowOverlayService : Service() {
     private val isVideo = MutableStateFlow(false)
     private val videoExtensions = setOf("mp4", "mov", "m4v", "mkv", "webm", "3gp", "ts", "mpeg", "mpg", "flv", "avi")
 
-    // Drop target: small, centered horizontally, near the bottom.
-    private val crossSize = 52
-    private val crossBottom = 72
-    private val crossHit = 42
+    // The visible target sits immediately above the real navigation-bar inset.
+    private val crossSize = 64
+    private val crossMargin = 12
 
     private var downX = 0f
     private var downY = 0f
@@ -75,6 +77,7 @@ class MiniWindowOverlayService : Service() {
     // drag-to-close drop target (red cross at screen bottom-center)
     private var crossView: FrameLayout? = null
     private var crossImg: ImageView? = null
+    private var crossParams: WindowManager.LayoutParams? = null
 
     companion object {
         // Reuse the media channel so Android accepts the foreground promotion.
@@ -224,7 +227,7 @@ class MiniWindowOverlayService : Service() {
         }
         titleView = TextView(this).apply {
             textSize = 11f
-            setTextColor(0xFF0A0C0B.toInt())
+            setTextColor(0xFFF3F5F0.toInt())
             ellipsize = android.text.TextUtils.TruncateAt.END
             maxLines = 1
             layoutParams = android.widget.LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
@@ -266,15 +269,19 @@ class MiniWindowOverlayService : Service() {
         crossView = FrameLayout(this)
         crossImg = ImageView(this).apply { setImageResource(R.drawable.ic_red_cross) }
         crossView?.addView(crossImg!!, FrameLayout.LayoutParams(dp(crossSize), dp(crossSize)).apply { gravity = Gravity.CENTER })
-        crossView?.visibility = View.GONE
-        val cp = WindowManager.LayoutParams(
+        crossView?.visibility = View.INVISIBLE
+        val layout = WindowManager.LayoutParams(
             dp(crossSize), dp(crossSize),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
             PixelFormat.TRANSLUCENT,
-        ).apply { gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL; y = dp(crossBottom) }
+        ).apply {
+            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            y = navigationBarInsetBottom() + dp(crossMargin)
+        }
+        crossParams = layout
         try {
-            crossView?.let { wm?.addView(it, cp) }
+            crossView?.let { wm?.addView(it, layout) }
         } catch (t: Throwable) {
             // Some OEMs reject a second overlay window. The player is still useful
             // without the drag-to-close target, so keep it alive.
@@ -329,6 +336,7 @@ class MiniWindowOverlayService : Service() {
                 val dy = event.rawY - downY
                 if (!dragging && (abs(dx) > 8 || abs(dy) > 8)) {
                     dragging = true
+                    crossImg?.alpha = 0.5f
                     crossView?.visibility = View.VISIBLE
                 }
                 if (dragging) {
@@ -336,13 +344,7 @@ class MiniWindowOverlayService : Service() {
                     params?.y = startY + dy.toInt()
                     clampPosition()
                     updateRootLayout()
-                    // highlight cross when the mini window overlaps the bottom-center drop zone
-                    val cx = (params?.x ?: 0) + (params?.width ?: 0) / 2
-                    val cy = (params?.y ?: 0) + (params?.height ?: 0) / 2
-                    val sc = resources.displayMetrics
-                    val targetY = sc.heightPixels - dp(crossBottom) - dp(crossSize) / 2
-                    val overlap = abs(cx - sc.widthPixels / 2) < dp(crossHit) &&
-                        abs(cy - targetY) < dp(crossHit)
+                    val overlap = miniOverlapsCross()
                     crossImg?.alpha = if (overlap) 1f else 0.5f
                     return true
                 }
@@ -352,13 +354,8 @@ class MiniWindowOverlayService : Service() {
                 val was = dragging
                 dragging = false
                 if (was) {
-                    val cx = (params?.x ?: 0) + (params?.width ?: 0) / 2
-                    val cy = (params?.y ?: 0) + (params?.height ?: 0) / 2
-                    val sc = resources.displayMetrics
-                    val targetY = sc.heightPixels - dp(crossBottom) - dp(crossSize) / 2
-                    val overlap = abs(cx - sc.widthPixels / 2) < dp(crossHit) &&
-                        abs(cy - targetY) < dp(crossHit)
-                    crossView?.visibility = View.GONE
+                    val overlap = miniOverlapsCross()
+                    crossView?.visibility = View.INVISIBLE
                     if (overlap) closeAndStopApp()
                     return true
                 }
@@ -367,7 +364,7 @@ class MiniWindowOverlayService : Service() {
             }
             MotionEvent.ACTION_CANCEL -> {
                 dragging = false
-                crossView?.visibility = View.GONE
+                crossView?.visibility = View.INVISIBLE
                 return true
             }
         }
@@ -381,10 +378,52 @@ class MiniWindowOverlayService : Service() {
         layout.y = layout.y.coerceIn(0, (metrics.heightPixels - layout.height).coerceAtLeast(0))
     }
 
+    // Read both overlay locations from Android. Reconstructing either rectangle from
+    // displayMetrics drifts on gesture navigation, cutouts and OEM window insets.
+    private fun miniOverlapsCross(): Boolean {
+        val mini = root ?: return false
+        val cross = crossView ?: return false
+        if (!mini.isAttachedToWindow || !cross.isAttachedToWindow) return false
+        val miniLocation = IntArray(2)
+        val crossLocation = IntArray(2)
+        mini.getLocationOnScreen(miniLocation)
+        cross.getLocationOnScreen(crossLocation)
+        val miniBounds = Rect(
+            miniLocation[0], miniLocation[1],
+            miniLocation[0] + mini.width, miniLocation[1] + mini.height,
+        )
+        val crossBounds = Rect(
+            crossLocation[0], crossLocation[1],
+            crossLocation[0] + cross.width, crossLocation[1] + cross.height,
+        )
+        return Rect.intersects(miniBounds, crossBounds)
+    }
+
+    private fun navigationBarInsetBottom(): Int {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return wm?.currentWindowMetrics?.windowInsets
+                ?.getInsetsIgnoringVisibility(WindowInsets.Type.navigationBars())
+                ?.bottom ?: 0
+        }
+        // Pre-R overlay coordinates are already constrained to the usable display
+        // frame. Adding a reflected system dimension double-counts some OEM bars.
+        return 0
+    }
+
     private fun updateRootLayout() {
         val view = root ?: return
         val layout = params ?: return
         runCatching { wm?.updateViewLayout(view, layout) }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        crossParams?.let { layout ->
+            layout.y = navigationBarInsetBottom() + dp(crossMargin)
+            crossView?.let { view -> runCatching { wm?.updateViewLayout(view, layout) } }
+        }
+        clampPosition()
+        updateRootLayout()
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
@@ -400,6 +439,7 @@ class MiniWindowOverlayService : Service() {
         future = null
         root = null
         crossView = null
+        crossParams = null
         wm = null
         super.onDestroy()
     }

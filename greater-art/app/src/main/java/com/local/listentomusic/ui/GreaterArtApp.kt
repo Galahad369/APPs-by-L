@@ -15,6 +15,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
@@ -54,9 +55,11 @@ fun GreaterArtApp(
     onGrantStorageAccess: () -> Unit,
 ) {
     val library by viewModel.library.collectAsStateWithLifecycle()
+    val queue by viewModel.queue.collectAsStateWithLifecycle()
     val playback by viewModel.playback.collectAsStateWithLifecycle()
     val controller by viewModel.controller.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val sleepTimer by viewModel.sleepTimer.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val imageBackgroundPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -110,7 +113,13 @@ fun GreaterArtApp(
     GreaterArtTheme(themeMode = settings.themeMode) {
         val lightPalette = MaterialTheme.colorScheme.background.luminance() > 0.5f
         Box(modifier = Modifier.fillMaxSize()) {
-            AppBackground(preferences = settings, playback = playback)
+            if (screen == Screen.NOW_PLAYING && playback.isVideo) {
+                // Full-screen video completely occludes the wallpaper. Avoid spending
+                // a decoder and animation frames on pixels the user cannot see.
+                Box(Modifier.fillMaxSize().background(Color.Black))
+            } else {
+                AppBackground(preferences = settings, playback = playback)
+            }
             Surface(
                 modifier = Modifier.fillMaxSize(),
                 // A light palette needs an opaque-enough base over black/custom media.
@@ -123,7 +132,10 @@ fun GreaterArtApp(
             AnimatedContent(
                 targetState = screen,
                 transitionSpec = {
-                    val spring = spring<IntOffset>(stiffness = Spring.StiffnessMediumLow, dampingRatio = Spring.DampingRatioLowBouncy)
+                    val spring = spring<IntOffset>(
+                        stiffness = Spring.StiffnessMediumLow,
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                    )
                     // A restrained horizontal push keeps screen changes spatially clear.
                     if (targetState > initialState) {
                         slideInHorizontally(spring, initialOffsetX = { it }) + fadeIn() togetherWith
@@ -171,6 +183,7 @@ fun GreaterArtApp(
                         onRemoveFromPlaylist = viewModel::removeFromActivePlaylist,
                         onDeletePlaylist = viewModel::deletePlaylist,
                         onLoadThumbnail = viewModel::loadThumbnail,
+                        onPreloadAhead = viewModel::preloadThumbnailsStartingAt,
                         onOpenSettings = { screen = Screen.SETTINGS },
                         onPlay = {
                             viewModel.play(it)
@@ -181,6 +194,7 @@ fun GreaterArtApp(
                 Screen.NOW_PLAYING -> NowPlayingScreen(
                         playback = playback,
                         artwork = artwork,
+                        queue = queue,
                         language = settings.appLanguage,
                         controller = controller,
                         contentPadding = PaddingValues(0.dp),
@@ -194,8 +208,12 @@ fun GreaterArtApp(
                         onSeek = viewModel::seekTo,
                         onSpeed = viewModel::setSpeed,
                         onRepeat = viewModel::cycleRepeatMode,
+                        onSleepTimer = viewModel::setSleepTimer,
+                        sleepTimer = sleepTimer,
                         seekOffsetMs = settings.seekOffsetMs,
                         onSeekBy = viewModel::seekBy,
+                        onPlayQueueItem = viewModel::play,
+                        onLoadThumbnail = viewModel::loadThumbnail,
                     )
                 Screen.SETTINGS -> SettingsScreen(
                     preferences = settings,
@@ -238,7 +256,7 @@ fun GreaterArtApp(
                     onRenamePlaylist = viewModel::renamePlaylist,
                     onDeletePlaylist = viewModel::deletePlaylist,
                     onSpeed = viewModel::setSpeed,
-                    onRepeatMode = viewModel::setRepeatMode,
+                    onPlaybackCycle = viewModel::setPlaybackCycle,
                     onClearThumbnailCache = viewModel::clearThumbnailCache,
                     onRescan = viewModel::rescan,
                     onReset = viewModel::resetAppSettings,
