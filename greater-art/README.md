@@ -12,7 +12,10 @@ ads, analytics, accounts, telemetry, or network access.
 - Library search, custom drag order, name sorting, and local playlists.
 - Repeat-one default, gapless-friendly queues, speed controls, seek, next and previous.
 - One-line playback controls: speed, Off/One/All/Random cycle and sleep timer.
-- Scrollable song list on the player screen with thumbnails and current-track highlight.
+- Compact one-line playback controls and an unlabelled scrollable queue with
+  thumbnails and current-track highlight.
+- Synchronized local lyrics from a matching `.lrc` file beside the media file.
+- Bluetooth output removal pauses playback before audio can spill to the phone speaker.
 - Full video playback, rotation, fullscreen mode and Android picture-in-picture.
 - Three floating modes:
   - `COMPACT` — Android-controlled compact picture-in-picture.
@@ -55,8 +58,8 @@ $env:GRADLE_USER_HOME = Join-Path $env:USERPROFILE '.gradle'
 Current release artifact:
 
 ```text
-releases/GreaterArt-v1.6.10-debug.apk
-SHA-256: A8CEC5D0D1B2AC02A5934C6A27689555EBD820A7903875964E0A08F475990585
+releases/GreaterArt-v1.6.11-debug.apk
+SHA-256: 89112A78FDC1426B82F410C50B24F13E5262BE8D5729A6741EC808F640D52144
 ```
 
 Versioned APKs are never overwritten. Builds remain signed by the pinned personal
@@ -106,6 +109,10 @@ app/src/main/java/com/local/listentomusic/
   every scroll event cancel the previous preload before it could finish.
 - The player owns one repeat cycle (`Off → One → All → Random`). Random is Media3
   shuffle state inside that cycle, not a second button or a queue rebuild.
+- Mini-window launch intents carry an explicit open-player request. Activity intent
+  handling owns this request; the overlay never guesses Compose navigation state.
+- Local lyrics accept UTF-8, UTF-16 BOM and Big5 text, use matching `song.lrc` or
+  `song.mp3.lrc` files, and never make a network request.
 - Every overlay view and controller future is nullable, guarded and released. A
   rejected optional close target must not kill an otherwise working mini player.
 - Keep the application ID and signing certificate unchanged. Current certificate

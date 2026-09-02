@@ -83,6 +83,7 @@ class MiniWindowOverlayService : Service() {
         // Reuse the media channel so Android accepts the foreground promotion.
         private const val CHANNEL_ID = "greater_art_playback"
         const val EXTRA_STOP_APP = "stop_app"
+        const val EXTRA_OPEN_PLAYER = "open_player"
         const val ACTION_FALLBACK_COMPACT = "com.local.listentomusic.MINI_FALLBACK_COMPACT"
         private const val AUDIO_WIDTH = 124
         private const val AUDIO_HEIGHT = 40
@@ -177,10 +178,14 @@ class MiniWindowOverlayService : Service() {
     }
 
     private fun openApp() {
-        // Tapping the mini window opens the main app and removes the overlay.
+        // Tapping the mini window returns to the full player, not the library.
         stopSelf()
         try {
-            startActivity(Intent(this, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK })
+            startActivity(Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra(EXTRA_OPEN_PLAYER, true)
+            })
         } catch (t: Throwable) {
             // The overlay has already stopped even if the Activity cannot be launched.
         }

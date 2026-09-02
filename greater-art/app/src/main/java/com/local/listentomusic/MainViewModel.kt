@@ -28,7 +28,9 @@ import com.local.listentomusic.data.AppLanguage
 import com.local.listentomusic.data.AppBackgroundMode
 import com.local.listentomusic.data.FloatingWindowMode
 import com.local.listentomusic.model.MediaFile
+import com.local.listentomusic.model.LocalLyrics
 import com.local.listentomusic.model.SortMode
+import com.local.listentomusic.model.loadLocalLyrics
 import com.local.listentomusic.playback.PlaybackService
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -273,6 +275,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     suspend fun loadCurrentArtwork(path: String?): Bitmap? {
         val file = scannedFiles.firstOrNull { it.path == path } ?: return null
         return thumbnailRepository.load(file)
+    }
+
+    suspend fun loadLyrics(path: String?): LocalLyrics? = withContext(Dispatchers.IO) {
+        loadLocalLyrics(path)
     }
 
     fun togglePlayPause() {

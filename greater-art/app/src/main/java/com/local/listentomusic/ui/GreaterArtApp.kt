@@ -41,6 +41,7 @@ import com.local.listentomusic.MainViewModel
 import com.local.listentomusic.ui.components.MiniPlayer
 import com.local.listentomusic.ui.components.AppBackground
 import com.local.listentomusic.data.AppBackgroundMode
+import com.local.listentomusic.model.LocalLyrics
 import com.local.listentomusic.ui.theme.GreaterArtTheme
 
 private enum class Screen { LIBRARY, NOW_PLAYING, SETTINGS }
@@ -48,6 +49,7 @@ private enum class Screen { LIBRARY, NOW_PLAYING, SETTINGS }
 @Composable
 fun GreaterArtApp(
     viewModel: MainViewModel,
+    openPlayerRequest: Int,
     isPictureInPicture: Boolean,
     onPlayerScreenChanged: (Boolean) -> Unit,
     onVideoBoundsChanged: (Rect) -> Unit,
@@ -102,7 +104,14 @@ fun GreaterArtApp(
     val artwork by produceState<Bitmap?>(initialValue = null, key1 = playback.currentPath) {
         value = viewModel.loadCurrentArtwork(playback.currentPath)
     }
+    val lyrics by produceState<LocalLyrics?>(initialValue = null, key1 = playback.currentPath) {
+        value = viewModel.loadLyrics(playback.currentPath)
+    }
     var screen by rememberSaveable { mutableStateOf(Screen.LIBRARY) }
+
+    LaunchedEffect(openPlayerRequest, playback.hasMedia) {
+        if (openPlayerRequest > 0 && playback.hasMedia) screen = Screen.NOW_PLAYING
+    }
 
     LaunchedEffect(screen) {
         onPlayerScreenChanged(screen == Screen.NOW_PLAYING)
@@ -195,6 +204,8 @@ fun GreaterArtApp(
                         playback = playback,
                         artwork = artwork,
                         queue = queue,
+                        lyrics = lyrics,
+                        showFileDetails = settings.showFileDetails,
                         language = settings.appLanguage,
                         controller = controller,
                         contentPadding = PaddingValues(0.dp),
