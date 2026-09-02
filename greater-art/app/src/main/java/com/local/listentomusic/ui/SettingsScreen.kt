@@ -91,6 +91,7 @@ fun SettingsScreen(
     onAppFont: (AppFont) -> Unit,
     onDeveloperMode: (Boolean) -> Unit,
     onEditableQueue: (Boolean) -> Unit,
+    onSilianRail: (Boolean) -> Unit,
     onImportM3u: () -> Unit,
     onExportM3u: () -> Unit,
     onBackgroundMode: (AppBackgroundMode) -> Unit,
