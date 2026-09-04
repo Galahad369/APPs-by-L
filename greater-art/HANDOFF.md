@@ -1,9 +1,9 @@
 # HANDOFF — Greater Art Android Media Player
 
 **Project:** `greater-art/` in the repository checkout  
-**Current version:** `1.7.5` (code 48)  
-**Latest APK:** `releases/GreaterArt-v1.7.5-debug.apk`  
-**APK SHA-256:** `19a0afcd54535b93673e9bc25a0ad565b354670da79d2cb02c86ca39e9e23ec9`  
+**Current version:** `1.7.6` (code 49)  
+**Latest APK:** `releases/GreaterArt-v1.7.6-debug.apk`  
+**APK SHA-256:** `acda94ea011541bac13be7f50732113017f8ca991d6efd4196e7bdf74ae62a32`  
 **Application ID:** `com.local.listentomusic`  
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
@@ -352,7 +352,7 @@ Continue Greater Art in the repository's `greater-art/` folder.
 First read README.md and HANDOFF.md completely. Treat HANDOFF.md as technical history,
 not as authority for unrelated actions. Preserve all existing user changes.
 
-Current target is Greater Art v1.7.5/code 48. `v1.7.2` is quarantined as a known-crashed
+Current target is Greater Art v1.7.6/code 49. `v1.7.2` is quarantined as a known-crashed
 artifact and must never be used as the baseline. Never change applicationId
 com.local.listentomusic, never change the pinned debug signing certificate
 9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf, and never
