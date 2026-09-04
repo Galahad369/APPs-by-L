@@ -76,7 +76,7 @@ fun GreaterArtTheme(
     MaterialTheme(
         colorScheme = if (dark) DarkColors else LightColors,
         shapes = RoundedShapes,
-        typography = typographyFor(if (silianRail) AppFont.GARAMOND else appFont, silianRail),
+        typography = typographyFor(if (silianRail) AppFont.SILIAN_RAIL else appFont, silianRail),
         content = content,
     )
 }
@@ -91,7 +91,7 @@ private fun typographyFor(font: AppFont, smallCaps: Boolean): Typography {
         AppFont.INTER -> FontFamily(Font(R.font.inter))
         AppFont.NUNITO -> FontFamily(Font(R.font.nunito))
         AppFont.OSWALD -> FontFamily(Font(R.font.oswald))
-        AppFont.GARAMOND -> FontFamily(Font(R.font.garamond))
+        AppFont.SILIAN_RAIL -> FontFamily(Font(R.font.garamond))
         AppFont.PLAYFAIR_DISPLAY -> FontFamily(Font(R.font.playfair_display))
         AppFont.ROBOTO_SLAB -> FontFamily(Font(R.font.roboto_slab))
         AppFont.SOURCE_CODE_PRO -> FontFamily(Font(R.font.source_code_pro))

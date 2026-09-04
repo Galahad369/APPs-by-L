@@ -175,17 +175,11 @@ fun SettingsScreen(
                 ChoiceSetting(
                                     uiText(language, "Text style", "文字字型"),
                                     "",
-                                    AppFont.entries.filterNot { it == AppFont.GARAMOND },
+                                    AppFont.entries,
                                     preferences.appFont,
-                    { it.label },
-                    onAppFont,
-                )
-                SwitchSetting(
-                    "Silian Rail",
-                    uiText(language, "Pierce & Pierce mode — Garamond small caps. Reversible and off by default.", "Pierce & Pierce 模式 — Garamond 小型大寫。可隨時關閉，預設停用。"),
-                    preferences.silianRail,
-                    onSilianRail,
-                )
+                                    { it.label },
+                                    onAppFont,
+                                )
                 ChoiceSetting(
                     uiText(language, "App background", "應用程式背景"),
                     uiText(language, "Default is animated black liquid metal. Custom video backgrounds are always muted.", "預設為黑色液態金屬動畫。自訂影片背景永遠靜音。"),

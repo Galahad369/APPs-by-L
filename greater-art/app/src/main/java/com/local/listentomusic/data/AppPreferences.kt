@@ -53,8 +53,8 @@ enum class AppLanguage { ENGLISH, TRADITIONAL_CHINESE }
 enum class AppBackgroundMode { DEFAULT, CUSTOM_IMAGE, CUSTOM_VIDEO, CURRENT_VIDEO }
 enum class AppFont(val label: String) {
     SYSTEM("System"), SANS_SERIF("Sans serif"), SERIF("Serif"), MONOSPACE("Monospace"),
-        CURSIVE("Cursive"), INTER("Inter"), NUNITO("Nunito"), OSWALD("Oswald"),
-        GARAMOND("Garamond"), PLAYFAIR_DISPLAY("Playfair Display"), ROBOTO_SLAB("Roboto Slab"), SOURCE_CODE_PRO("Source Code Pro")
+    CURSIVE("Cursive"), INTER("Inter"), NUNITO("Nunito"), OSWALD("Oswald"),
+    SILIAN_RAIL("Silian Rail"), PLAYFAIR_DISPLAY("Playfair Display"), ROBOTO_SLAB("Roboto Slab"), SOURCE_CODE_PRO("Source Code Pro")
 }
 
 data class LocalPlaylist(
