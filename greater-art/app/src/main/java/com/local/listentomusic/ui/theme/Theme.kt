@@ -90,6 +90,7 @@ private fun typographyFor(font: AppFont): Typography {
         AppFont.INTER -> FontFamily(Font(R.font.inter))
         AppFont.NUNITO -> FontFamily(Font(R.font.nunito))
         AppFont.OSWALD -> FontFamily(Font(R.font.oswald))
+        AppFont.GARAMOND -> FontFamily(Font(R.font.playfair_display))
         AppFont.PLAYFAIR_DISPLAY -> FontFamily(Font(R.font.playfair_display))
         AppFont.ROBOTO_SLAB -> FontFamily(Font(R.font.roboto_slab))
         AppFont.SOURCE_CODE_PRO -> FontFamily(Font(R.font.source_code_pro))

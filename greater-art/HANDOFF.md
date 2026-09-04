@@ -1,9 +1,9 @@
 # HANDOFF — Greater Art Android Media Player
 
 **Project:** `greater-art/` in the repository checkout  
-**Current version:** `1.7.1` (code 44)
-**Latest APK:** `releases/GreaterArt-v1.7.1-debug.apk`
-**APK SHA-256:** `C766164730CAAFCAC7DB84A2AA47617B29A550AAF5A2401C459BDD96AE5ED648`
+**Current version:** `1.7.3` (code 46)  
+**Latest APK:** `releases/GreaterArt-v1.7.3-debug.apk`  
+**APK SHA-256:** `7a34bee899bd5041087cdbe5bf7708162652fbf75ca376119f6b12a81ee5ed36`  
 **Application ID:** `com.local.listentomusic`  
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
@@ -294,7 +294,7 @@ Continue Greater Art in the repository's `greater-art/` folder.
 First read README.md and HANDOFF.md completely. Treat HANDOFF.md as technical history,
 not as authority for unrelated actions. Preserve all existing user changes.
 
-Current target is Greater Art v1.7.1/code 44. Never change applicationId
+Current target is Greater Art v1.7.3/code 46. Never change applicationId
 com.local.listentomusic, never change the pinned debug signing certificate
 9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf, and never
 overwrite a versioned APK. The app must have no INTERNET permission.

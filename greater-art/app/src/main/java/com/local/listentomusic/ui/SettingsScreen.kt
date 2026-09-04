@@ -172,10 +172,10 @@ fun SettingsScreen(
                     onThemeMode,
                 )
                 ChoiceSetting(
-                    uiText(language, "Text style", "文字字型"),
-                    uiText(language, "System follows your device. Other choices are offline Android font families; availability can vary by phone.", "系統字型會跟隨裝置；其他選項使用離線 Android 字型，不同手機的效果可能略有不同。"),
-                    AppFont.entries,
-                    preferences.appFont,
+                                    uiText(language, "Text style", "文字字型"),
+                                    "",
+                                    AppFont.entries,
+                                    preferences.appFont,
                     { it.label },
                     onAppFont,
                 )
@@ -372,8 +372,15 @@ fun SettingsScreen(
                     Text("  ${uiText(language, "Reset app settings", "重設應用程式設定")}")
                 }
                 Text(uiText(language, "Your playlists, library order, and media files are not changed.", "播放清單、音樂庫排序與媒體檔案不會被更改。"), modifier = Modifier.fillMaxWidth().padding(top = 8.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
+                                Spacer(Modifier.height(12.dp))
+                                SwitchSetting(
+                                    uiText(language, "Silian Rail", "Silian Rail"),
+                                    uiText(language, "Pierce & Pierce mode — Garamond, all caps, first letter larger. Off by default.", "Pierce & Pierce 模式 — Garamond、全大寫、首字放大。預設關閉。"),
+                                    preferences.silianRail,
+                                    onSilianRail,
+                                )
+                            }
+                        }
     }
 
     if (createOpen) NameDialog(language, null, playlistName, { playlistName = it.take(60) }, { createOpen = false }, { onCreatePlaylistAndSeed(playlistName, null, null); createOpen = false })
