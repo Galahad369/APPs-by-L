@@ -67,7 +67,7 @@ Current release artifact:
 
 ```text
 releases/GreaterArt-v1.7.5-debug.apk
-SHA-256: 2d6a3c19022df1222bd172ab68af2e75e13f119ca7fc0ca0a6755c6e267a0553
+SHA-256: 19a0afcd54535b93673e9bc25a0ad565b354670da79d2cb02c86ca39e9e23ec9
 ```
 
 Versioned APKs are never overwritten. Builds remain signed by the pinned personal
