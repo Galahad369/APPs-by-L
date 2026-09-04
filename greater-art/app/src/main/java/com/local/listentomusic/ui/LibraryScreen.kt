@@ -290,10 +290,10 @@ fun LibraryScreen(
                         var lastRequestedStart = -1
                         snapshotFlow { listState.firstVisibleItemIndex }
                             .collect { index ->
-                                val start = ((index - 12).coerceAtLeast(0) / 24) * 24
+                                val start = ((index - 8).coerceAtLeast(0) / 48) * 48
                                 if (start != lastRequestedStart) {
                                     lastRequestedStart = start
-                                    onPreloadAhead(start, 96)
+                                    onPreloadAhead(start, 72)
                                 }
                             }
                     }

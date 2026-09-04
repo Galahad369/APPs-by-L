@@ -427,6 +427,9 @@ private fun AudioPlayer(
     onRemoveQueueItem: (Int) -> Unit,
 ) {
     val waveform by produceState<FloatArray?>(null, playback.currentPath) {
+        // Playback and artwork get the first frame; stale requests are cancelled by
+        // produceState when the user skips rapidly.
+        delay(350)
         value = playback.currentPath?.let { onLoadWaveform(it) }
     }
     BoxWithConstraints(
@@ -837,14 +840,14 @@ private fun WaveformTimeline(
                 val bars = waveform?.size ?: 72
                 val spacing = size.width / bars
                 repeat(bars) { index ->
-                    val wave = waveform?.getOrNull(index) ?: 0.08f
-                    val barHeight = size.height * (0.16f + wave * 0.78f)
+                    val wave = waveform?.getOrNull(index) ?: 0.025f
+                    val barHeight = size.height * (0.06f + wave * 0.90f)
                     val x = spacing * (index + 0.5f)
                     drawLine(
                         color = if ((index + 1f) / bars <= fraction) active else inactive,
                         start = Offset(x, (size.height - barHeight) / 2f),
                         end = Offset(x, (size.height + barHeight) / 2f),
-                        strokeWidth = 2.dp.toPx(),
+                        strokeWidth = 2.25.dp.toPx(),
                         cap = StrokeCap.Round,
                     )
                 }

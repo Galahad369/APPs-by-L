@@ -47,8 +47,8 @@ data class ThumbnailStats(
 class ThumbnailRepository(context: Context) {
     private val cacheDirectory = File(context.cacheDir, "media_thumbnails").apply { mkdirs() }
     private val keyLocks = ConcurrentHashMap<String, Mutex>()
-    // Three workers keep the first screen moving without opening hundreds of
-    // retrievers at once. Visible requests still bypass this background gate.
+    // Two workers keep warmup from competing with scrolling and playback.
+    // Visible requests still bypass this background gate.
     private val preloadWorkers = Semaphore(3)
     private val recentFailures = ConcurrentHashMap<String, Long>()
     private val _stats = MutableStateFlow(ThumbnailStats())
@@ -185,7 +185,7 @@ class ThumbnailRepository(context: Context) {
         while (bounds.outWidth / sample > width * 2 || bounds.outHeight / sample > height * 2) sample *= 2
         return BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply {
             inSampleSize = sample
-            inPreferredConfig = Bitmap.Config.ARGB_8888
+            inPreferredConfig = Bitmap.Config.RGB_565
         })
     }
 
@@ -198,7 +198,7 @@ class ThumbnailRepository(context: Context) {
         }
         val options = BitmapFactory.Options().apply {
             inSampleSize = sample
-            inPreferredConfig = Bitmap.Config.ARGB_8888
+            inPreferredConfig = Bitmap.Config.RGB_565
         }
         return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
     }
@@ -234,11 +234,11 @@ class ThumbnailRepository(context: Context) {
         runCatching {
             FileOutputStream(temporary).use { output ->
                 val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    Bitmap.CompressFormat.WEBP_LOSSLESS
+                    Bitmap.CompressFormat.WEBP_LOSSY
                 } else {
                     Bitmap.CompressFormat.PNG
                 }
-                check(bitmap.compress(format, 100, output))
+                check(bitmap.compress(format, 92, output))
             }
             if (!temporary.renameTo(destination)) {
                 temporary.copyTo(destination, overwrite = true)
@@ -277,7 +277,7 @@ class ThumbnailRepository(context: Context) {
         const val ARTWORK_SIZE = 512
         const val MAX_DISK_FILES = 600
         const val MAX_DISK_BYTES = 256L * 1024L * 1024L
-        const val PRELOAD_COROUTINES = 3
+        const val PRELOAD_COROUTINES = 2
         const val FAILURE_RETRY_MS = 30_000L
         val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "bmp")
         val FOLDER_ART_NAMES = setOf("cover", "folder", "front", "album", "artwork")
