@@ -67,11 +67,12 @@ fun AppBackground(
             AppBackgroundMode.CUSTOM_VIDEO -> preferences.customBackgroundVideoUri
                 ?.let(Uri::parse)
                 ?.let { BackgroundVideo(source = it, shouldPlay = true) }
-            // Reuse the real playback decoder. A second ExoPlayer for the same file
-            // exhausted the single hardware video decoder on some phones: audio kept
-            // playing while the foreground PlayerView stayed black.
-            AppBackgroundMode.CURRENT_VIDEO -> if (currentVideoUri != null) {
-                ExistingPlayerBackground(controller)
+            AppBackgroundMode.CURRENT_VIDEO -> currentVideoUri?.let {
+                BackgroundVideo(
+                    source = it,
+                    shouldPlay = playback.isPlaying,
+                    syncPositionMs = playback.positionMs,
+                )
             }
         }
         val isLight = androidx.compose.material3.MaterialTheme.colorScheme.background.luminance() > 0.5f
@@ -79,23 +80,6 @@ fun AppBackground(
         val veil = if (mode == AppBackgroundMode.DEFAULT && isLight) Color.White else Color.Black
         Box(Modifier.matchParentSize().background(veil.copy(alpha = dim)))
     }
-}
-
-@Composable
-private fun ExistingPlayerBackground(controller: MediaController?) {
-    AndroidView(
-        factory = { context ->
-            PlayerView(context).apply {
-                useController = false
-                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                setKeepContentOnPlayerReset(true)
-                player = controller
-            }
-        },
-        update = { view -> if (view.player !== controller) view.player = controller },
-        onRelease = { it.player = null },
-        modifier = Modifier.fillMaxSize(),
-    )
 }
 
 @Composable
