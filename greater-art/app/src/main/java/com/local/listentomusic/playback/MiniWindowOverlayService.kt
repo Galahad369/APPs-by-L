@@ -60,8 +60,8 @@ class MiniWindowOverlayService : Service() {
 
     // The visible target sits immediately above the real navigation-bar inset.
     // A larger invisible hit box makes the drop reliable while the visible X stays compact.
-    private val crossHitSize = 92
-    private val crossSize = 56
+    private val crossHitSize = 72
+    private val crossSize = 44
     private val crossMargin = 12
 
     private var downX = 0f
