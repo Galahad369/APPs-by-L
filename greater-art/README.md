@@ -7,7 +7,7 @@ ads, analytics, accounts, telemetry, or network access.
 ## Features
 
 - Recursive local scan of `Download` with a staged 300-item thumbnail warmup, bounded
-  two-worker cache pipeline, embedded artwork and same-name/folder-cover fallback.
+  three-worker cache pipeline, embedded artwork and same-name/folder-cover fallback.
 - Media3 playback for audio and video through one `MediaSessionService`.
 - Library search, custom drag order, name sorting, local playlists and M3U/M3U8 import/export.
 - Repeat-one default, gapless-friendly queues, speed controls, seek, next and previous.
@@ -31,7 +31,11 @@ ads, analytics, accounts, telemetry, or network access.
 - English and Traditional Chinese interface options.
 - Dark/black liquid metal by default; light mode uses white liquid metal.
 - System text style by default plus platform families and six bundled open-licensed fonts.
-- Optional copyable developer diagnostics panel; disabled by default and fully local.
+- Optional full-screen developer inspector with live player, first-frame, cache,
+  waveform, permission and UI-region facts; disabled by default and fully local.
+- Optional reversible `Silian Rail` mode uses bundled EB Garamond small caps and the
+  in-app `PIERCE&PIERCE` identity. It is deliberately last in the font choices.
+- Restrained technical-grid liquid metal and a flat waveform/stylus launcher mark.
 - The visible app keeps the display awake while still honoring the hardware lock key.
 
 Custom backgrounds use Android's document picker and persist only the selected file's
@@ -62,8 +66,8 @@ $env:GRADLE_USER_HOME = Join-Path $env:USERPROFILE '.gradle'
 Current release artifact:
 
 ```text
-releases/GreaterArt-v1.7.3-debug.apk
-SHA-256: 7a34bee899bd5041087cdbe5bf7708162652fbf75ca376119f6b12a81ee5ed36
+releases/GreaterArt-v1.7.5-debug.apk
+SHA-256: 2d6a3c19022df1222bd172ab68af2e75e13f119ca7fc0ca0a6755c6e267a0553
 ```
 
 Versioned APKs are never overwritten. Builds remain signed by the pinned personal
@@ -111,17 +115,24 @@ app/src/main/java/com/local/listentomusic/
   removes both services and the Activity task.
 - The red-X hit test reads both attached overlay bounds from Android; never rebuild
   its position from raw display metrics, which drift around gesture navigation bars.
+- The red-X collision is circular. Rectangle intersection accepted invisible corner
+  pixels outside the visible ring and made the real quit zone look offset.
 - Android overlay coordinates are already constrained around Samsung system bars;
   adding the navigation inset twice placed the red X too high. Keep the target at the
   overlay frame's bottom margin and compare actual attached rectangles.
 - Android 12 automatic PiP must be disabled whenever Mini window is selected. If it
   remains armed, system PiP wins before `onUserLeaveHint` can launch the tiny overlay.
 - Thumbnail warmup and visible-list lookahead use separate jobs. Reusing one job made
-  every scroll event cancel the previous preload before it could finish.
+  every scroll event cancel the previous preload before it could finish. Prefetch
+  preserves visible queue order so video-heavy sorting cannot starve nearby audio art.
 - Startup scan requests are deduplicated, and the 300-thumbnail pass is staged after
   the visible 24 rows to prevent first-launch layout/I/O shaking.
 - Real waveforms decode on a worker and keep only normalized peaks; playback never
-  waits for waveform generation.
+  waits for waveform generation. Audio transitions warm the cache even before the
+  waveform UI requests it; WAV receives a direct PCM parser before codec fallback.
+- Never create a second decoder for the currently playing video background. On phones
+  with one hardware video decoder, that caused sound with a black foreground surface.
+  Reuse the MediaController and detach old PlayerViews when media/screen changes.
 - The player owns one repeat cycle (`Off → One → All → Random`). Random is Media3
   shuffle state inside that cycle, not a second button or a queue rebuild.
 - Mini-window launch intents carry an explicit open-player request. Activity intent
@@ -143,3 +154,7 @@ so installation, OEM overlay behavior and real codec playback still require a ph
 smoke test.
 
 Bundled font licenses are packaged under `app/src/main/assets/font_licenses/`.
+
+`v1.7.2` is retained only as known-crashed forensic history. It is not a supported
+baseline or release recommendation. No device logcat was captured for that build, so
+its exact crash signature is intentionally not guessed.

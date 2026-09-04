@@ -96,6 +96,9 @@ data class PlaybackUiState(
     val hasNext: Boolean = false,
     val hasPrevious: Boolean = false,
     val videoAspectRatio: Float = 16f / 9f,
+    val videoWidth: Int = 0,
+    val videoHeight: Int = 0,
+    val videoFrameRendered: Boolean = false,
     val errorMessage: String? = null,
     val appLanguage: AppLanguage = AppLanguage.ENGLISH,
 ) {
@@ -112,6 +115,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val preferences = AppPreferences(application)
     private val thumbnailRepository = ThumbnailRepository(application)
     private val waveformRepository = WaveformRepository(application)
+    val thumbnailStats = thumbnailRepository.stats
+    val waveformDiagnostics = waveformRepository.diagnostics
     private var userPreferences = UserPreferences()
     private var scannedFiles: List<MediaFile> = emptyList()
     private var orderedFiles: List<MediaFile> = emptyList()
@@ -148,6 +153,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val probedDurations = mutableMapOf<String, Long>()
     private var pendingPlay: MediaFile? = null
     private var lastPlaybackError: String? = null
+    private var videoFrameRendered = false
 
     private val playerListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) = publishPlayback(player)
@@ -162,9 +168,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            videoFrameRendered = false
+            mediaItem?.mediaId?.let { path ->
+                val file = scannedFiles.firstOrNull { it.path == path }
+                if (file?.kind == com.local.listentomusic.model.MediaKind.AUDIO) {
+                    viewModelScope.launch { loadWaveform(path) }
+                }
+            }
             // Sleep timer in "end of track" mode fires when the next item lands.
             val timer = _sleepTimer.value
             if (timer.active && timer.endOfTrack) cancelSleepTimer()
+        }
+
+        override fun onRenderedFirstFrame() {
+            videoFrameRendered = true
+            _controller.value?.let(::publishPlayback)
         }
     }
 
@@ -478,7 +496,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun clearThumbnailCache() {
-        viewModelScope.launch { thumbnailRepository.clear() }
+        viewModelScope.launch {
+            thumbnailRepository.clear()
+            waveformRepository.clear()
+        }
     }
 
     fun resetAppSettings() {
@@ -652,6 +673,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             hasNext = player.hasNextMediaItem(),
             hasPrevious = player.hasPreviousMediaItem() || player.currentPosition > 0,
             videoAspectRatio = videoAspectRatio,
+            videoWidth = videoSize.width,
+            videoHeight = videoSize.height,
+            videoFrameRendered = videoFrameRendered,
             errorMessage = lastPlaybackError,
         )
         // Skip identical emits. Every StateFlow update triggers a

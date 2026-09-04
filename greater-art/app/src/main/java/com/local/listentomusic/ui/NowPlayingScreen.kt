@@ -78,6 +78,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -158,7 +159,7 @@ fun NowPlayingScreen(
 
     if (isPictureInPicture && playback.isVideo) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
-            VideoSurface(controller, onVideoBoundsChanged, Modifier.fillMaxSize())
+            VideoSurface(playback.currentPath, controller, onVideoBoundsChanged, Modifier.fillMaxSize())
         }
         return
     }
@@ -299,7 +300,7 @@ private fun VideoPlayerStage(
         },
         contentAlignment = Alignment.Center,
     ) {
-        VideoSurface(controller, onVideoBoundsChanged, Modifier.fillMaxSize())
+        VideoSurface(playback.currentPath, controller, onVideoBoundsChanged, Modifier.fillMaxSize())
 
         AnimatedVisibility(
             visible = controlsVisible,
@@ -1107,11 +1108,13 @@ private fun OverlayIconButton(
 
 @Composable
 private fun VideoSurface(
+    mediaKey: String?,
     controller: MediaController?,
     onBoundsChanged: (Rect) -> Unit,
     modifier: Modifier,
 ) {
-    AndroidView(
+    key(mediaKey, controller) {
+        AndroidView(
         factory = { context ->
             PlayerView(context).apply {
                 layoutParams = FrameLayout.LayoutParams(
@@ -1124,7 +1127,8 @@ private fun VideoSurface(
                 player = controller
             }
         },
-        update = { it.player = controller },
+        update = { view -> if (view.player !== controller) view.player = controller },
+        onRelease = { it.player = null },
         modifier = modifier.onGloballyPositioned { coordinates ->
             val bounds = coordinates.boundsInWindow()
             onBoundsChanged(
@@ -1136,7 +1140,8 @@ private fun VideoSurface(
                 )
             )
         },
-    )
+        )
+    }
 }
 
 @Composable

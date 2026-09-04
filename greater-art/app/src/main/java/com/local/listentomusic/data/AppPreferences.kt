@@ -277,6 +277,7 @@ class AppPreferences(private val context: Context) {
             it.remove(Keys.appFont)
             it.remove(Keys.developerMode)
             it.remove(Keys.editableQueue)
+            it.remove(Keys.silianRail)
             it[Keys.speed] = 1f
             it[Keys.repeatMode] = Player.REPEAT_MODE_ONE.toLong()
         }

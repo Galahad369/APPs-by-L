@@ -20,12 +20,24 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.math.max
+
+data class ThumbnailStats(
+    val memoryHits: Int = 0,
+    val diskHits: Int = 0,
+    val generated: Int = 0,
+    val failed: Int = 0,
+    val inFlight: Int = 0,
+)
 
 /**
  * Local-only thumbnail pipeline:
@@ -35,7 +47,12 @@ import kotlin.math.max
 class ThumbnailRepository(context: Context) {
     private val cacheDirectory = File(context.cacheDir, "media_thumbnails").apply { mkdirs() }
     private val keyLocks = ConcurrentHashMap<String, Mutex>()
-    private val preloadWorkers = Semaphore(2)
+    // Three workers keep the first screen moving without opening hundreds of
+    // retrievers at once. Visible requests still bypass this background gate.
+    private val preloadWorkers = Semaphore(3)
+    private val recentFailures = ConcurrentHashMap<String, Long>()
+    private val _stats = MutableStateFlow(ThumbnailStats())
+    val stats: StateFlow<ThumbnailStats> = _stats.asStateFlow()
     private val memoryCache = object : LruCache<String, Bitmap>(memoryBudgetKb()) {
         override fun sizeOf(key: String, value: Bitmap): Int = max(1, value.byteCount / 1024)
     }
@@ -46,7 +63,12 @@ class ThumbnailRepository(context: Context) {
 
     suspend fun load(file: MediaFile): Bitmap? = withContext(Dispatchers.IO) {
         val key = cacheKey(file)
-        memoryCache.get(key)?.let { return@withContext it }
+        memoryCache.get(key)?.let {
+            _stats.update { value -> value.copy(memoryHits = value.memoryHits + 1) }
+            return@withContext it
+        }
+        if (System.currentTimeMillis() - (recentFailures[key] ?: 0L) < FAILURE_RETRY_MS) return@withContext null
+        _stats.update { it.copy(inFlight = it.inFlight + 1) }
 
         val mutex = keyLocks.computeIfAbsent(key) { Mutex() }
         try {
@@ -54,21 +76,31 @@ class ThumbnailRepository(context: Context) {
                 memoryCache.get(key)?.let { return@withLock it }
                 readDisk(key)?.let {
                     memoryCache.put(key, it)
+                    _stats.update { value -> value.copy(diskHits = value.diskHits + 1) }
                     return@withLock it
                 }
 
-                val generated = generate(file) ?: return@withLock null
+                val generated = generate(file) ?: run {
+                    recentFailures[key] = System.currentTimeMillis()
+                    _stats.update { value -> value.copy(failed = value.failed + 1) }
+                    return@withLock null
+                }
                 memoryCache.put(key, generated)
                 writeDisk(key, generated)
+                recentFailures.remove(key)
+                _stats.update { value -> value.copy(generated = value.generated + 1) }
                 generated
             }
         } finally {
             keyLocks.remove(key, mutex)
+            _stats.update { it.copy(inFlight = (it.inFlight - 1).coerceAtLeast(0)) }
         }
     }
 
     suspend fun preload(files: List<MediaFile>) = supervisorScope {
-        val queue = ConcurrentLinkedQueue(files.sortedByDescending { it.kind == MediaKind.VIDEO })
+        // Preserve caller priority. Sorting every video before audio starved the
+        // actually visible rows in mixed libraries.
+        val queue = ConcurrentLinkedQueue(files.distinctBy(MediaFile::path))
         List(PRELOAD_COROUTINES) {
             async(Dispatchers.IO) {
                 while (true) {
@@ -82,6 +114,7 @@ class ThumbnailRepository(context: Context) {
 
     suspend fun clear() = withContext(Dispatchers.IO) {
         memoryCache.evictAll()
+        recentFailures.clear()
         cacheDirectory.listFiles()?.forEach { it.delete() }
         Unit
     }
@@ -244,7 +277,8 @@ class ThumbnailRepository(context: Context) {
         const val ARTWORK_SIZE = 512
         const val MAX_DISK_FILES = 600
         const val MAX_DISK_BYTES = 256L * 1024L * 1024L
-        const val PRELOAD_COROUTINES = 2
+        const val PRELOAD_COROUTINES = 3
+        const val FAILURE_RETRY_MS = 30_000L
         val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "bmp")
         val FOLDER_ART_NAMES = setOf("cover", "folder", "front", "album", "artwork")
     }

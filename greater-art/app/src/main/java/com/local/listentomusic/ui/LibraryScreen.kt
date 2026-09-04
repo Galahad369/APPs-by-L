@@ -86,6 +86,7 @@ import kotlin.math.abs
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
+    appName: String,
     state: LibraryUiState,
     preferences: UserPreferences,
     currentPath: String?,
@@ -141,7 +142,7 @@ fun LibraryScreen(
                         }
                         Spacer(Modifier.width(11.dp))
                         Column {
-                            Text("Greater Art", fontWeight = FontWeight.ExtraBold)
+                            Text(appName, fontWeight = FontWeight.ExtraBold)
                             Text(
                                 uiText(language, "${state.files.size} files • offline", "${state.files.size} 個檔案 • 離線"),
                                 style = MaterialTheme.typography.labelSmall,
@@ -282,19 +283,17 @@ fun LibraryScreen(
                     )
                 } else {
                     val listState = rememberLazyListState()
-                    // The first 300 thumbnails warm in the background. Request later
-                    // windows only once per 100 rows; cancelling on every scroll index
-                    // previously prevented either preload from completing.
+                    // Keep a priority window around the viewport. The repository also
+                    // warms 300 items in the background, but visible-nearby work must
+                    // never wait behind the whole batch.
                     LaunchedEffect(listState) {
                         var lastRequestedStart = -1
                         snapshotFlow { listState.firstVisibleItemIndex }
                             .collect { index ->
-                                if (index >= 240) {
-                                    val start = 300 + ((index - 240) / 100) * 100
-                                    if (start != lastRequestedStart) {
-                                        lastRequestedStart = start
-                                        onPreloadAhead(start, 140)
-                                    }
+                                val start = ((index - 12).coerceAtLeast(0) / 24) * 24
+                                if (start != lastRequestedStart) {
+                                    lastRequestedStart = start
+                                    onPreloadAhead(start, 96)
                                 }
                             }
                     }

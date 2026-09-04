@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Rect
 import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
@@ -273,7 +274,11 @@ class MiniWindowOverlayService : Service() {
     }
 
     private fun buildCross() {
-        crossView = FrameLayout(this)
+        crossView = FrameLayout(this).apply {
+            // This circle is the real hit area—not decoration with a different size.
+            // Its faint fill makes the exact quit zone visible without shouting.
+            background = crossTargetDrawable(active = false)
+        }
         crossImg = ImageView(this).apply { setImageResource(R.drawable.ic_red_cross) }
         crossView?.addView(crossImg!!, FrameLayout.LayoutParams(dp(crossSize), dp(crossSize)).apply { gravity = Gravity.CENTER })
         crossView?.visibility = View.INVISIBLE
@@ -345,7 +350,7 @@ class MiniWindowOverlayService : Service() {
                 val dy = event.rawY - downY
                 if (!dragging && (abs(dx) > 8 || abs(dy) > 8)) {
                     dragging = true
-                    crossImg?.alpha = 0.5f
+                    updateCrossAppearance(false)
                     crossView?.visibility = View.VISIBLE
                 }
                 if (dragging) {
@@ -354,7 +359,7 @@ class MiniWindowOverlayService : Service() {
                     clampPosition()
                     updateRootLayout()
                     val overlap = miniOverlapsCross()
-                    crossImg?.alpha = if (overlap) 1f else 0.5f
+                    updateCrossAppearance(overlap)
                     return true
                 }
                 return true
@@ -380,6 +385,17 @@ class MiniWindowOverlayService : Service() {
         return false
     }
 
+    private fun updateCrossAppearance(active: Boolean) {
+        crossImg?.alpha = if (active) 1f else 0.72f
+        crossView?.background = crossTargetDrawable(active)
+    }
+
+    private fun crossTargetDrawable(active: Boolean) = GradientDrawable().apply {
+        shape = GradientDrawable.OVAL
+        setColor(if (active) 0x38FF3B30 else 0x16FF3B30)
+        setStroke(dp(if (active) 2 else 1), if (active) 0xCCFF453A.toInt() else 0x70FF453A)
+    }
+
     private fun clampPosition() {
         val layout = params ?: return
         val metrics = resources.displayMetrics
@@ -401,11 +417,16 @@ class MiniWindowOverlayService : Service() {
             miniLocation[0], miniLocation[1],
             miniLocation[0] + mini.width, miniLocation[1] + mini.height,
         )
-        val crossBounds = Rect(
-            crossLocation[0], crossLocation[1],
-            crossLocation[0] + cross.width, crossLocation[1] + cross.height,
-        )
-        return Rect.intersects(miniBounds, crossBounds)
+        // Match the visible circular target, not its square WindowManager bounds.
+        // Rect.intersects previously accepted invisible corner pixels outside the ring.
+        val centerX = crossLocation[0] + cross.width / 2f
+        val centerY = crossLocation[1] + cross.height / 2f
+        val nearestX = centerX.coerceIn(miniBounds.left.toFloat(), miniBounds.right.toFloat())
+        val nearestY = centerY.coerceIn(miniBounds.top.toFloat(), miniBounds.bottom.toFloat())
+        val dx = nearestX - centerX
+        val dy = nearestY - centerY
+        val radius = minOf(cross.width, cross.height) / 2f
+        return dx * dx + dy * dy <= radius * radius
     }
 
     private fun navigationBarInsetBottom(): Int {

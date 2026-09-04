@@ -3,6 +3,9 @@ package com.local.listentomusic.ui
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Rect
+import android.os.Build
+import android.os.Environment
+import android.provider.Settings
 
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -63,6 +66,8 @@ fun GreaterArtApp(
     val controller by viewModel.controller.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val sleepTimer by viewModel.sleepTimer.collectAsStateWithLifecycle()
+    val thumbnailStats by viewModel.thumbnailStats.collectAsStateWithLifecycle()
+    val waveformDiagnostics by viewModel.waveformDiagnostics.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val imageBackgroundPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -126,7 +131,12 @@ fun GreaterArtApp(
 
     BackHandler(enabled = screen != Screen.LIBRARY) { screen = Screen.LIBRARY }
 
-    GreaterArtTheme(themeMode = settings.themeMode, appFont = settings.appFont) {
+    val appName = if (settings.silianRail) "PIERCE&PIERCE" else "Greater Art"
+    GreaterArtTheme(
+        themeMode = settings.themeMode,
+        appFont = settings.appFont,
+        silianRail = settings.silianRail,
+    ) {
         val lightPalette = MaterialTheme.colorScheme.background.luminance() > 0.5f
         Box(modifier = Modifier.fillMaxSize()) {
             if (screen == Screen.NOW_PLAYING && playback.isVideo) {
@@ -134,7 +144,7 @@ fun GreaterArtApp(
                 // a decoder and animation frames on pixels the user cannot see.
                 Box(Modifier.fillMaxSize().background(Color.Black))
             } else {
-                AppBackground(preferences = settings, playback = playback)
+                AppBackground(preferences = settings, playback = playback, controller = controller)
             }
             Surface(
                 modifier = Modifier.fillMaxSize(),
@@ -182,6 +192,7 @@ fun GreaterArtApp(
                     },
                 ) { padding ->
                     LibraryScreen(
+                        appName = appName,
                         state = library,
                         preferences = settings,
                         currentPath = playback.currentPath,
@@ -238,6 +249,7 @@ fun GreaterArtApp(
                         onRemoveQueueItem = viewModel::removeQueueItem,
                     )
                 Screen.SETTINGS -> SettingsScreen(
+                    appName = appName,
                     preferences = settings,
                     playback = playback,
                     onBack = { screen = Screen.LIBRARY },
@@ -293,6 +305,14 @@ fun GreaterArtApp(
             }
             }
             if (settings.developerMode) {
+                val regions = when (screen) {
+                    Screen.LIBRARY -> listOf("LIBRARY_TOP_BAR", "SEARCH_AND_SORT", "MEDIA_LIST", "MINI_PLAYER")
+                    Screen.NOW_PLAYING -> listOf("MEDIA_STAGE", "TRACK_TITLE", "PLAYBACK_CONTROLS", "TIMELINE", "QUEUE", "LYRICS")
+                    Screen.SETTINGS -> listOf("SETTINGS_TOP_BAR", "APPEARANCE", "PLAYBACK", "SONG_LISTS", "CACHE", "PRIVACY")
+                }
+                val warning = playback.errorMessage != null ||
+                    (playback.isVideo && playback.isPlaying && playback.positionMs > 1_000L && !playback.videoFrameRendered) ||
+                    waveformDiagnostics.error != null
                 DeveloperDiagnostics(
                     report = buildString {
                         appendLine("version=${com.local.listentomusic.BuildConfig.VERSION_NAME}")
@@ -300,16 +320,23 @@ fun GreaterArtApp(
                         appendLine("media=${playback.currentPath ?: "none"}")
                         appendLine("playing=${playback.isPlaying} video=${playback.isVideo}")
                         appendLine("position=${playback.positionMs} duration=${playback.durationMs}")
+                        appendLine("playerState=${controller?.playbackState ?: -1} buffered=${controller?.bufferedPosition ?: 0L}")
+                        appendLine("video=${playback.videoWidth}x${playback.videoHeight} firstFrame=${playback.videoFrameRendered}")
                         appendLine("queue=${queue.size} library=${library.files.size}")
                         appendLine("repeat=${playback.repeatMode} random=${playback.shuffleEnabled}")
                         appendLine("floating=${settings.floatingWindowMode} auto=${settings.autoPictureInPicture}")
                         appendLine("background=${settings.backgroundMode} theme=${settings.themeMode}")
-                        appendLine("elements=${when (screen) {
-                            Screen.LIBRARY -> "search,sort,playlists,media_rows,mini_player,settings"
-                            Screen.NOW_PLAYING -> "art_or_video,title,transport,timeline,mode_controls,queue,lyrics"
-                            Screen.SETTINGS -> "appearance,playback,lists,cache,privacy,reset"
-                        }}")
+                        appendLine("thumbs=memory:${thumbnailStats.memoryHits} disk:${thumbnailStats.diskHits} made:${thumbnailStats.generated} failed:${thumbnailStats.failed} active:${thumbnailStats.inFlight}")
+                        appendLine("waveform=${waveformDiagnostics.status} file=${waveformDiagnostics.fileName ?: "none"}")
+                        appendLine("waveformError=${waveformDiagnostics.error ?: "none"}")
+                        val storageGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.R ||
+                            Environment.isExternalStorageManager()
+                        appendLine("storage=$storageGranted overlay=${Settings.canDrawOverlays(context)}")
+                        appendLine("device=${Build.MANUFACTURER} ${Build.MODEL} api=${Build.VERSION.SDK_INT}")
+                        appendLine("warning=$warning")
                     },
+                    regions = regions,
+                    warning = warning,
                     modifier = Modifier.align(Alignment.TopEnd),
                 )
             }

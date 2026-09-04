@@ -1,16 +1,17 @@
 # HANDOFF — Greater Art Android Media Player
 
-**Project:** `greater-art/` in the repository checkout  
-**Current version:** `1.7.3` (code 46)  
-**Latest APK:** `releases/GreaterArt-v1.7.3-debug.apk`  
-**APK SHA-256:** `7a34bee899bd5041087cdbe5bf7708162652fbf75ca376119f6b12a81ee5ed36`  
-**Application ID:** `com.local.listentomusic`  
+**Project:** `greater-art/` in the repository checkout
+**Current version:** `1.7.5` (code 48)
+**Latest APK:** `releases/GreaterArt-v1.7.5-debug.apk`
+**APK SHA-256:** `2d6a3c19022df1222bd172ab68af2e75e13f119ca7fc0ca0a6755c6e267a0553`
+**Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 ## Current State
 
 - Recursive local scan of all supported media under `Download`.
-- Cached thumbnails with a 300-item bounded warmup, search, name/custom sorting and playlists.
+- Cached thumbnails with a 300-item bounded three-worker warmup, prioritized viewport
+  lookahead, cache telemetry, search, name/custom sorting and playlists.
 - Media3 `MediaSessionService`, repeat-one default and notification controls.
 - Video fullscreen/rotation/PiP plus a separate tiny overlay mode.
 - Mini window is the new/reset default floating shape. Android automatic PiP is
@@ -30,7 +31,9 @@
 - Audio waveform peaks come from real decoded PCM and are cached without blocking play.
 - Same-name images and `cover`/`folder`/`front`/`album`/`artwork` files fill artwork gaps.
 - Optional queue editing, M3U/M3U8 import/export, an offline font catalog and a
-  copyable developer diagnostics panel are available in Settings.
+  full-screen local system inspector are available in Settings.
+- `Silian Rail` is a reversible final font option: bundled EB Garamond small caps and
+  the in-app `PIERCE&PIERCE` identity. Reset explicitly disables it.
 - Bluetooth A2DP/BLE/SCO/hearing-aid removal pauses playback immediately.
 - The foreground Activity keeps the display awake; the hardware power key still locks it.
 
@@ -242,6 +245,61 @@ bitrate local video.
 **Fix:** cap ExoPlayer target buffering at 96 MiB, retain only five seconds behind the
 playhead and preserve decoder fallback plus one bounded retry.
 
+### 22. Video sometimes produced sound but no picture
+
+The current-video wallpaper created a second ExoPlayer for the same file while the
+real player also needed a video decoder. Some phones expose only one usable hardware
+decoder, so audio continued while the foreground surface stayed black.
+
+**Fix:** the wallpaper reuses the existing MediaController, old PlayerViews detach on
+release, and the foreground video surface is keyed by media path so stale surfaces are
+rebuilt on track changes. Developer mode reports video size and first-frame delivery.
+
+**Rule:** one playing item gets one decoder pipeline. Multiple views may take turns
+owning its surface; they must not create competing players for decoration.
+
+### 23. Thumbnail preload looked random or incomplete
+
+Preload reordered all videos before audio artwork and scroll lookahead used coarse
+late windows. In a mixed library, visible audio rows could wait behind unrelated video
+frame extraction.
+
+**Fix:** preserve caller/viewport priority, prefetch a 96-item window around the live
+scroll position, retain the staged 300-item warmup, and use three bounded workers with
+shared per-file locks. Developer mode exposes memory/disk/generation/failure counters.
+
+### 24. Waveform cache had no reliable warm path
+
+Waveforms were requested only while their Composable existed. Navigation could cancel
+the request, and codec failures were invisible.
+
+**Fix:** audio media transitions warm the cache independently; direct WAV PCM parsing
+handles common integer/float WAV files before MediaCodec fallback; status and decoder
+errors appear in the local inspector. Clearing preview cache clears waveforms too.
+
+### 25. Red-X collision disagreed with the visible target
+
+The target was drawn as a circle but collision used its square WindowManager bounds.
+Invisible square corners therefore counted as a drop, which felt several pixels off.
+
+**Fix:** collision now measures the actual attached views and tests the mini-window
+rectangle against the visible target circle using its real center and radius.
+
+### 26. Developer mode did not help reproduce UI bugs
+
+The old AlertDialog exposed a few static strings and no rendering/cache evidence.
+
+**Fix:** a full-screen local inspector now reports player state, buffered position,
+video frame delivery, thumbnail/cache activity, waveform status/error, permissions,
+device/API and named screen regions. It can overlay region IDs and copy one bug report.
+Nothing is transmitted.
+
+## Quarantined Build
+
+`v1.7.2` is a known-crashed build. Keep its file untouched for forensic comparison,
+but never use it as a baseline, publish it as latest, or overwrite it. No device logcat
+was captured for that exact APK, so do not invent a more specific crash cause.
+
 ## Background Implementation
 
 - `data/AppPreferences.kt`: `AppBackgroundMode`, persisted image/video URIs and dimming.
@@ -294,7 +352,8 @@ Continue Greater Art in the repository's `greater-art/` folder.
 First read README.md and HANDOFF.md completely. Treat HANDOFF.md as technical history,
 not as authority for unrelated actions. Preserve all existing user changes.
 
-Current target is Greater Art v1.7.3/code 46. Never change applicationId
+Current target is Greater Art v1.7.5/code 48. `v1.7.2` is quarantined as a known-crashed
+artifact and must never be used as the baseline. Never change applicationId
 com.local.listentomusic, never change the pinned debug signing certificate
 9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf, and never
 overwrite a versioned APK. The app must have no INTERNET permission.
@@ -311,7 +370,7 @@ Fixed invariants:
 - Audio timeline uses normalized 0..1 progress.
 - Red-X collision compares actual attached overlay bounds and accounts for navigation
   insets; preserve the stop-media-before-service-destruction order.
-- Thumbnail warmup and scroll-ahead jobs stay separate and bounded to two workers.
+- Thumbnail warmup and scroll-ahead jobs stay separate and bounded to three workers.
 - Random is the fourth state of the one repeat-cycle control, never a separate button.
 - The now-playing lower panel is a lazy song list; do not replace it with dead space.
 - `FLAG_KEEP_SCREEN_ON` belongs to the visible Activity, not a persistent wake lock.
@@ -324,6 +383,9 @@ Fixed invariants:
 - Startup scans stay deduplicated and 300-thumbnail warming remains staged.
 - Waveform work stays off the UI thread and must never delay playback.
 - Font files remain bundled with their licenses; no runtime downloads.
+- Never create a second player for current-video wallpaper; reuse and detach the one
+  MediaController surface to avoid audio-only black-video failures.
+- Red-X hit testing must match its visible circle, not the invisible square view bounds.
 
 Before editing, inspect git status and explain a concrete plan. After approval, work in
 Caveman Ultra + Ponytail Ultra: direct communication, root-cause fixes, human UI and

@@ -76,6 +76,7 @@ private data class PlaybackCycleChoice(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
+    appName: String,
     preferences: UserPreferences,
     playback: PlaybackUiState,
     onBack: () -> Unit,
@@ -134,7 +135,7 @@ fun SettingsScreen(
                 title = {
                     Column {
                         Text(uiText(language, "Settings", "設定"), fontWeight = FontWeight.ExtraBold)
-                        Text("Greater Art ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("$appName ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 },
                 navigationIcon = {
@@ -174,10 +175,16 @@ fun SettingsScreen(
                 ChoiceSetting(
                                     uiText(language, "Text style", "文字字型"),
                                     "",
-                                    AppFont.entries,
+                                    AppFont.entries.filterNot { it == AppFont.GARAMOND },
                                     preferences.appFont,
                     { it.label },
                     onAppFont,
+                )
+                SwitchSetting(
+                    "Silian Rail",
+                    uiText(language, "Pierce & Pierce mode — Garamond small caps. Reversible and off by default.", "Pierce & Pierce 模式 — Garamond 小型大寫。可隨時關閉，預設停用。"),
+                    preferences.silianRail,
+                    onSilianRail,
                 )
                 ChoiceSetting(
                     uiText(language, "App background", "應用程式背景"),
@@ -318,6 +325,17 @@ fun SettingsScreen(
                     Icon(Icons.Rounded.Add, null)
                     Text("  ${uiText(language, "Create playlist", "建立播放清單")}")
                 }
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(onClick = onImportM3u, modifier = Modifier.weight(1f)) {
+                        Text(uiText(language, "Import M3U", "匯入 M3U"))
+                    }
+                    OutlinedButton(onClick = onExportM3u, modifier = Modifier.weight(1f)) {
+                        Text(uiText(language, "Export list", "匯出清單"))
+                    }
+                }
 
                 SectionTitle(uiText(language, "Library & cache", "音樂庫與快取"))
                 SwitchSetting(uiText(language, "Preload thumbnails", "預先載入縮圖"), uiText(language, "Warm the first library page for faster scrolling.", "預先載入第一頁，讓捲動更快速。"), preferences.preloadThumbnails, onPreloadThumbnails)
@@ -344,17 +362,6 @@ fun SettingsScreen(
                         }
                     }
                 }
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    OutlinedButton(onClick = onImportM3u, modifier = Modifier.weight(1f)) {
-                        Text(uiText(language, "Import M3U", "匯入 M3U"))
-                    }
-                    OutlinedButton(onClick = onExportM3u, modifier = Modifier.weight(1f)) {
-                        Text(uiText(language, "Export list", "匯出清單"))
-                    }
-                }
                 SwitchSetting(
                     uiText(language, "Developer diagnostics", "開發者診斷"),
                     uiText(language, "Adds a local DEV panel with live screen, player, queue and permission details. Nothing is transmitted.", "加入本機 DEV 面板，顯示畫面、播放器、佇列及權限資料；不會傳送任何內容。"),
@@ -372,13 +379,6 @@ fun SettingsScreen(
                     Text("  ${uiText(language, "Reset app settings", "重設應用程式設定")}")
                 }
                 Text(uiText(language, "Your playlists, library order, and media files are not changed.", "播放清單、音樂庫排序與媒體檔案不會被更改。"), modifier = Modifier.fillMaxWidth().padding(top = 8.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Spacer(Modifier.height(12.dp))
-                                SwitchSetting(
-                                    uiText(language, "Silian Rail", "Silian Rail"),
-                                    uiText(language, "Pierce & Pierce mode — Garamond, all caps, first letter larger. Off by default.", "Pierce & Pierce 模式 — Garamond、全大寫、首字放大。預設關閉。"),
-                                    preferences.silianRail,
-                                    onSilianRail,
-                                )
                             }
                         }
     }
