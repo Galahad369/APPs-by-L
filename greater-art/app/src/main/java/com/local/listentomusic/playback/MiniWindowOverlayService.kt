@@ -60,8 +60,8 @@ class MiniWindowOverlayService : Service() {
 
     // The visible target sits immediately above the real navigation-bar inset.
     // A larger invisible hit box makes the drop reliable while the visible X stays compact.
-    private val crossHitSize = 72
-    private val crossSize = 44
+    private val crossHitSize = 58
+    private val crossSize = 34
     private val crossMargin = 12
 
     private var downX = 0f
@@ -87,7 +87,6 @@ class MiniWindowOverlayService : Service() {
         private const val CHANNEL_ID = "greater_art_playback"
         const val EXTRA_STOP_APP = "stop_app"
         const val EXTRA_OPEN_PLAYER = "open_player"
-        const val ACTION_FALLBACK_COMPACT = "com.local.listentomusic.MINI_FALLBACK_COMPACT"
         private const val AUDIO_WIDTH = 124
         private const val AUDIO_HEIGHT = 40
         private const val VIDEO_WIDTH = 108
@@ -98,7 +97,6 @@ class MiniWindowOverlayService : Service() {
     override fun onCreate() {
         super.onCreate()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-            sendFallbackCompact()
             stopSelf()
             return
         }
@@ -120,8 +118,8 @@ class MiniWindowOverlayService : Service() {
         try {
             root?.let { wm?.addView(it, params!!) }
         } catch (t: Throwable) {
-            // Any root addView failure means the overlay cannot run; fall back to compact.
-            sendFallbackCompact()
+            // Keep the user's Mini preference intact. A temporary OEM overlay failure
+            // must not silently rewrite Settings to a different floating mode.
             stopSelf()
             return
         }
@@ -172,12 +170,6 @@ class MiniWindowOverlayService : Service() {
             NotificationChannel(CHANNEL_ID, "Mini window", NotificationManager.IMPORTANCE_LOW)
                 .apply { setShowBadge(false) },
         )
-    }
-
-    private fun sendFallbackCompact() {
-        // Switch MINI_WINDOW -> COMPACT so playback can still float.
-        val ctx = applicationContext
-        ctx.sendBroadcast(Intent(ACTION_FALLBACK_COMPACT).setPackage(ctx.packageName))
     }
 
     private fun openApp() {

@@ -149,6 +149,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var thumbnailAheadJob: Job? = null
     private var scanJob: Job? = null
     private var durationProbeJob: Job? = null
+    private var waveformWarmupJob: Job? = null
     private var durationProbePath: String? = null
     private val probedDurations = mutableMapOf<String, Long>()
     private var pendingPlay: MediaFile? = null
@@ -169,10 +170,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             videoFrameRendered = false
+            waveformWarmupJob?.cancel()
             mediaItem?.mediaId?.let { path ->
                 val file = scannedFiles.firstOrNull { it.path == path }
                 if (file?.kind == com.local.listentomusic.model.MediaKind.AUDIO) {
-                    viewModelScope.launch { loadWaveform(path) }
+                    waveformWarmupJob = viewModelScope.launch {
+                        // Give playback first claim on storage/codec resources.
+                        delay(600)
+                        loadWaveform(path)
+                    }
                 }
             }
             // Sleep timer in "end of track" mode fires when the next item lands.
@@ -384,7 +390,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         updatePreference { preferences.setAppFont(value) }
     fun setDeveloperMode(value: Boolean) = updatePreference { preferences.setDeveloperMode(value) }
     fun setEditableQueue(value: Boolean) = updatePreference { preferences.setEditableQueue(value) }
-    fun setSilianRail(value: Boolean) = updatePreference { preferences.setSilianRail(value) }
     fun setActivePlaylist(id: String?) = updatePreference { preferences.setActivePlaylist(id) }
 
     fun importM3u(uri: Uri) {
@@ -538,10 +543,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun warmThumbnailsInStages(files: List<MediaFile>) {
-        // Make the first viewport ready quickly, then yield between disk-heavy chunks.
+        // Let the first frame and visible rows settle before bulk disk work. Visible
+        // requests bypass this queue, so interaction stays responsive.
+        delay(300)
         thumbnailRepository.preload(files.take(24))
         files.drop(24).chunked(24).forEach { chunk ->
-            delay(45)
+            delay(90)
             thumbnailRepository.preload(chunk)
         }
     }
@@ -621,11 +628,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun startTicker() {
         tickerJob?.cancel()
         tickerJob = viewModelScope.launch {
-            // Four updates per second keep the timeline visually smooth without
-            // driving Compose at video-frame rate.
+            // Labels need only two updates per second. The old 4 Hz root-state churn
+            // made long library scrolling visibly hitch on mid-range phones.
             while (true) {
                 _controller.value?.let(::publishPlayback)
-                delay(250L)
+                delay(500L)
             }
         }
     }
@@ -656,8 +663,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             16f / 9f
         }
-        // Match the 250ms UI cadence so identical events do not cause extra emissions.
-        val quantizedPosition = (player.currentPosition / 250L) * 250L
+        // Match the UI cadence so player callbacks do not emit redundant state.
+        val quantizedPosition = (player.currentPosition / 500L) * 500L
         val next = PlaybackUiState(
             connected = true,
             currentPath = path,
@@ -733,6 +740,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun probeDuration(path: String) {
         if (durationProbePath == path || probedDurations.containsKey(path)) return
         durationProbeJob?.cancel()
+        waveformWarmupJob?.cancel()
         durationProbePath = path
         durationProbeJob = viewModelScope.launch {
             val duration = withContext(Dispatchers.IO) {

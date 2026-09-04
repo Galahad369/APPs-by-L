@@ -54,6 +54,7 @@ private enum class Screen { LIBRARY, NOW_PLAYING, SETTINGS }
 fun GreaterArtApp(
     viewModel: MainViewModel,
     openPlayerRequest: Int,
+    onOpenPlayerRequestConsumed: (Int) -> Unit,
     isPictureInPicture: Boolean,
     onPlayerScreenChanged: (Boolean) -> Unit,
     onVideoBoundsChanged: (Rect) -> Unit,
@@ -66,8 +67,6 @@ fun GreaterArtApp(
     val controller by viewModel.controller.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val sleepTimer by viewModel.sleepTimer.collectAsStateWithLifecycle()
-    val thumbnailStats by viewModel.thumbnailStats.collectAsStateWithLifecycle()
-    val waveformDiagnostics by viewModel.waveformDiagnostics.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val imageBackgroundPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -122,7 +121,10 @@ fun GreaterArtApp(
     var screen by rememberSaveable { mutableStateOf(Screen.LIBRARY) }
 
     LaunchedEffect(openPlayerRequest, playback.hasMedia) {
-        if (openPlayerRequest > 0 && playback.hasMedia) screen = Screen.NOW_PLAYING
+        if (openPlayerRequest > 0 && playback.hasMedia) {
+            screen = Screen.NOW_PLAYING
+            onOpenPlayerRequestConsumed(openPlayerRequest)
+        }
     }
 
     LaunchedEffect(screen) {
@@ -296,15 +298,19 @@ fun GreaterArtApp(
                     onDeletePlaylist = viewModel::deletePlaylist,
                     onSpeed = viewModel::setSpeed,
                     onPlaybackCycle = viewModel::setPlaybackCycle,
-                                        onClearThumbnailCache = viewModel::clearThumbnailCache,
-                                        onRescan = viewModel::rescan,
-                                        onReset = viewModel::resetAppSettings,
-                                        onSeekOffset = viewModel::setSeekOffset,
-                                        onSilianRail = viewModel::setSilianRail,
+                    onClearThumbnailCache = viewModel::clearThumbnailCache,
+                    onRescan = viewModel::rescan,
+                    onReset = viewModel::resetAppSettings,
+                    onSeekOffset = viewModel::setSeekOffset,
                 )
             }
             }
             if (settings.developerMode) {
+                // Diagnostics are deliberately collected only while the inspector is
+                // enabled. Thumbnail warmup changes these counters hundreds of times;
+                // collecting them at the app root caused avoidable full-screen churn.
+                val thumbnailStats by viewModel.thumbnailStats.collectAsStateWithLifecycle()
+                val waveformDiagnostics by viewModel.waveformDiagnostics.collectAsStateWithLifecycle()
                 val regions = when (screen) {
                     Screen.LIBRARY -> listOf("LIBRARY_TOP_BAR", "SEARCH_AND_SORT", "MEDIA_LIST", "MINI_PLAYER")
                     Screen.NOW_PLAYING -> listOf("MEDIA_STAGE", "TRACK_TITLE", "PLAYBACK_CONTROLS", "TIMELINE", "QUEUE", "LYRICS")

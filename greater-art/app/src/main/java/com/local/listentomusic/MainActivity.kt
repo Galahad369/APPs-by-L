@@ -2,10 +2,8 @@ package com.local.listentomusic
 
 import android.Manifest
 import android.app.PictureInPictureParams
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.res.Configuration
 import android.graphics.Rect
 import android.os.Build
@@ -47,30 +45,16 @@ class MainActivity : ComponentActivity() {
     private var openPlayerRequest by mutableIntStateOf(0)
     private var playerScreenVisible = false
     private var videoSourceRect = Rect()
-    // The fallback receiver lives on MainActivity so it catches the broadcast
-    // even if the Composable isn't composed yet (e.g., service starts in background).
-    private var fallbackReceiver: BroadcastReceiver? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        openPlayerRequest = savedInstanceState?.getInt(STATE_OPEN_PLAYER_REQUEST) ?: 0
         WindowCompat.setDecorFitsSystemWindows(window, false)
         // Keep the display awake only while this Activity is visible. Android still
         // honors the physical power/lock key, and no wake lock survives the Activity.
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         if (handleStopIntent(intent)) return
         handleOpenPlayerIntent(intent)
-        // Register fallback receiver early
-        fallbackReceiver = object : BroadcastReceiver() {
-            override fun onReceive(c: Context?, i: Intent?) {
-                viewModel.setFloatingWindowMode(FloatingWindowMode.COMPACT)
-            }
-        }
-        ContextCompat.registerReceiver(
-            this,
-            fallbackReceiver,
-            IntentFilter(MiniWindowOverlayService.ACTION_FALLBACK_COMPACT),
-            ContextCompat.RECEIVER_NOT_EXPORTED,
-        )
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 combine(viewModel.playback, viewModel.settings) { playback, settings ->
@@ -89,6 +73,9 @@ class MainActivity : ComponentActivity() {
             PermissionAwareApp(
                 viewModel = viewModel,
                 openPlayerRequest = openPlayerRequest,
+                onOpenPlayerRequestConsumed = { request ->
+                    if (openPlayerRequest == request) openPlayerRequest = 0
+                },
                 isPictureInPicture = isPictureInPicture,
                 onPlayerScreenChanged = {
                     playerScreenVisible = it
@@ -190,8 +177,6 @@ class MainActivity : ComponentActivity() {
                         ),
                     )
                 }
-            } else {
-                viewModel.setFloatingWindowMode(FloatingWindowMode.COMPACT)
             }
             return false
         }
@@ -201,10 +186,7 @@ class MainActivity : ComponentActivity() {
                 Intent(this, MiniWindowOverlayService::class.java),
             )
             true
-        }.getOrElse {
-            viewModel.setFloatingWindowMode(FloatingWindowMode.COMPACT)
-            false
-        }
+        }.getOrElse { false }
     }
 
     private fun handleStopIntent(intent: Intent?): Boolean {
@@ -243,10 +225,13 @@ class MainActivity : ComponentActivity() {
             .build()
     }
 
-    override fun onDestroy() {
-        fallbackReceiver?.let { receiver -> runCatching { unregisterReceiver(receiver) } }
-        fallbackReceiver = null
-        super.onDestroy()
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putInt(STATE_OPEN_PLAYER_REQUEST, openPlayerRequest)
+        super.onSaveInstanceState(outState)
+    }
+
+    companion object {
+        private const val STATE_OPEN_PLAYER_REQUEST = "open_player_request"
     }
 }
 
@@ -254,6 +239,7 @@ class MainActivity : ComponentActivity() {
 private fun PermissionAwareApp(
     viewModel: MainViewModel,
     openPlayerRequest: Int,
+    onOpenPlayerRequestConsumed: (Int) -> Unit,
     isPictureInPicture: Boolean,
     onPlayerScreenChanged: (Boolean) -> Unit,
     onVideoBoundsChanged: (Rect) -> Unit,
@@ -277,6 +263,7 @@ private fun PermissionAwareApp(
     GreaterArtApp(
         viewModel = viewModel,
         openPlayerRequest = openPlayerRequest,
+        onOpenPlayerRequestConsumed = onOpenPlayerRequestConsumed,
         isPictureInPicture = isPictureInPicture,
         onPlayerScreenChanged = onPlayerScreenChanged,
         onVideoBoundsChanged = onVideoBoundsChanged,

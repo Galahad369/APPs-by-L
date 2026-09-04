@@ -7,7 +7,7 @@ ads, analytics, accounts, telemetry, or network access.
 ## Features
 
 - Recursive local scan of `Download` with a staged 300-item thumbnail warmup, bounded
-  three-worker cache pipeline, embedded artwork and same-name/folder-cover fallback.
+  two-worker cache pipeline, embedded artwork and same-name/folder-cover fallback.
 - Media3 playback for audio and video through one `MediaSessionService`.
 - Library search, custom drag order, name sorting, local playlists and M3U/M3U8 import/export.
 - Repeat-one default, gapless-friendly queues, speed controls, seek, next and previous.
@@ -15,7 +15,8 @@ ads, analytics, accounts, telemetry, or network access.
 - Compact one-line playback controls and an unlabelled scrollable queue with
   thumbnails and current-track highlight.
 - Synchronized local lyrics from a matching `.lrc`, with embedded MP3/FLAC/Opus lyrics fallback.
-- Real PCM-decoded audio waveform, generated off the UI thread and cached locally.
+- Noise-gated, percentile-scaled PCM waveform, generated once off the UI thread and
+  cached locally without exaggerating silence or one loud spike.
 - Optional queue editor for moving/removing upcoming items; disabled by default.
 - Bluetooth output removal pauses playback before audio can spill to the phone speaker.
 - Full video playback, rotation, fullscreen mode and Android picture-in-picture.
@@ -66,8 +67,8 @@ $env:GRADLE_USER_HOME = Join-Path $env:USERPROFILE '.gradle'
 Current release artifact:
 
 ```text
-releases/GreaterArt-v1.7.6-debug.apk
-SHA-256: acda94ea011541bac13be7f50732113017f8ca991d6efd4196e7bdf74ae62a32
+releases/GreaterArt-v1.7.8-debug.apk
+SHA-256: e04a8c09dba381e7cd7d3e7f0c341037c2e30bd5a9a8343b2f57dc09f169515a
 ```
 
 Versioned APKs are never overwritten. Builds remain signed by the pinned personal
@@ -77,7 +78,7 @@ debug keystore so a newer APK can update the existing installation.
 
 ```text
 app/src/main/java/com/local/listentomusic/
-├── MainActivity.kt                   Activity lifecycle, PiP and overlay fallback
+├── MainActivity.kt                   Activity lifecycle, PiP and overlay routing
 ├── MainViewModel.kt                  Library, playback state and preference actions
 ├── data/
 │   ├── AppPreferences.kt             DataStore settings and playlists
@@ -101,8 +102,8 @@ app/src/main/java/com/local/listentomusic/
 
 ## Failure Prevention Notes
 
-- Runtime receivers on target SDK 37 must be registered with an explicit exported
-  state. The fallback receiver uses `ContextCompat.RECEIVER_NOT_EXPORTED`.
+- Do not rewrite the saved floating mode when a temporary overlay start fails. Earlier
+  fallback code silently changed Mini to Compact and made the failure permanent.
 - Overlay service start/stop belongs to Activity lifecycle callbacks. Do not move it
   back into a screen-keyed Compose `LaunchedEffect`; that previously left dead state
   after reopening the app.
@@ -136,7 +137,14 @@ app/src/main/java/com/local/listentomusic/
 - The player owns one repeat cycle (`Off → One → All → Random`). Random is Media3
   shuffle state inside that cycle, not a second button or a queue rebuild.
 - Mini-window launch intents carry an explicit open-player request. Activity intent
-  handling owns this request; the overlay never guesses Compose navigation state.
+  handling owns this durable pending request and consumes it only after media is ready;
+  the overlay never guesses Compose navigation state.
+- Developer cache counters are collected only while Developer Mode is enabled. Root
+  collection previously recomposed the whole app several times for every thumbnail.
+- Waveform transition warmup and the visible waveform share one decoder mutex and
+  recheck the cache, preventing duplicate full-file PCM jobs.
+- The first thumbnail batch waits briefly for the initial frame, then warms in staged
+  chunks. Visible rows bypass the warmup gate, while background work uses two workers.
 - Local lyrics accept UTF-8, UTF-16 BOM and Big5 text, use matching `song.lrc` or
   `song.mp3.lrc` files, and never make a network request.
 - Every overlay view and controller future is nullable, guarded and released. A
@@ -145,6 +153,8 @@ app/src/main/java/com/local/listentomusic/
   SHA-256: `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`.
 
 See [HANDOFF.md](HANDOFF.md) for the continuation checklist and copy-paste Hermes prompt.
+See [RESEARCH_IDEAS.md](RESEARCH_IDEAS.md) for privacy-compatible ideas compared
+against maintained open-source Android players.
 
 ## Current Verification Boundary
 

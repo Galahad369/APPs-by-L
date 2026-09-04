@@ -6,11 +6,14 @@ import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.File
@@ -18,6 +21,7 @@ import java.security.MessageDigest
 import kotlin.coroutines.coroutineContext
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.pow
 
 enum class WaveformStatus { IDLE, CACHE_HIT, DECODING, READY, FAILED }
 data class WaveformDiagnostics(
@@ -26,33 +30,60 @@ data class WaveformDiagnostics(
     val error: String? = null,
 )
 
+/** Noise-gated percentile scaling keeps quiet decoder noise from looking like music. */
+internal fun normalizeWaveformPeaks(
+    peaks: FloatArray,
+    minimum: Float = 0.015f,
+): FloatArray {
+    val sorted = peaks.filter { it.isFinite() && it > 0f }.sorted()
+    if (sorted.isEmpty()) return FloatArray(peaks.size) { minimum }
+    val floor = (sorted[(sorted.lastIndex * 0.10f).toInt()] * 0.9f)
+        .coerceAtMost(sorted.last() * 0.45f)
+    val ceiling = sorted[(sorted.lastIndex * 0.92f).toInt()]
+        .coerceAtLeast(floor + 0.001f)
+    return FloatArray(peaks.size) { index ->
+        val signal = ((peaks[index] - floor) / (ceiling - floor)).coerceIn(0f, 1f)
+        minimum + signal.pow(0.78f) * (1f - minimum)
+    }
+}
+
 /** Decodes real PCM peaks off the UI thread and keeps only a tiny local cache. */
 class WaveformRepository(context: Context) {
     private val directory = File(context.cacheDir, "waveforms").apply { mkdirs() }
     private val _diagnostics = MutableStateFlow(WaveformDiagnostics())
     val diagnostics: StateFlow<WaveformDiagnostics> = _diagnostics.asStateFlow()
+    // The player screen and media-transition warmup may request the same file at
+    // once. One decoder prevents duplicate full-file work and codec contention.
+    private val decodeMutex = Mutex()
 
-    suspend fun load(path: String, size: Long, modified: Long): FloatArray? = withContext(Dispatchers.Default) {
+    suspend fun load(path: String, size: Long, modified: Long): FloatArray? = withContext(Dispatchers.IO) {
         val key = MessageDigest.getInstance("SHA-256")
-            .digest("$path|$size|$modified|$BINS".toByteArray())
+            .digest("$path|$size|$modified|$BINS|$CACHE_VERSION".toByteArray())
             .joinToString("") { "%02x".format(it) }
         val cached = File(directory, "$key.bin")
         read(cached)?.let {
             _diagnostics.value = WaveformDiagnostics(WaveformStatus.CACHE_HIT, File(path).name)
             return@withContext it
         }
-        _diagnostics.value = WaveformDiagnostics(WaveformStatus.DECODING, File(path).name)
-        val decoded = (if (File(path).extension.equals("wav", true)) decodeWav(path) else null)
-            ?: decode(path)
-        if (decoded == null) {
-            if (_diagnostics.value.status != WaveformStatus.FAILED) {
-                _diagnostics.value = WaveformDiagnostics(WaveformStatus.FAILED, File(path).name, "No decodable PCM output")
+        decodeMutex.withLock {
+            // Another caller may have completed while this one waited.
+            read(cached)?.let {
+                _diagnostics.value = WaveformDiagnostics(WaveformStatus.CACHE_HIT, File(path).name)
+                return@withLock it
             }
-            return@withContext null
+            _diagnostics.value = WaveformDiagnostics(WaveformStatus.DECODING, File(path).name)
+            val decoded = (if (File(path).extension.equals("wav", true)) decodeWav(path) else null)
+                ?: decode(path)
+            if (decoded == null) {
+                if (_diagnostics.value.status != WaveformStatus.FAILED) {
+                    _diagnostics.value = WaveformDiagnostics(WaveformStatus.FAILED, File(path).name, "No decodable PCM output")
+                }
+                return@withLock null
+            }
+            runCatching { write(cached, decoded) }
+            _diagnostics.value = WaveformDiagnostics(WaveformStatus.READY, File(path).name)
+            decoded
         }
-        runCatching { write(cached, decoded) }
-        _diagnostics.value = WaveformDiagnostics(WaveformStatus.READY, File(path).name)
-        decoded
     }
 
     suspend fun clear() = withContext(Dispatchers.IO) {
@@ -70,7 +101,9 @@ class WaveformRepository(context: Context) {
             } ?: return null
             val format = extractor.getTrackFormat(track)
             val mime = format.getString(MediaFormat.KEY_MIME) ?: return null
-            val durationUs = format.getLong(MediaFormat.KEY_DURATION).coerceAtLeast(1L)
+            val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) {
+                format.getLong(MediaFormat.KEY_DURATION).coerceAtLeast(1L)
+            } else return null
             extractor.selectTrack(track)
             codec = MediaCodec.createDecoderByType(mime).apply {
                 configure(format, null, null, 0)
@@ -123,8 +156,9 @@ class WaveformRepository(context: Context) {
                     }
                 }
             }
-            val maxPeak = peaks.maxOrNull()?.coerceAtLeast(0.001f) ?: return null
-            FloatArray(BINS) { (peaks[it] / maxPeak).coerceIn(0.04f, 1f) }
+            normalize(peaks)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (error: Throwable) {
             _diagnostics.value = WaveformDiagnostics(
                 WaveformStatus.FAILED,
@@ -230,8 +264,9 @@ class WaveformRepository(context: Context) {
     }
 
     private fun normalize(peaks: FloatArray): FloatArray {
-        val ceiling = peaks.maxOrNull()?.coerceAtLeast(0.001f) ?: return peaks
-        return FloatArray(peaks.size) { (peaks[it] / ceiling).coerceIn(0.04f, 1f) }
+        // Ignore tiny decoder noise and one-off spikes instead of dividing every
+        // bar by the single loudest sample.
+        return normalizeWaveformPeaks(peaks, MIN_VISUAL_PEAK)
     }
 
     private fun read(file: File): FloatArray? = runCatching {
@@ -244,14 +279,21 @@ class WaveformRepository(context: Context) {
     }.getOrNull()
 
     private fun write(file: File, values: FloatArray) {
-        DataOutputStream(file.outputStream().buffered()).use { output ->
+        val temporary = File(file.parentFile, "${file.name}.tmp")
+        DataOutputStream(temporary.outputStream().buffered()).use { output ->
             output.writeInt(values.size)
             values.forEach(output::writeFloat)
+        }
+        if (!temporary.renameTo(file)) {
+            temporary.copyTo(file, overwrite = true)
+            temporary.delete()
         }
     }
 
     private companion object {
         const val BINS = 96
+        const val CACHE_VERSION = 2
+        const val MIN_VISUAL_PEAK = 0.015f
         const val TIMEOUT_US = 10_000L
         const val MAX_SAMPLES_PER_BIN = 12_000L
     }

@@ -92,7 +92,6 @@ fun SettingsScreen(
     onAppFont: (AppFont) -> Unit,
     onDeveloperMode: (Boolean) -> Unit,
     onEditableQueue: (Boolean) -> Unit,
-    onSilianRail: (Boolean) -> Unit,
     onImportM3u: () -> Unit,
     onExportM3u: () -> Unit,
     onBackgroundMode: (AppBackgroundMode) -> Unit,
@@ -173,13 +172,13 @@ fun SettingsScreen(
                     onThemeMode,
                 )
                 ChoiceSetting(
-                                    uiText(language, "Text style", "文字字型"),
-                                    "",
-                                    AppFont.entries,
-                                    preferences.appFont,
-                                    { it.label },
-                                    onAppFont,
-                                )
+                    uiText(language, "Text style", "文字字型"),
+                    uiText(language, "Silian Rail is the final reversible font choice.", "Silian Rail 是最後一個可隨時切換的字型選項。"),
+                    AppFont.entries,
+                    preferences.appFont,
+                    { it.label },
+                    onAppFont,
+                )
                 ChoiceSetting(
                     uiText(language, "App background", "應用程式背景"),
                     uiText(language, "Default is animated black liquid metal. Custom video backgrounds are always muted.", "預設為黑色液態金屬動畫。自訂影片背景永遠靜音。"),

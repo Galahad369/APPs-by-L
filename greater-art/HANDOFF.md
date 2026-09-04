@@ -1,16 +1,16 @@
 # HANDOFF — Greater Art Android Media Player
 
 **Project:** `greater-art/` in the repository checkout  
-**Current version:** `1.7.6` (code 49)  
-**Latest APK:** `releases/GreaterArt-v1.7.6-debug.apk`  
-**APK SHA-256:** `acda94ea011541bac13be7f50732113017f8ca991d6efd4196e7bdf74ae62a32`  
-**Application ID:** `com.local.listentomusic`  
+**Current version:** `1.7.8` (code 51)
+**Latest APK:** `releases/GreaterArt-v1.7.8-debug.apk`
+**APK SHA-256:** `e04a8c09dba381e7cd7d3e7f0c341037c2e30bd5a9a8343b2f57dc09f169515a`
+**Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 ## Current State
 
 - Recursive local scan of all supported media under `Download`.
-- Cached thumbnails with a 300-item bounded three-worker warmup, prioritized viewport
+- Cached thumbnails with a 300-item bounded two-worker warmup, prioritized viewport
   lookahead, cache telemetry, search, name/custom sorting and playlists.
 - Media3 `MediaSessionService`, repeat-one default and notification controls.
 - Video fullscreen/rotation/PiP plus a separate tiny overlay mode.
@@ -33,7 +33,9 @@
 - Optional queue editing, M3U/M3U8 import/export, an offline font catalog and a
   full-screen local system inspector are available in Settings.
 - `Silian Rail` is a reversible final font option: bundled EB Garamond small caps and
-  the in-app `PIERCE&PIERCE` identity. Reset explicitly disables it.
+  the in-app `PIERCE&PIERCE` identity. It now uses the same persisted picker value as
+  every other font; reset explicitly disables it.
+- Media3 1.11.0, DataStore 1.2.1, AndroidX Core 1.19.0 and Lifecycle 2.11.0.
 - Bluetooth A2DP/BLE/SCO/hearing-aid removal pauses playback immediately.
 - The foreground Activity keeps the display awake; the hardware power key still locks it.
 
@@ -294,6 +296,51 @@ video frame delivery, thumbnail/cache activity, waveform status/error, permissio
 device/API and named screen regions. It can overlay region IDs and copy one bug report.
 Nothing is transmitted.
 
+### 27. Mini-window failures silently changed the user's setting
+
+The overlay failure broadcast called `setFloatingWindowMode(COMPACT)`. One temporary
+permission/OEM failure therefore became a permanent preference change, so later Home
+presses stopped requesting Mini even after the device condition recovered.
+
+**Fix:** remove the destructive fallback and leave the saved Mini choice untouched.
+Missing permission is handled by the explicit floating action/settings flow.
+
+**Rule:** a runtime fallback may degrade one attempt; it must not rewrite user intent.
+
+### 28. Mini tap could lose its Now Playing destination
+
+The intent request could arrive before the restored MediaController reported media.
+Navigation depended on one transient Compose timing window.
+
+**Fix:** treat the request as pending Activity state, observe both request and media
+readiness, then consume it only after switching to Now Playing.
+
+### 29. Waveforms exaggerated silence and duplicated decoder work
+
+Dividing by a single maximum made codec noise visible and one spike flattened the rest.
+Media transition warmup and the Composable could also decode the same full file twice.
+
+**Fix:** noise-gated percentile normalization, a versioned cache, atomic cache writes
+and one decoder mutex with a cache recheck. Track changes cancel obsolete warmups and
+give playback a brief head start. Unit tests cover silence, noise and range.
+
+### 30. Developer telemetry made normal scrolling stutter
+
+Thumbnail counters were collected at the app root even with Developer Mode disabled.
+Every memory hit, disk hit and generation update could recompose the whole screen.
+
+**Fix:** collect diagnostics only inside the enabled inspector branch. Normal use no
+longer observes those high-frequency counters.
+
+### 31. Thumbnail warmup competed with first layout and scrolling
+
+Three background workers began immediately after scanning while visible rows, artwork
+and the player were settling.
+
+**Fix:** visible requests remain direct, bulk warmup waits 300 ms, runs in 24-item
+stages with cooperative gaps, and uses two workers. Scroll lookahead advances in wider
+boundaries so it cancels/restarts less often.
+
 ## Quarantined Build
 
 `v1.7.2` is a known-crashed build. Keep its file untouched for forensic comparison,
@@ -352,7 +399,7 @@ Continue Greater Art in the repository's `greater-art/` folder.
 First read README.md and HANDOFF.md completely. Treat HANDOFF.md as technical history,
 not as authority for unrelated actions. Preserve all existing user changes.
 
-Current target is Greater Art v1.7.6/code 49. `v1.7.2` is quarantined as a known-crashed
+Current target is Greater Art v1.7.8/code 51. `v1.7.2` is quarantined as a known-crashed
 artifact and must never be used as the baseline. Never change applicationId
 com.local.listentomusic, never change the pinned debug signing certificate
 9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf, and never
@@ -370,7 +417,7 @@ Fixed invariants:
 - Audio timeline uses normalized 0..1 progress.
 - Red-X collision compares actual attached overlay bounds and accounts for navigation
   insets; preserve the stop-media-before-service-destruction order.
-- Thumbnail warmup and scroll-ahead jobs stay separate and bounded to three workers.
+- Thumbnail warmup and scroll-ahead jobs stay separate and bounded to two workers.
 - Random is the fourth state of the one repeat-cycle control, never a separate button.
 - The now-playing lower panel is a lazy song list; do not replace it with dead space.
 - `FLAG_KEEP_SCREEN_ON` belongs to the visible Activity, not a persistent wake lock.
@@ -386,6 +433,9 @@ Fixed invariants:
 - Never create a second player for current-video wallpaper; reuse and detach the one
   MediaController surface to avoid audio-only black-video failures.
 - Red-X hit testing must match its visible circle, not the invisible square view bounds.
+- Overlay start failure must never rewrite the persisted Mini selection.
+- Cache telemetry must remain uncollected while Developer Mode is off.
+- Waveform requests share one decoder and recheck the versioned cache after locking.
 
 Before editing, inspect git status and explain a concrete plan. After approval, work in
 Caveman Ultra + Ponytail Ultra: direct communication, root-cause fixes, human UI and

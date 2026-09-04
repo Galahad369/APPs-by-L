@@ -96,6 +96,10 @@ class AppPreferences(private val context: Context) {
     }
 
     val values: Flow<UserPreferences> = context.dataStore.data.map { prefs ->
+        val savedFont = enumValueOrDefault(prefs[Keys.appFont], AppFont.SYSTEM)
+        // v1.7.5 briefly stored Silian Rail in a second Boolean. Migrate that
+        // state into the font picker so typography and identity cannot disagree.
+        val effectiveFont = if (prefs[Keys.silianRail] == true) AppFont.SILIAN_RAIL else savedFont
         UserPreferences(
             sortMode = runCatching {
                 SortMode.valueOf(prefs[Keys.sortMode] ?: SortMode.NAME_ASC.name)
@@ -136,10 +140,10 @@ class AppPreferences(private val context: Context) {
             playlists = decodePlaylists(prefs[Keys.playlists].orEmpty()),
             activePlaylistId = prefs[Keys.activePlaylistId],
             seekOffsetMs = prefs[Keys.seekOffsetMs] ?: 5_000L,
-            appFont = enumValueOrDefault(prefs[Keys.appFont], AppFont.SYSTEM),
+            appFont = effectiveFont,
             developerMode = prefs[Keys.developerMode] ?: false,
             editableQueue = prefs[Keys.editableQueue] ?: false,
-            silianRail = prefs[Keys.silianRail] ?: false,
+            silianRail = effectiveFont == AppFont.SILIAN_RAIL,
         )
     }
 
@@ -192,11 +196,13 @@ class AppPreferences(private val context: Context) {
     suspend fun setBackgroundDim(value: Float) =
         edit { it[Keys.backgroundDim] = value.coerceIn(0.25f, 0.85f) }
     suspend fun setSeekOffsetMs(value: Long) = edit { it[Keys.seekOffsetMs] = value }
-    suspend fun setAppFont(value: AppFont) = edit { it[Keys.appFont] = value.name }
+    suspend fun setAppFont(value: AppFont) = edit {
+        it[Keys.appFont] = value.name
+        // One source of truth: this old key is migration-only.
+        it.remove(Keys.silianRail)
+    }
     suspend fun setDeveloperMode(value: Boolean) = edit { it[Keys.developerMode] = value }
     suspend fun setEditableQueue(value: Boolean) = edit { it[Keys.editableQueue] = value }
-    suspend fun setSilianRail(value: Boolean) = edit { it[Keys.silianRail] = value }
-
     suspend fun setActivePlaylist(id: String?) = edit { prefs ->
         if (id == null) prefs.remove(Keys.activePlaylistId) else prefs[Keys.activePlaylistId] = id
     }
