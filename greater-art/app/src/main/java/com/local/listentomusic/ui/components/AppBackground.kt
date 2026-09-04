@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
@@ -30,6 +32,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.session.MediaController
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -46,6 +49,7 @@ import kotlin.math.max
 fun AppBackground(
     preferences: UserPreferences,
     playback: PlaybackUiState,
+    controller: MediaController?,
     modifier: Modifier = Modifier,
 ) {
     val mode = preferences.backgroundMode
@@ -63,12 +67,11 @@ fun AppBackground(
             AppBackgroundMode.CUSTOM_VIDEO -> preferences.customBackgroundVideoUri
                 ?.let(Uri::parse)
                 ?.let { BackgroundVideo(source = it, shouldPlay = true) }
-            AppBackgroundMode.CURRENT_VIDEO -> currentVideoUri?.let {
-                BackgroundVideo(
-                    source = it,
-                    shouldPlay = playback.isPlaying,
-                    syncPositionMs = playback.positionMs,
-                )
+            // Reuse the real playback decoder. A second ExoPlayer for the same file
+            // exhausted the single hardware video decoder on some phones: audio kept
+            // playing while the foreground PlayerView stayed black.
+            AppBackgroundMode.CURRENT_VIDEO -> if (currentVideoUri != null) {
+                ExistingPlayerBackground(controller)
             }
         }
         val isLight = androidx.compose.material3.MaterialTheme.colorScheme.background.luminance() > 0.5f
@@ -76,6 +79,23 @@ fun AppBackground(
         val veil = if (mode == AppBackgroundMode.DEFAULT && isLight) Color.White else Color.Black
         Box(Modifier.matchParentSize().background(veil.copy(alpha = dim)))
     }
+}
+
+@Composable
+private fun ExistingPlayerBackground(controller: MediaController?) {
+    AndroidView(
+        factory = { context ->
+            PlayerView(context).apply {
+                useController = false
+                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                setKeepContentOnPlayerReset(true)
+                player = controller
+            }
+        },
+        update = { view -> if (view.player !== controller) view.player = controller },
+        onRelease = { it.player = null },
+        modifier = Modifier.fillMaxSize(),
+    )
 }
 
 @Composable
@@ -87,6 +107,19 @@ private fun DefaultMetalBackground() {
         baseColor = if (isLight) Color(0xFFF2F4F2) else Color(0xFF080A09),
         accentColor = if (isLight) Color(0xFF94BFB5) else Color(0xFF72D7C0),
     ) {
+        // Quiet technical grid inspired by editorial motion graphics. It stays
+        // subordinate to content and costs no per-frame layout work.
+        Canvas(Modifier.matchParentSize()) {
+            val line = if (isLight) Color.Black.copy(alpha = 0.055f) else Color.White.copy(alpha = 0.045f)
+            repeat(6) { index ->
+                val x = size.width * index / 5f
+                drawLine(line, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
+            }
+            repeat(9) { index ->
+                val y = size.height * index / 8f
+                drawLine(line, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
+            }
+        }
         Box(
             Modifier.matchParentSize().background(
                 Brush.verticalGradient(

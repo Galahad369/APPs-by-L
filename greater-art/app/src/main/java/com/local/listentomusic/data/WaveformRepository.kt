@@ -8,6 +8,9 @@ import android.media.MediaFormat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.File
@@ -16,19 +19,45 @@ import kotlin.coroutines.coroutineContext
 import kotlin.math.abs
 import kotlin.math.max
 
+enum class WaveformStatus { IDLE, CACHE_HIT, DECODING, READY, FAILED }
+data class WaveformDiagnostics(
+    val status: WaveformStatus = WaveformStatus.IDLE,
+    val fileName: String? = null,
+    val error: String? = null,
+)
+
 /** Decodes real PCM peaks off the UI thread and keeps only a tiny local cache. */
 class WaveformRepository(context: Context) {
     private val directory = File(context.cacheDir, "waveforms").apply { mkdirs() }
+    private val _diagnostics = MutableStateFlow(WaveformDiagnostics())
+    val diagnostics: StateFlow<WaveformDiagnostics> = _diagnostics.asStateFlow()
 
     suspend fun load(path: String, size: Long, modified: Long): FloatArray? = withContext(Dispatchers.Default) {
         val key = MessageDigest.getInstance("SHA-256")
             .digest("$path|$size|$modified|$BINS".toByteArray())
             .joinToString("") { "%02x".format(it) }
         val cached = File(directory, "$key.bin")
-        read(cached)?.let { return@withContext it }
-        val decoded = decode(path) ?: return@withContext null
+        read(cached)?.let {
+            _diagnostics.value = WaveformDiagnostics(WaveformStatus.CACHE_HIT, File(path).name)
+            return@withContext it
+        }
+        _diagnostics.value = WaveformDiagnostics(WaveformStatus.DECODING, File(path).name)
+        val decoded = (if (File(path).extension.equals("wav", true)) decodeWav(path) else null)
+            ?: decode(path)
+        if (decoded == null) {
+            if (_diagnostics.value.status != WaveformStatus.FAILED) {
+                _diagnostics.value = WaveformDiagnostics(WaveformStatus.FAILED, File(path).name, "No decodable PCM output")
+            }
+            return@withContext null
+        }
         runCatching { write(cached, decoded) }
+        _diagnostics.value = WaveformDiagnostics(WaveformStatus.READY, File(path).name)
         decoded
+    }
+
+    suspend fun clear() = withContext(Dispatchers.IO) {
+        directory.listFiles()?.forEach { file -> runCatching { file.delete() } }
+        _diagnostics.value = WaveformDiagnostics()
     }
 
     private suspend fun decode(path: String): FloatArray? {
@@ -96,13 +125,113 @@ class WaveformRepository(context: Context) {
             }
             val maxPeak = peaks.maxOrNull()?.coerceAtLeast(0.001f) ?: return null
             FloatArray(BINS) { (peaks[it] / maxPeak).coerceIn(0.04f, 1f) }
-        } catch (_: Throwable) {
+        } catch (error: Throwable) {
+            _diagnostics.value = WaveformDiagnostics(
+                WaveformStatus.FAILED,
+                File(path).name,
+                "${error.javaClass.simpleName}: ${error.message.orEmpty()}".take(180),
+            )
             null
         } finally {
             runCatching { codec?.stop() }
             runCatching { codec?.release() }
             runCatching { extractor.release() }
         }
+    }
+
+    /** Direct WAV reader avoids device codec quirks and samples every time segment. */
+    private fun decodeWav(path: String): FloatArray? = runCatching {
+        java.io.RandomAccessFile(path, "r").use { input ->
+            if (input.length() < 44L) return null
+            val riff = ByteArray(4).also(input::readFully).toString(Charsets.US_ASCII)
+            val little = riff == "RIFF"
+            if (!little && riff != "RIFX") return null
+            readInt(input, little)
+            if (ByteArray(4).also(input::readFully).toString(Charsets.US_ASCII) != "WAVE") return null
+            var formatCode = 1
+            var channels = 1
+            var bits = 16
+            var dataStart = -1L
+            var dataSize = 0L
+            while (input.filePointer + 8 <= input.length()) {
+                val id = ByteArray(4).also(input::readFully).toString(Charsets.US_ASCII)
+                val size = readInt(input, little).toLong() and 0xffffffffL
+                val start = input.filePointer
+                if (id == "fmt " && size >= 16) {
+                    formatCode = readShort(input, little)
+                    channels = readShort(input, little).coerceAtLeast(1)
+                    input.skipBytes(6)
+                    input.skipBytes(4)
+                    bits = readShort(input, little)
+                } else if (id == "data") {
+                    dataStart = start
+                    dataSize = minOf(size, input.length() - start)
+                    break
+                }
+                input.seek((start + size + (size and 1L)).coerceAtMost(input.length()))
+            }
+            if (dataStart < 0 || dataSize <= 0 || formatCode !in setOf(1, 3)) return null
+            val bytesPerSample = ((bits + 7) / 8).coerceIn(1, 4)
+            val frameBytes = bytesPerSample * channels
+            val peaks = FloatArray(BINS)
+            repeat(BINS) { bin ->
+                val segmentStart = dataStart + dataSize * bin / BINS
+                val segmentEnd = dataStart + dataSize * (bin + 1) / BINS
+                val frames = ((segmentEnd - segmentStart) / frameBytes).coerceAtLeast(1L)
+                val stride = (frames / MAX_SAMPLES_PER_BIN).coerceAtLeast(1L)
+                var frame = 0L
+                var peak = 0f
+                while (frame < frames) {
+                    input.seek(segmentStart + frame * frameBytes)
+                    repeat(channels) {
+                        peak = max(peak, readPcmSample(input, bits, formatCode, little))
+                    }
+                    frame += stride
+                }
+                peaks[bin] = peak
+            }
+            normalize(peaks)
+        }
+    }.getOrElse { error ->
+        _diagnostics.value = WaveformDiagnostics(WaveformStatus.FAILED, File(path).name, "WAV: ${error.message.orEmpty()}".take(180))
+        null
+    }
+
+    private fun readPcmSample(input: java.io.RandomAccessFile, bits: Int, format: Int, little: Boolean): Float {
+        if (format == 3 && bits == 32) {
+            return abs(Float.fromBits(readInt(input, little))).coerceAtMost(1f)
+        }
+        val signed = when (bits) {
+            8 -> input.readUnsignedByte() - 128
+            16 -> readShort(input, little).toShort().toInt()
+            24 -> {
+                val b = ByteArray(3).also(input::readFully)
+                var value = if (little) (b[0].toInt() and 255) or ((b[1].toInt() and 255) shl 8) or ((b[2].toInt() and 255) shl 16)
+                else (b[2].toInt() and 255) or ((b[1].toInt() and 255) shl 8) or ((b[0].toInt() and 255) shl 16)
+                if (value and 0x800000 != 0) value = value or -0x1000000
+                value
+            }
+            else -> readInt(input, little)
+        }
+        val denominator = when (bits) { 8 -> 128f; 16 -> 32768f; 24 -> 8388608f; else -> 2147483648f }
+        return abs(signed / denominator).coerceAtMost(1f)
+    }
+
+    private fun readShort(input: java.io.RandomAccessFile, little: Boolean): Int {
+        val a = input.readUnsignedByte(); val b = input.readUnsignedByte()
+        return if (little) a or (b shl 8) else (a shl 8) or b
+    }
+
+    private fun readInt(input: java.io.RandomAccessFile, little: Boolean): Int {
+        val a = input.readUnsignedByte(); val b = input.readUnsignedByte()
+        val c = input.readUnsignedByte(); val d = input.readUnsignedByte()
+        return if (little) a or (b shl 8) or (c shl 16) or (d shl 24)
+        else (a shl 24) or (b shl 16) or (c shl 8) or d
+    }
+
+    private fun normalize(peaks: FloatArray): FloatArray {
+        val ceiling = peaks.maxOrNull()?.coerceAtLeast(0.001f) ?: return peaks
+        return FloatArray(peaks.size) { (peaks[it] / ceiling).coerceIn(0.04f, 1f) }
     }
 
     private fun read(file: File): FloatArray? = runCatching {
@@ -124,5 +253,6 @@ class WaveformRepository(context: Context) {
     private companion object {
         const val BINS = 96
         const val TIMEOUT_US = 10_000L
+        const val MAX_SAMPLES_PER_BIN = 12_000L
     }
 }

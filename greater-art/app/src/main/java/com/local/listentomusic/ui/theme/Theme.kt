@@ -65,6 +65,7 @@ private val RoundedShapes = Shapes(
 fun GreaterArtTheme(
     themeMode: ThemeMode = ThemeMode.DARK,
     appFont: AppFont = AppFont.SYSTEM,
+    silianRail: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val dark = when (themeMode) {
@@ -75,12 +76,12 @@ fun GreaterArtTheme(
     MaterialTheme(
         colorScheme = if (dark) DarkColors else LightColors,
         shapes = RoundedShapes,
-        typography = typographyFor(appFont),
+        typography = typographyFor(if (silianRail) AppFont.GARAMOND else appFont, silianRail),
         content = content,
     )
 }
 
-private fun typographyFor(font: AppFont): Typography {
+private fun typographyFor(font: AppFont, smallCaps: Boolean): Typography {
     val family = when (font) {
         AppFont.SYSTEM -> FontFamily.Default
         AppFont.SANS_SERIF -> FontFamily.SansSerif
@@ -90,27 +91,28 @@ private fun typographyFor(font: AppFont): Typography {
         AppFont.INTER -> FontFamily(Font(R.font.inter))
         AppFont.NUNITO -> FontFamily(Font(R.font.nunito))
         AppFont.OSWALD -> FontFamily(Font(R.font.oswald))
-        AppFont.GARAMOND -> FontFamily(Font(R.font.playfair_display))
+        AppFont.GARAMOND -> FontFamily(Font(R.font.garamond))
         AppFont.PLAYFAIR_DISPLAY -> FontFamily(Font(R.font.playfair_display))
         AppFont.ROBOTO_SLAB -> FontFamily(Font(R.font.roboto_slab))
         AppFont.SOURCE_CODE_PRO -> FontFamily(Font(R.font.source_code_pro))
     }
     val base = Typography()
+    val features = if (smallCaps) "\"smcp\"" else null
     return base.copy(
-        displayLarge = base.displayLarge.copy(fontFamily = family),
-        displayMedium = base.displayMedium.copy(fontFamily = family),
-        displaySmall = base.displaySmall.copy(fontFamily = family),
-        headlineLarge = base.headlineLarge.copy(fontFamily = family),
-        headlineMedium = base.headlineMedium.copy(fontFamily = family),
-        headlineSmall = base.headlineSmall.copy(fontFamily = family),
-        titleLarge = base.titleLarge.copy(fontFamily = family),
-        titleMedium = base.titleMedium.copy(fontFamily = family),
-        titleSmall = base.titleSmall.copy(fontFamily = family),
-        bodyLarge = base.bodyLarge.copy(fontFamily = family),
-        bodyMedium = base.bodyMedium.copy(fontFamily = family),
-        bodySmall = base.bodySmall.copy(fontFamily = family),
-        labelLarge = base.labelLarge.copy(fontFamily = family),
-        labelMedium = base.labelMedium.copy(fontFamily = family),
-        labelSmall = base.labelSmall.copy(fontFamily = family),
+        displayLarge = base.displayLarge.copy(fontFamily = family, fontFeatureSettings = features),
+        displayMedium = base.displayMedium.copy(fontFamily = family, fontFeatureSettings = features),
+        displaySmall = base.displaySmall.copy(fontFamily = family, fontFeatureSettings = features),
+        headlineLarge = base.headlineLarge.copy(fontFamily = family, fontFeatureSettings = features),
+        headlineMedium = base.headlineMedium.copy(fontFamily = family, fontFeatureSettings = features),
+        headlineSmall = base.headlineSmall.copy(fontFamily = family, fontFeatureSettings = features),
+        titleLarge = base.titleLarge.copy(fontFamily = family, fontFeatureSettings = features),
+        titleMedium = base.titleMedium.copy(fontFamily = family, fontFeatureSettings = features),
+        titleSmall = base.titleSmall.copy(fontFamily = family, fontFeatureSettings = features),
+        bodyLarge = base.bodyLarge.copy(fontFamily = family, fontFeatureSettings = features),
+        bodyMedium = base.bodyMedium.copy(fontFamily = family, fontFeatureSettings = features),
+        bodySmall = base.bodySmall.copy(fontFamily = family, fontFeatureSettings = features),
+        labelLarge = base.labelLarge.copy(fontFamily = family, fontFeatureSettings = features),
+        labelMedium = base.labelMedium.copy(fontFamily = family, fontFeatureSettings = features),
+        labelSmall = base.labelSmall.copy(fontFamily = family, fontFeatureSettings = features),
     )
 }
