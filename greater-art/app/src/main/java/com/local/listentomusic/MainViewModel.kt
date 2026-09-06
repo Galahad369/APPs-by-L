@@ -212,7 +212,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (scanJob?.isActive == true) return
         scanJob = viewModelScope.launch {
             _library.value = _library.value.copy(status = LibraryStatus.SCANNING)
-            when (val result = MediaScanner.scan()) {
+            when (val result = MediaScanner.scan(userPreferences.excludedFolders.toSet())) {
                 is ScanResult.Success -> {
                     scannedFiles = result.files
                     applySortingAndFilter()
@@ -390,6 +390,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         updatePreference { preferences.setAppFont(value) }
     fun setDeveloperMode(value: Boolean) = updatePreference { preferences.setDeveloperMode(value) }
     fun setEditableQueue(value: Boolean) = updatePreference { preferences.setEditableQueue(value) }
+    fun setShowSleepControl(value: Boolean) = updatePreference { preferences.setShowSleepControl(value) }
+    fun setReplayGainEnabled(value: Boolean) = updatePreference { preferences.setReplayGainEnabled(value) }
+    fun setJokeAdsEnabled(value: Boolean) = updatePreference { preferences.setJokeAdsEnabled(value) }
+    fun setFolderExcluded(folder: String, excluded: Boolean) = updatePreference {
+        val next = userPreferences.excludedFolders.toMutableSet().apply {
+            if (excluded) add(folder) else remove(folder)
+        }
+        preferences.setExcludedFolders(next.toList())
+        rescan()
+    }
     fun setActivePlaylist(id: String?) = updatePreference { preferences.setActivePlaylist(id) }
 
     fun importM3u(uri: Uri) {
@@ -740,7 +750,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun probeDuration(path: String) {
         if (durationProbePath == path || probedDurations.containsKey(path)) return
         durationProbeJob?.cancel()
-        waveformWarmupJob?.cancel()
         durationProbePath = path
         durationProbeJob = viewModelScope.launch {
             val duration = withContext(Dispatchers.IO) {
@@ -766,6 +775,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         thumbnailAheadJob?.cancel()
         scanJob?.cancel()
         durationProbeJob?.cancel()
+        waveformWarmupJob?.cancel()
         sleepTimerJob?.cancel()
         _controller.value?.removeListener(playerListener)
         controllerFuture?.let(MediaController::releaseFuture)

@@ -33,18 +33,26 @@ object MediaScanner {
      * A Play-Store build should replace direct File access with the Storage Access Framework,
      * persist a tree URI using takePersistableUriPermission(), and scan DocumentFile children.
      */
-    suspend fun scan(): ScanResult = withContext(Dispatchers.IO) {
+    suspend fun scan(excludedFolders: Set<String> = emptySet()): ScanResult = withContext(Dispatchers.IO) {
         val folder = targetFolder()
         if (!folder.exists()) return@withContext ScanResult.FolderMissing(folder.absolutePath)
         if (!folder.isDirectory || !folder.canRead()) {
             return@withContext ScanResult.PermissionMissing(folder.absolutePath)
         }
 
-        ScanResult.Success(scanFolder(folder))
+        ScanResult.Success(scanFolder(folder, excludedFolders))
     }
 
     /** Pure folder traversal kept separate so recursive discovery can be unit-tested. */
-    internal fun scanFolder(folder: File): List<MediaFile> = folder.walkTopDown()
+    internal fun scanFolder(folder: File, excludedFolders: Set<String> = emptySet()): List<MediaFile> {
+        val excluded = excludedFolders.map { it.replace('\\', '/').trim('/') }.filter { it.isNotBlank() }.toSet()
+        return folder.walkTopDown()
+            .onEnter { dir ->
+                if (dir == folder) true else {
+                    val relative = dir.relativeTo(folder).invariantSeparatorsPath
+                    excluded.none { relative == it || relative.startsWith("$it/") }
+                }
+            }
             .onFail { _, _ -> /* Ignore unreadable children and keep the rest of the library. */ }
             .filter { it.isFile && it.extension.lowercase() in supportedExtensions }
             // Keep the launch scan fast: do not open or decode every file here.
@@ -64,7 +72,7 @@ object MediaScanner {
                 )
             }
             .toList()
-
+    }
 }
 
 sealed interface ScanResult {

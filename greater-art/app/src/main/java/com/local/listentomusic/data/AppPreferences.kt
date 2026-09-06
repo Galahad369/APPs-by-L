@@ -44,6 +44,10 @@ data class UserPreferences(
     val developerMode: Boolean = false,
     val editableQueue: Boolean = false,
     val silianRail: Boolean = false,
+    val showSleepControl: Boolean = false,
+    val replayGainEnabled: Boolean = false,
+    val excludedFolders: List<String> = emptyList(),
+    val jokeAdsEnabled: Boolean = false,
 )
 
 enum class LibraryRowSize(val label: String) { SMALL("Small"), MEDIUM("Medium"), LARGE("Large") }
@@ -93,6 +97,10 @@ class AppPreferences(private val context: Context) {
         val developerMode = booleanPreferencesKey("developer_mode")
         val editableQueue = booleanPreferencesKey("editable_queue")
         val silianRail = booleanPreferencesKey("silian_rail")
+        val showSleepControl = booleanPreferencesKey("show_sleep_control")
+        val replayGainEnabled = booleanPreferencesKey("replay_gain_enabled")
+        val excludedFolders = stringPreferencesKey("excluded_folders")
+        val jokeAdsEnabled = booleanPreferencesKey("joke_ads_enabled")
     }
 
     val values: Flow<UserPreferences> = context.dataStore.data.map { prefs ->
@@ -144,6 +152,10 @@ class AppPreferences(private val context: Context) {
             developerMode = prefs[Keys.developerMode] ?: false,
             editableQueue = prefs[Keys.editableQueue] ?: false,
             silianRail = effectiveFont == AppFont.SILIAN_RAIL,
+            showSleepControl = prefs[Keys.showSleepControl] ?: false,
+            replayGainEnabled = prefs[Keys.replayGainEnabled] ?: false,
+            excludedFolders = decodeOrder(prefs[Keys.excludedFolders].orEmpty()),
+            jokeAdsEnabled = prefs[Keys.jokeAdsEnabled] ?: false,
         )
     }
 
@@ -203,6 +215,12 @@ class AppPreferences(private val context: Context) {
     }
     suspend fun setDeveloperMode(value: Boolean) = edit { it[Keys.developerMode] = value }
     suspend fun setEditableQueue(value: Boolean) = edit { it[Keys.editableQueue] = value }
+    suspend fun setShowSleepControl(value: Boolean) = edit { it[Keys.showSleepControl] = value }
+    suspend fun setReplayGainEnabled(value: Boolean) = edit { it[Keys.replayGainEnabled] = value }
+    suspend fun setExcludedFolders(value: List<String>) = edit { prefs ->
+        prefs[Keys.excludedFolders] = value.distinct().sorted().joinToString("\n") { encode(it) }
+    }
+    suspend fun setJokeAdsEnabled(value: Boolean) = edit { it[Keys.jokeAdsEnabled] = value }
     suspend fun setActivePlaylist(id: String?) = edit { prefs ->
         if (id == null) prefs.remove(Keys.activePlaylistId) else prefs[Keys.activePlaylistId] = id
     }
@@ -284,6 +302,10 @@ class AppPreferences(private val context: Context) {
             it.remove(Keys.developerMode)
             it.remove(Keys.editableQueue)
             it.remove(Keys.silianRail)
+            it.remove(Keys.showSleepControl)
+            it.remove(Keys.replayGainEnabled)
+            it.remove(Keys.excludedFolders)
+            it.remove(Keys.jokeAdsEnabled)
             it[Keys.speed] = 1f
             it[Keys.repeatMode] = Player.REPEAT_MODE_ONE.toLong()
         }
