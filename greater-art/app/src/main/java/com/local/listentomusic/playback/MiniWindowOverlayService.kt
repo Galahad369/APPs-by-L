@@ -63,6 +63,8 @@ class MiniWindowOverlayService : Service() {
     private val crossHitSize = 58
     private val crossSize = 34
     private val crossMargin = 12
+    // Brighter red X for visibility against dark liquid metal backgrounds
+    private val crossBaseAlpha = 1f
 
     private var downX = 0f
     private var downY = 0f
@@ -378,14 +380,14 @@ class MiniWindowOverlayService : Service() {
     }
 
     private fun updateCrossAppearance(active: Boolean) {
-        crossImg?.alpha = if (active) 1f else 0.90f
+        crossImg?.alpha = if (active) 1f else crossBaseAlpha
         crossView?.background = crossTargetDrawable(active)
     }
 
     private fun crossTargetDrawable(active: Boolean) = GradientDrawable().apply {
         shape = GradientDrawable.OVAL
-        setColor(if (active) 0x38FF3B30 else 0x16FF3B30)
-        setStroke(dp(if (active) 2 else 1), if (active) 0xCCFF453A.toInt() else 0x70FF453A)
+        setColor(if (active) 0x48FF3B30 else 0x22FF3B30)
+        setStroke(dp(2).toInt(), if (active) 0xFF453A.toInt() else 0xB0FF453A.toInt())
     }
 
     private fun clampPosition() {

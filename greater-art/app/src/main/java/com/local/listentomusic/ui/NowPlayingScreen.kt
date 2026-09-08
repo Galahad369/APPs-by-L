@@ -822,12 +822,17 @@ private fun WaveformTimeline(
     val inactive = MaterialTheme.colorScheme.outlineVariant
     val displayPeaks = remember(waveform) {
         waveform?.takeIf { it.isNotEmpty() }?.let { raw ->
-            val peaks = FloatArray(72) { bar ->
-                val first = bar * raw.size / 72
-                val last = ((bar + 1) * raw.size / 72).coerceAtLeast(first + 1).coerceAtMost(raw.size)
+            // 4 bars per group = fewer, wider bars with stronger presence
+            val groupSize = 4
+            val groups = (raw.size + groupSize - 1) / groupSize
+            val peaks = FloatArray(groups) { g ->
+                val first = g * groupSize
+                val last = ((g + 1) * groupSize).coerceAtMost(raw.size)
                 (first until last).maxOfOrNull { raw[it].takeIf(Float::isFinite) ?: 0f } ?: 0f
             }
-            val reference = peaks.sorted()[64].coerceAtLeast(0.01f)
+            // p75 reference keeps quiet passages visible instead of crushing them
+            val sorted = peaks.sorted()
+            val reference = sorted[(sorted.lastIndex * 0.75f).toInt()].coerceAtLeast(0.02f)
             peaks.map { (it / reference).coerceIn(0f, 1f) }.toFloatArray()
         }
     }

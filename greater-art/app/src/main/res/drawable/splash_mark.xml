@@ -1,1 +1,24 @@
-<inset xmlns:android="http://schemas.android.com/apk/res/android" android:drawable="@drawable/ic_launcher_foreground" android:insetLeft="24dp" android:insetTop="24dp" android:insetRight="24dp" android:insetBottom="24dp" />
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="288"
+    android:viewportHeight="288">
+    <!-- Properly inset waveform/stylus mark — centered, not cropped -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#111614"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="12"
+        android:pathData="M62,170 L95,170 L115,125 L145,227 L177,80 L209,170 L262,170" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#DDE6E2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="7"
+        android:pathData="M62,170 L95,170 L115,125 L145,227 L177,80 L209,170 L262,170" />
+    <path
+        android:fillColor="#8BE9D3"
+        android:pathData="M242,170 A18,18 0,1 1,214 170 A18,18 0,1 1,242 170" />
+</vector>

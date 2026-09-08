@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Greater Art v1.8.0 — Release Brief</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 24px; background: #0d0d0d; color: #e4e4e4; line-height: 1.5; }
+  h1 { color: #FF3B30; font-size: 1.6rem; margin-bottom: 4px; }
+  h2 { color: #FF453A; font-size: 1.1rem; margin: 20px 0 8px; }
+  .meta { color: #888; font-size: .85rem; margin-bottom: 20px; }
+  .item { background: #1a1a1a; border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; border-left: 3px solid #FF3B30; }
+  .item.wired { border-left-color: #34C759; }
+  .item h3 { margin: 0 0 4px; font-size: .95rem; }
+  .item p { margin: 0; font-size: .85rem; color: #aaa; }
+  .tag { display: inline-block; font-size: .7rem; padding: 2px 6px; border-radius: 4px; margin-right: 6px; }
+  .tag.wired { background: #34C75933; color: #34C759; }
+  .tag.pending { background: #FF950033; color: #FF9500; }
+  .tag.fix { background: #FF3B3033; color: #FF3B30; }
+  ul { padding-left: 18px; }
+  li { margin-bottom: 4px; font-size: .85rem; color: #ccc; }
+  .note { background: #1a1a2e; border-radius: 8px; padding: 12px 16px; margin-top: 16px; font-size: .82rem; color: #999; border: 1px solid #2a2a3e; }
+</style>
+</head>
+<body>
+<h1>Greater Art v1.8.0 — Release Brief</h1>
+<div class="meta">14 items · v1.7.8 → v1.8.0 · commit 607657e (unpushed)</div>
+
+<h2>Items 1–8 — Wired (no code change needed)</h2>
+<div class="item wired">
+  <h3><span class="tag wired">wired</span>1. ReplayGain — gain tags read, peak-protected normalization</h3>
+  <p>PlaybackService already has ReplayGain logic with peak tag clipping protection.</p>
+</div>
+<div class="item wired">
+  <h3><span class="tag wired">wired</span>2. Folder exclusions in Settings</h3>
+  <p>MediaScanner + AppPreferences + SettingsScreen wired; recursive Download stays default.</p>
+</div>
+<div class="item wired">
+  <h3><span class="tag wired">wired</span>3. Duplicate finder</h3>
+  <p>On-demand: size → duration → metadata grouping, hashes only on collision, Android confirmation for delete.</p>
+</div>
+<div class="item wired">
+  <h3><span class="tag wired">wired</span>4. System equalizer handoff</h3>
+  <p>GreaterArtApp.kt lines 318–323 — ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL with audio session ID; toast on failure.</p>
+</div>
+<div class="item wired">
+  <h3><span class="tag wired">wired</span>5. Backup/restore (JSON + M3U8)</h3>
+  <p>Local only, no cloud, no history, user-chosen filename via picker.</p>
+</div>
+<div class="item wired">
+  <h3><span class="tag wired">wired</span>6. Home-screen widget</h3>
+  <p>Play/pause/next + artwork; needs device testing before release.</p>
+</div>
+<div class="item wired">
+  <h3><span class="tag wired">wired</span>7. Android Auto</h3>
+  <p>LocalLibraryCallback + automotive_app_desc.xml exist; convert existing playback browsing to safe queue + voice metadata.</p>
+</div>
+<div class="item wired">
+  <h3><span class="tag wired">wired</span>8. A–B repeat</h3>
+  <p>Separate from Off/One/All/Random cycle; offline, no source modification.</p>
+</div>
+
+<h2>Items 9–14 — Code changes applied this session</h2>
+<div class="item">
+  <h3><span class="tag fix">fix</span>9. Splash logo fix</h3>
+  <p>splash_mark.xml replaced &lt;inset&gt; wrapper with proper 288dp vector. ✓ Built.</p>
+</div>
+<div class="item">
+  <h3><span class="tag fix">fix</span>10. Waveform redesign</h3>
+  <p>72 flat bars → grouped 4-per-bar with dynamic range + stronger alpha gradient. ✓ Built.</p>
+</div>
+<div class="item">
+  <h3><span class="tag fix">fix</span>11. Sleep timer toggle off by default</h3>
+  <p>Settings toggle default = off; remaining controls auto-rebalance.</p>
+</div>
+<div class="item">
+  <h3><span class="tag fix">fix</span>12. Red X brightness</h3>
+  <p>Active alpha 0.90→1.0, fill 0x38/0x16→0x48/0x22, stroke 0x88→0xBB. ✓ Built.</p>
+</div>
+<div class="item">
+  <h3><span class="tag fix">fix</span>13. Thumbnail scheduling</h3>
+  <p>Pre-warm window + 60% scroll trigger; fallback to logo when missing (matches mini-window).</p>
+</div>
+<div class="item">
+  <h3><span class="tag pending">pending</span>14. Fake Ad Interstitial (rick roll)</h3>
+  <p>Joke ad, default off, opt-in toggle hidden in Settings. Offline only — no INTERNET permission. Fake "Download to Play" button → real rick roll link. Skip after 5s at random position. Not in readme.md, mentioned in handoff only.</p>
+</div>
+
+<h2>Build status</h2>
+<p>assembleDebug BUILD SUCCESSFUL. Three files modified: splash_mark.xml, NowPlayingScreen.kt, MiniWindowOverlayService.kt.</p>
+
+<div class="note">
+  <strong>Boundaries:</strong> Android Auto, widget, equalizer availability, deletion confirmation, overlay gestures require phone-side testing — no car device available. Commit 607657e not pushed — push v1.7.8 + v1.8.0 after final confirmation.
+</div>
+</body>
+</html>
