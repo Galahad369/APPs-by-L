@@ -258,7 +258,13 @@ fun LibraryScreen(
                     uiText(language, "Open settings", "開啟設定"),
                     onGrantStorageAccess,
                 )
-                LibraryStatus.SCANNING -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                LibraryStatus.SCANNING -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Image(androidx.compose.ui.res.painterResource(com.local.listentomusic.R.drawable.ic_launcher_foreground), null, Modifier.size(96.dp))
+                        Text(uiText(language, "Opening your library", "正在開啟音樂庫"), style = MaterialTheme.typography.titleMedium)
+                        CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                    }
+                }
                 LibraryStatus.FOLDER_MISSING -> MessageState(
                     uiText(language, "Download folder unavailable", "無法使用 Download 資料夾"),
                     uiText(language, "The app could not open:\n${state.targetPath}", "應用程式無法開啟：\n${state.targetPath}"),

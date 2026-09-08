@@ -111,6 +111,14 @@ fun SettingsScreen(
     onRescan: () -> Unit,
     onReset: () -> Unit,
     onSeekOffset: (Long) -> Unit,
+    onJokeAdsEnabled: (Boolean) -> Unit,
+    onShowSleepControl: (Boolean) -> Unit,
+    onFolderExcluded: (String, Boolean) -> Unit,
+    onReplayGainEnabled: (Boolean) -> Unit,
+    onEqualizer: () -> Unit,
+    onBackup: () -> Unit,
+    onRestore: () -> Unit,
+    onDuplicates: () -> Unit,
 ) {
     val language = preferences.appLanguage
     var cacheCleared by remember { mutableStateOf(false) }
@@ -119,6 +127,7 @@ fun SettingsScreen(
     var deletePlaylist by remember { mutableStateOf<LocalPlaylist?>(null) }
     var playlistName by remember { mutableStateOf("") }
     var resetConfirmOpen by remember { mutableStateOf(false) }
+    var folderDraft by remember { mutableStateOf("") }
     val repeatModes = listOf(
         PlaybackCycleChoice(Player.REPEAT_MODE_ONE, false, uiText(language, "One", "單曲")),
         PlaybackCycleChoice(Player.REPEAT_MODE_ALL, false, uiText(language, "All", "全部")),
@@ -251,6 +260,9 @@ fun SettingsScreen(
                 SwitchSetting(uiText(language, "Show file details", "顯示檔案詳情"), uiText(language, "Display format and file size below the title.", "在標題下顯示格式與檔案大小。"), preferences.showFileDetails, onShowFileDetails)
 
                 SectionTitle(uiText(language, "Playback", "播放"))
+                SwitchSetting("ReplayGain", uiText(language, "Use track gain tags with peak protection. Untagged files play unchanged; boosting needs a peak tag and device support.", "使用曲目增益標籤及峰值保護。沒有標籤時保持原音量，增強音量需要峰值標籤和裝置支援。"), preferences.replayGainEnabled, onReplayGainEnabled)
+                TextButton(onClick = onEqualizer, modifier = Modifier.padding(horizontal = 16.dp)) { Text(uiText(language, "Open system equalizer", "開啟系統等化器")) }
+                SwitchSetting(uiText(language, "Show sleep timer", "顯示睡眠計時器"), uiText(language, "Optional player control. Hidden by default.", "選用播放控制，預設隱藏。"), preferences.showSleepControl, onShowSleepControl)
                 ChoiceSetting(uiText(language, "Playback speed", "播放速度"), uiText(language, "Applied immediately and remembered locally.", "立即套用並儲存在本機。"), speeds, playback.speed, { "${it}×" }, onSpeed)
                 ChoiceSetting(
                     uiText(language, "Repeat", "循環"),
@@ -331,6 +343,22 @@ fun SettingsScreen(
                 }
 
                 SectionTitle(uiText(language, "Library & cache", "音樂庫與快取"))
+                TextButton(onClick = onDuplicates, modifier = Modifier.padding(horizontal = 16.dp)) { Text(uiText(language, "Find duplicate files", "尋找重複檔案")) }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onBackup, modifier = Modifier.weight(1f)) { Text("Back up settings") }
+                    OutlinedButton(onClick = onRestore, modifier = Modifier.weight(1f)) { Text("Restore backup") }
+                }
+                Text(uiText(language, "Excluded Download folders", "排除的 Download 資料夾"), Modifier.padding(horizontal = 16.dp), fontWeight = FontWeight.Bold)
+                OutlinedTextField(folderDraft, { folderDraft = it }, label = { Text("Folder / subfolder") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(16.dp))
+                TextButton(onClick = {
+                    val path = folderDraft.trim().replace('\\', '/').trim('/')
+                    if (path.isNotBlank() && path.split('/').none { it == ".." || it == "." } && ':' !in path) {
+                        onFolderExcluded(path, true); folderDraft = ""
+                    }
+                }, enabled = folderDraft.isNotBlank(), modifier = Modifier.padding(horizontal = 16.dp)) { Text(uiText(language, "Exclude folder", "排除此資料夾")) }
+                preferences.excludedFolders.forEach { folder ->
+                    SwitchSetting(folder, uiText(language, "Turn off to include again. Files remain untouched.", "關閉後重新加入，不會更改檔案。"), true, { onFolderExcluded(folder, false) })
+                }
                 SwitchSetting(uiText(language, "Preload thumbnails", "預先載入縮圖"), uiText(language, "Warm the first library page for faster scrolling.", "預先載入第一頁，讓捲動更快速。"), preferences.preloadThumbnails, onPreloadThumbnails)
                 ActionCard(Icons.Rounded.Cached, uiText(language, "Scan Download again", "重新掃描 Download"), uiText(language, "Refresh the recursive local media index.", "重新整理遞迴本機媒體索引。"), uiText(language, "Rescan", "重新掃描")) { onRescan(); onBack() }
                 ActionCard(
@@ -362,6 +390,12 @@ fun SettingsScreen(
                     onDeveloperMode,
                 )
                 Spacer(Modifier.height(12.dp))
+                SwitchSetting(
+                    "Toggle Ads On",
+                    "Optional parody: loud colours, wobbling buttons and a five-second skip. Buttons open a Rickroll in your browser.",
+                    preferences.jokeAdsEnabled,
+                    onJokeAdsEnabled,
+                )
                 OutlinedButton(
                     onClick = { resetConfirmOpen = true },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
