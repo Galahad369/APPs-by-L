@@ -138,7 +138,9 @@ class ThumbnailRepository(context: Context) {
         val retriever = MediaMetadataRetriever()
         return try {
             retriever.setDataSource(media.path)
-            val frame = retriever.getFrameAtTime(1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+            val frame = (if (Build.VERSION.SDK_INT >= 27) {
+                retriever.getScaledFrameAtTime(1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, VIDEO_WIDTH, VIDEO_HEIGHT)
+            } else retriever.getFrameAtTime(1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC))
                 ?: retriever.getFrameAtTime(-1L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
                 ?: return null
             centerCrop(frame, VIDEO_WIDTH, VIDEO_HEIGHT)

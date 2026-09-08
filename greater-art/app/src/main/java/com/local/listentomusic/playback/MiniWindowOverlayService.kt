@@ -222,7 +222,7 @@ class MiniWindowOverlayService : Service() {
             gravity = android.view.Gravity.CENTER_VERTICAL
         }
         val note = ImageView(this).apply {
-            setImageResource(R.drawable.ic_music_note)
+            setImageResource(R.drawable.ic_launcher_foreground)
             layoutParams = android.widget.LinearLayout.LayoutParams(dp(22), dp(22)).apply { rightMargin = dp(6) }
         }
         titleView = TextView(this).apply {
@@ -378,7 +378,7 @@ class MiniWindowOverlayService : Service() {
     }
 
     private fun updateCrossAppearance(active: Boolean) {
-        crossImg?.alpha = if (active) 1f else 0.72f
+        crossImg?.alpha = if (active) 1f else 0.90f
         crossView?.background = crossTargetDrawable(active)
     }
 

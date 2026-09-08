@@ -75,6 +75,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -819,6 +820,17 @@ private fun WaveformTimeline(
     val fraction = if (seeking) seekFraction else playbackFraction
     val active = MaterialTheme.colorScheme.secondary
     val inactive = MaterialTheme.colorScheme.outlineVariant
+    val displayPeaks = remember(waveform) {
+        waveform?.takeIf { it.isNotEmpty() }?.let { raw ->
+            val peaks = FloatArray(72) { bar ->
+                val first = bar * raw.size / 72
+                val last = ((bar + 1) * raw.size / 72).coerceAtLeast(first + 1).coerceAtMost(raw.size)
+                (first until last).maxOfOrNull { raw[it].takeIf(Float::isFinite) ?: 0f } ?: 0f
+            }
+            val reference = peaks.sorted()[64].coerceAtLeast(0.01f)
+            peaks.map { (it / reference).coerceIn(0f, 1f) }.toFloatArray()
+        }
+    }
 
     Slider(
         value = fraction,
@@ -837,10 +849,10 @@ private fun WaveformTimeline(
         },
         track = {
             Canvas(Modifier.fillMaxWidth().height(44.dp)) {
-                val bars = waveform?.size ?: 72
+                val bars = displayPeaks?.size ?: 72
                 val spacing = size.width / bars
                 repeat(bars) { index ->
-                    val wave = waveform?.getOrNull(index) ?: 0.025f
+                    val wave = displayPeaks?.getOrNull(index) ?: 0.025f
                     val barHeight = size.height * (0.06f + wave * 0.90f)
                     val x = spacing * (index + 0.5f)
                     drawLine(
@@ -975,6 +987,7 @@ private fun SecondaryControlRow(
     sleepTimer: SleepTimerState,
 ) {
     var speedMenuOpen by remember { mutableStateOf(false) }
+    val practice by com.local.listentomusic.playback.PracticeLoop.state.collectAsState()
     var sleepMenuOpen by remember { mutableStateOf(false) }
     val outline = MaterialTheme.colorScheme.outline
     val activeColor = MaterialTheme.colorScheme.secondary
@@ -1041,7 +1054,14 @@ private fun SecondaryControlRow(
             Spacer(Modifier.width(4.dp))
             Text(cycleLabel, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
         }
-        Box(Modifier.weight(1f)) {
+        Button(
+            onClick = { com.local.listentomusic.playback.PracticeLoop.mark(playback.currentPath, playback.positionMs) },
+            modifier = Modifier.weight(1f).height(40.dp), colors = controlColors,
+            shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(horizontal = 4.dp),
+        ) {
+            Text(when { practice.end != null -> "A–B ×"; practice.start != null -> "Set B"; else -> "Set A" }, style = MaterialTheme.typography.labelMedium)
+        }
+        if (playback.showSleepControl) Box(Modifier.weight(1f)) {
             Button(
                 onClick = { sleepMenuOpen = true },
                 modifier = Modifier.fillMaxWidth().height(40.dp),

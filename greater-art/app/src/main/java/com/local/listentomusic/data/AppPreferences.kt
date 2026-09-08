@@ -161,6 +161,51 @@ class AppPreferences(private val context: Context) {
 
     suspend fun current(): UserPreferences = values.first()
 
+    // Explicit portable preference allowlist: no last-played data, private background
+    // document grants, diagnostics or joke toggle cross a backup boundary.
+    private val backupStrings = listOf(Keys.sortMode, Keys.customOrder, Keys.libraryRowSize,
+        Keys.themeMode, Keys.floatingWindowMode, Keys.appLanguage, Keys.appFont,
+        Keys.playlists, Keys.activePlaylistId, Keys.excludedFolders)
+    private val backupBooleans = listOf(Keys.showThumbnails, Keys.showFileDetails,
+        Keys.preloadThumbnails, Keys.resumePlayback, Keys.autoPictureInPicture,
+        Keys.editableQueue, Keys.showSleepControl, Keys.replayGainEnabled)
+
+    suspend fun exportBackup(): String {
+        val prefs = context.dataStore.data.first()
+        val json = org.json.JSONObject().put("format", "GreaterArtSettings").put("version", 1)
+        backupStrings.forEach { key -> prefs[key]?.let { json.put(key.name, it) } }
+        backupBooleans.forEach { key -> prefs[key]?.let { json.put(key.name, it) } }
+        json.put(Keys.speed.name, prefs[Keys.speed] ?: 1f)
+        json.put(Keys.repeatMode.name, prefs[Keys.repeatMode] ?: 1L)
+        json.put(Keys.seekOffsetMs.name, prefs[Keys.seekOffsetMs] ?: 5_000L)
+        return json.toString(2)
+    }
+
+    suspend fun restoreBackup(text: String) {
+        require(text.length <= 5_000_000) { "Backup is too large" }
+        val json = org.json.JSONObject(text)
+        require(json.optString("format") == "GreaterArtSettings" && json.optInt("version") == 1) { "Not a supported Greater Art backup" }
+        val speed = json.optDouble(Keys.speed.name, 1.0)
+        require(speed.isFinite() && speed in 0.25..3.0)
+        context.dataStore.edit { prefs ->
+            backupStrings.forEach { key ->
+                if (json.has(key.name)) {
+                    val value = json.getString(key.name)
+                    require(value.length <= 4_000_000)
+                    prefs[key] = value
+                } else prefs.remove(key)
+            }
+            backupBooleans.forEach { key ->
+                if (json.has(key.name)) prefs[key] = json.getBoolean(key.name) else prefs.remove(key)
+            }
+            prefs[Keys.speed] = speed.toFloat()
+            prefs[Keys.repeatMode] = json.optLong(Keys.repeatMode.name, 1).coerceIn(0, 2)
+            prefs[Keys.seekOffsetMs] = json.optLong(Keys.seekOffsetMs.name, 5_000).coerceIn(1_000, 60_000)
+            prefs[Keys.floatingWindowDefaultV2] = true
+            prefs.remove(Keys.silianRail)
+        }
+    }
+
     suspend fun setSortMode(mode: SortMode) {
         context.dataStore.edit { it[Keys.sortMode] = mode.name }
     }

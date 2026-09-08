@@ -68,6 +68,10 @@ fun GreaterArtApp(
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val sleepTimer by viewModel.sleepTimer.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val backupPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri -> uri?.let { viewModel.backupSettings(it) } }
+    val restorePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let { viewModel.restoreSettings(it) } }
+    var restoreConfirm by rememberSaveable { mutableStateOf(false) }
+    var showDuplicates by rememberSaveable { mutableStateOf(false) }
     val imageBackgroundPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
@@ -119,6 +123,7 @@ fun GreaterArtApp(
         value = viewModel.loadLyrics(playback.currentPath)
     }
     var screen by rememberSaveable { mutableStateOf(Screen.LIBRARY) }
+    var jokeDismissed by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(openPlayerRequest, playback.hasMedia) {
         if (openPlayerRequest > 0 && playback.hasMedia) {
@@ -302,6 +307,22 @@ fun GreaterArtApp(
                     onRescan = viewModel::rescan,
                     onReset = viewModel::resetAppSettings,
                     onSeekOffset = viewModel::setSeekOffset,
+                    onJokeAdsEnabled = viewModel::setJokeAdsEnabled,
+                    onShowSleepControl = viewModel::setShowSleepControl,
+                    onFolderExcluded = viewModel::setFolderExcluded,
+                    onReplayGainEnabled = viewModel::setReplayGainEnabled,
+                    onBackup = { backupPicker.launch("Greater-Art-settings.json") },
+                    onRestore = { restoreConfirm = true },
+                    onDuplicates = { showDuplicates = true },
+                    onEqualizer = {
+                        val intent = Intent(android.media.audiofx.AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL)
+                            .putExtra(android.media.audiofx.AudioEffect.EXTRA_AUDIO_SESSION, controller?.audioSessionId ?: 0)
+                            .putExtra(android.media.audiofx.AudioEffect.EXTRA_PACKAGE_NAME, context.packageName)
+                            .putExtra(android.media.audiofx.AudioEffect.EXTRA_CONTENT_TYPE, android.media.audiofx.AudioEffect.CONTENT_TYPE_MUSIC)
+                        runCatching { context.startActivity(intent) }.onFailure {
+                            android.widget.Toast.makeText(context, "No system equalizer is installed on this device.", android.widget.Toast.LENGTH_LONG).show()
+                        }
+                    },
                 )
             }
             }
@@ -346,6 +367,24 @@ fun GreaterArtApp(
                     modifier = Modifier.align(Alignment.TopEnd),
                 )
             }
+            if (settings.jokeAdsEnabled && !jokeDismissed && !isPictureInPicture) {
+                FakeAdInterstitial(
+                    onSkip = { jokeDismissed = true },
+                    onOpenLink = {
+                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW,
+                            "https://www.youtube.com/watch?v=dQw4w9WgXcQ".toUri())) }
+                    },
+                )
+            }
+            if (restoreConfirm) androidx.compose.material3.AlertDialog(
+                onDismissRequest = { restoreConfirm = false },
+                title = { androidx.compose.material3.Text("Restore settings and playlists?") },
+                text = { androidx.compose.material3.Text("The selected backup replaces portable settings and playlists. Media files remain unchanged.") },
+                confirmButton = { androidx.compose.material3.TextButton(onClick = { restoreConfirm = false; restorePicker.launch(arrayOf("application/json", "text/plain")) }) { androidx.compose.material3.Text("Choose backup") } },
+                dismissButton = { androidx.compose.material3.TextButton(onClick = { restoreConfirm = false }) { androidx.compose.material3.Text("Cancel") } },
+            )
+            if (showDuplicates) DuplicateDialog(library.files, playback.currentPath,
+                onDismiss = { showDuplicates = false }, onChanged = viewModel::rescan)
         }
         }
     }

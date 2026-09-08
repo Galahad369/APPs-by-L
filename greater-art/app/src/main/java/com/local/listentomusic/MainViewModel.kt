@@ -101,6 +101,7 @@ data class PlaybackUiState(
     val videoFrameRendered: Boolean = false,
     val errorMessage: String? = null,
     val appLanguage: AppLanguage = AppLanguage.ENGLISH,
+    val showSleepControl: Boolean = false,
 ) {
     val hasMedia: Boolean get() = currentPath != null
     val isVideo: Boolean
@@ -398,9 +399,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (excluded) add(folder) else remove(folder)
         }
         preferences.setExcludedFolders(next.toList())
+        userPreferences = preferences.current()
+        scanJob?.cancel()
+        scanJob = null
         rescan()
     }
     fun setActivePlaylist(id: String?) = updatePreference { preferences.setActivePlaylist(id) }
+
+    fun backupSettings(uri: Uri) = viewModelScope.launch(Dispatchers.IO) {
+        val context = getApplication<Application>()
+        val result = runCatching {
+            context.contentResolver.openOutputStream(uri, "wt")!!.bufferedWriter().use { it.write(preferences.exportBackup()) }
+        }
+        withContext(Dispatchers.Main) { android.widget.Toast.makeText(context, if (result.isSuccess) "Backup saved" else "Could not save backup", android.widget.Toast.LENGTH_LONG).show() }
+    }
+
+    fun restoreSettings(uri: Uri) = viewModelScope.launch(Dispatchers.IO) {
+        val context = getApplication<Application>()
+        val result = runCatching {
+            val bytes = context.contentResolver.openInputStream(uri)!!.use { input ->
+                val output = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(8192)
+                while (output.size() <= 5_000_000) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    output.write(buffer, 0, count)
+                }
+                output.toByteArray()
+            }
+            require(bytes.size <= 5_000_000)
+            preferences.restoreBackup(bytes.toString(Charsets.UTF_8))
+        }
+        withContext(Dispatchers.Main) {
+            if (result.isSuccess) { userPreferences = preferences.current(); scanJob?.cancel(); scanJob = null; rescan() }
+            android.widget.Toast.makeText(context, if (result.isSuccess) "Settings and playlists restored" else "Invalid or unreadable backup", android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
 
     fun importM3u(uri: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -694,6 +728,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             videoHeight = videoSize.height,
             videoFrameRendered = videoFrameRendered,
             errorMessage = lastPlaybackError,
+            appLanguage = userPreferences.appLanguage,
+            showSleepControl = userPreferences.showSleepControl,
         )
         // Skip identical emits. Every StateFlow update triggers a
         // recomposition storm across every screen that reads `playback`.
