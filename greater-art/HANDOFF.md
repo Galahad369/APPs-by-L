@@ -1,9 +1,9 @@
 # HANDOFF — Greater Art Android Media Player
 
 **Project:** `greater-art/` in the repository checkout  
-**Current version:** `1.7.8` (code 51)
-**Latest APK:** `releases/GreaterArt-v1.7.8-debug.apk`
-**APK SHA-256:** `e04a8c09dba381e7cd7d3e7f0c341037c2e30bd5a9a8343b2f57dc09f169515a`
+|**Current version:** `1.8.0` (code 51)|
+|**Latest APK:** `releases/GreaterArt-v1.8.0-debug.apk`|
+|**APK SHA-256:** `e1af46426170de96f35d29c13fc9727b2c5b67087fd5de06bde5e740612e5a8a`|
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
