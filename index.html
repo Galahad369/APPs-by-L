@@ -6,93 +6,30 @@
 <title>Apps by L — releases</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{
-  background:#06080c;
-  color:#c8ccd4;
-  font:15px/1.45 system-ui,-apple-system,sans-serif;
-  min-height:100vh;
-  -webkit-font-smoothing:antialiased;
-  background-image:
-    radial-gradient(ellipse at 20% 0%, rgba(0,229,255,.07) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 100%, rgba(120,0,255,.06) 0%, transparent 50%),
-    linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px);
-  background-size:100%,100%,48px 48px,48px 48px;
-}
+body{background:#06080c;color:#c8ccd4;font:15px/1.45 system-ui,-apple-system,sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased;background-image:radial-gradient(ellipse at 20% 0%,rgba(0,229,255,.07) 0%,transparent 60%),radial-gradient(ellipse at 80% 100%,rgba(120,0,255,.06) 0%,transparent 50%),linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px);background-size:100%,100%,48px 48px,48px 48px}
 .wrap{max-width:860px;margin:0 auto;padding:1.5rem 1rem 3rem}
 header{border-bottom:1px solid rgba(255,255,255,.06);padding-bottom:1rem;margin-bottom:1.5rem}
 h1{font-size:1.4rem;font-weight:700;color:#e8eaf0;letter-spacing:-.02em}
 .sub{color:#6b7280;font-size:.8rem;margin-top:.2rem}
-.card{
-  border:1px solid rgba(255,255,255,.06);
-  border-radius:12px;
-  padding:1.1rem 1.2rem;
-  margin-bottom:1rem;
-  background:linear-gradient(135deg,rgba(14,18,28,.95),rgba(22,28,42,.9));
-  backdrop-filter:blur(12px);
-  box-shadow:0 0 40px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.04);
-}
+.card{border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:1.1rem 1.2rem;margin-bottom:1rem;background:linear-gradient(135deg,rgba(14,18,28,.95),rgba(22,28,42,.9));backdrop-filter:blur(12px);box-shadow:0 0 40px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.04)}
 .card-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.4rem;margin-bottom:.7rem}
 .card h2{font-size:1.05rem;color:#e2e6ef;font-weight:600}
 .badge{font-size:.68rem;padding:.15rem .5rem;border-radius:999px;background:rgba(0,229,255,.1);color:#4fdcec;border:1px solid rgba(0,229,255,.18);font-weight:600;white-space:nowrap}
 .card .meta{font-size:.75rem;color:#8b92a5;margin-top:.1rem}
 .card .meta span{margin-right:.8rem}
-.card pre{
-  background:rgba(0,0,0,.45);
-  border:1px solid rgba(255,255,255,.05);
-  border-radius:8px;
-  padding:.75rem .9rem;
-  font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  color:#9ca3b8;
-  overflow-x:auto;
-  white-space:pre-wrap;
-  word-break:break-word;
-  margin-top:.6rem;
-}
+.card pre{background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.05);border-radius:8px;padding:.75rem .9rem;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#9ca3b8;overflow-x:auto;white-space:pre-wrap;word-break:break-word;margin-top:.6rem}
 .card h3{font-size:.82rem;color:#9ca3b8;margin:.8rem 0 .4rem;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
-.btn{
-  display:inline-flex;align-items:center;gap:.4rem;
-  margin-top:.7rem;
-  padding:.45rem 1rem;
-  border-radius:8px;
-  border:1px solid rgba(0,229,255,.25);
-  background:linear-gradient(135deg,rgba(0,229,255,.12),rgba(120,0,255,.08));
-  color:#c8d0e4;
-  font-size:.82rem;font-weight:500;
-  text-decoration:none;
-  cursor:pointer;
-  transition:background .2s,border-color .2s,transform .08s;
-  -webkit-tap-highlight-color:transparent;
-  touch-action:manipulation;
-}
+.btn{display:inline-flex;align-items:center;gap:.4rem;margin-top:.7rem;padding:.45rem 1rem;border-radius:8px;border:1px solid rgba(0,229,255,.25);background:linear-gradient(135deg,rgba(0,229,255,.12),rgba(120,0,255,.08));color:#c8d0e4;font-size:.82rem;font-weight:500;text-decoration:none;cursor:pointer;transition:background .2s,border-color .2s,transform .08s;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 .btn:hover{background:linear-gradient(135deg,rgba(0,229,255,.22),rgba(120,0,255,.14));border-color:rgba(0,229,255,.45);transform:translateY(-1px)}
 .btn:active{transform:scale(.97)}
 .btn .sha{font-size:.65rem;color:#5a6178;font-family:monospace;margin-left:.3rem}
 .sha-list{font-size:.75rem;color:#6b7280;margin-top:.3rem;font-family:monospace;word-break:break-all}
 .versions{margin-top:.5rem;display:flex;flex-wrap:wrap;gap:.35rem}
-.versions a{
-  font-size:.72rem;font-family:monospace;
-  padding:.15rem .45rem;border-radius:5px;
-  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);
-  color:#8b92a5;text-decoration:none;transition:background .15s;
-  -webkit-tap-highlight-color:transparent;
-  touch-action:manipulation;
-}
+.versions a{font-size:.72rem;font-family:monospace;padding:.15rem .45rem;border-radius:5px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);color:#8b92a5;text-decoration:none;transition:background .15s;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 .versions a:hover{background:rgba(0,229,255,.1);color:#c8d0e4}
 .versions .latest{background:rgba(0,229,255,.15);border-color:rgba(0,229,255,.3);color:#4fdcec;font-weight:600}
 footer{border-top:1px solid rgba(255,255,255,.06);margin-top:1.5rem;padding-top:.8rem;color:#3d4452;font-size:.72rem;text-align:center}
-
-@media(max-width:640px){
-  .wrap{padding:1rem .6rem 2rem}
-  .card{padding:.8rem .9rem;border-radius:10px}
-  .card h2{font-size:.95rem}
-  .btn{font-size:.78rem;padding:.4rem .8rem;width:100%;justify-content:center}
-  .btn .sha{display:none}
-  .versions a{font-size:.68rem;padding:.12rem .35rem}
-  .card pre{font-size:11px;padding:.6rem .7rem}
-  .card .meta span{display:block;margin-bottom:.2rem}
-  .card-head{gap:.3rem}
-}
+@media(max-width:640px){.wrap{padding:1rem .6rem 2rem}.card{padding:.8rem .9rem;border-radius:10px}.card h2{font-size:.95rem}.btn{font-size:.78rem;padding:.4rem .8rem;width:100%;justify-content:center}.btn .sha{display:none}.versions a{font-size:.68rem;padding:.12rem .35rem}.card pre{font-size:11px;padding:.6rem .7rem}.card .meta span{display:block;margin-bottom:.2rem}.card-head{gap:.3rem}}
 </style>
 </head>
 <body>
@@ -102,7 +39,6 @@ footer{border-top:1px solid rgba(255,255,255,.06);margin-top:1.5rem;padding-top:
     <div class="sub">Offline Android builds — no ads, no analytics, no internet permission</div>
   </header>
 
-  <!-- Greater Art — hosted on Vercel (24MB, under 50MB cap) -->
   <div class="card">
     <div class="card-head">
       <h2>Greater Art</h2>
@@ -115,28 +51,6 @@ footer{border-top:1px solid rgba(255,255,255,.06);margin-top:1.5rem;padding-top:
     <a class="btn" href="/releases/GreaterArt-v1.7.8-debug.apk" download>
       ↓ Download APK <span class="sha">e04a8c09dba381e7cd7d3e7f0c341037c2e30bd5a9a8343b2f57dc09f169515a</span>
     </a>
-    <div class="versions">
-      <a href="/releases/GreaterArt-v1.7.8-debug.apk" download class="latest">v1.7.8</a>
-      <a href="/releases/GreaterArt-v1.7.7-debug.apk" download>v1.7.7</a>
-      <a href="/releases/GreaterArt-v1.7.6-debug.apk" download>v1.7.6</a>
-      <a href="/releases/GreaterArt-v1.7.5-debug.apk" download>v1.7.5</a>
-      <a href="/releases/GreaterArt-v1.7.4-debug.apk" download>v1.7.4</a>
-      <a href="/releases/GreaterArt-v1.7.3-debug.apk" download>v1.7.3</a>
-      <a href="/releases/GreaterArt-v1.7.1-debug.apk" download>v1.7.1</a>
-      <a href="/releases/GreaterArt-v1.7.0-debug.apk" download>v1.7.0</a>
-      <a href="/releases/GreaterArt-v1.6.11-debug.apk" download>v1.6.11</a>
-      <a href="/releases/GreaterArt-v1.6.10-debug.apk" download>v1.6.10</a>
-      <a href="/releases/GreaterArt-v1.6.9-debug.apk" download>v1.6.9</a>
-      <a href="/releases/GreaterArt-v1.6.8-debug.apk" download>v1.6.8</a>
-      <a href="/releases/GreaterArt-v1.6.7-debug.apk" download>v1.6.7</a>
-      <a href="/releases/GreaterArt-v1.6.6-debug.apk" download>v1.6.6</a>
-      <a href="/releases/GreaterArt-v1.6.5-debug.apk" download>v1.6.5</a>
-      <a href="/releases/GreaterArt-v1.6.4-debug.apk" download>v1.6.4</a>
-      <a href="/releases/GreaterArt-v1.6.3-debug.apk" download>v1.6.3</a>
-      <a href="/releases/GreaterArt-v1.6.2-debug.apk" download>v1.6.2</a>
-      <a href="/releases/GreaterArt-v1.6.1-debug.apk" download>v1.6.1</a>
-      <a href="/releases/GreaterArt-v1.6.0-debug.apk" download>v1.6.0</a>
-    </div>
     <h3>README</h3>
     <pre># Greater Art — Offline Android Media Player
 
@@ -156,7 +70,6 @@ Build: JDK 21 + Android SDK API 37. See HANDOFF.md.
 v1.7.2 quarantined — known crash, not a baseline.</pre>
   </div>
 
-  <!-- LocalKit — GitHub (87MB, over Vercel cap) -->
   <div class="card">
     <div class="card-head">
       <h2>LocalKit</h2>
@@ -186,7 +99,6 @@ Build: JDK 17+, Android SDK API 37. .\build-personal-debug.ps1 or Android Studio
 QR/OCR models bundled (increases APK size, no first-use downloads).</pre>
   </div>
 
-  <!-- Useless Calculator — GitHub (18MB, over Vercel cap) -->
   <div class="card">
     <div class="card-head">
       <h2>Useless Calculator</h2>
@@ -214,7 +126,7 @@ Satire — do not present as trustworthy.</pre>
   </div>
 
   <footer>
-    Apps by L · Greater Art on Vercel · LocalKit &amp; Calculator on GitHub · no device connected for smoke tests
+    Apps by L · Greater Art on Vercel · LocalKit & Calculator on GitHub · no device connected for smoke tests
   </footer>
 </div>
 </body>
