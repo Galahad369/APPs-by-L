@@ -30,6 +30,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -110,7 +111,8 @@ fun GreaterArtApp(
             )
         }
     }
-    val artwork by produceState<Bitmap?>(initialValue = null, key1 = playback.currentPath) {
+    val artwork by produceState<Bitmap?>(initialValue = null, key1 = playback.currentPath, key2 = settings.localOverrides[playback.currentPath]) {
+        value = null
         value = viewModel.loadCurrentArtwork(playback.currentPath)
     }
     val m3uImporter = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -123,20 +125,34 @@ fun GreaterArtApp(
         value = viewModel.loadLyrics(playback.currentPath)
     }
     var screen by rememberSaveable { mutableStateOf(Screen.LIBRARY) }
+    var playerOpen by rememberSaveable { mutableStateOf(false) }
+    var editDisplay by remember { mutableStateOf<com.local.listentomusic.model.MediaFile?>(null) }
+    var createRule by remember { mutableStateOf(false) }
+    val sheetState = remember { androidx.compose.animation.core.MutableTransitionState(false) }
+    sheetState.targetState = playerOpen
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = object : androidx.lifecycle.DefaultLifecycleObserver {
+            override fun onStart(owner: androidx.lifecycle.LifecycleOwner) { viewModel.startLibraryObservation() }
+            override fun onStop(owner: androidx.lifecycle.LifecycleOwner) { viewModel.stopLibraryObservation() }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer); viewModel.stopLibraryObservation() }
+    }
     var jokeDismissed by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(openPlayerRequest, playback.hasMedia) {
         if (openPlayerRequest > 0 && playback.hasMedia) {
-            screen = Screen.NOW_PLAYING
+            playerOpen = true
             onOpenPlayerRequestConsumed(openPlayerRequest)
         }
     }
 
-    LaunchedEffect(screen) {
-        onPlayerScreenChanged(screen == Screen.NOW_PLAYING)
+    LaunchedEffect(playerOpen) {
+        onPlayerScreenChanged(playerOpen)
     }
 
-    BackHandler(enabled = screen != Screen.LIBRARY) { screen = Screen.LIBRARY }
+    BackHandler(enabled = screen != Screen.LIBRARY || playerOpen) { if (playerOpen) playerOpen = false else screen = Screen.LIBRARY }
 
     val appName = if (settings.silianRail) "PIERCE&PIERCE" else "Greater Art"
     GreaterArtTheme(
@@ -145,14 +161,19 @@ fun GreaterArtApp(
         silianRail = settings.silianRail,
     ) {
         val lightPalette = MaterialTheme.colorScheme.background.luminance() > 0.5f
-        Box(modifier = Modifier.fillMaxSize()) {
-            if (screen == Screen.NOW_PLAYING && playback.isVideo) {
-                // Full-screen video completely occludes the wallpaper. Avoid spending
-                // a decoder and animation frames on pixels the user cannot see.
-                Box(Modifier.fillMaxSize().background(Color.Black))
-            } else {
-                AppBackground(preferences = settings, playback = playback, controller = controller)
+        LaunchedEffect(lightPalette) {
+            context.findActivity()?.let { activity ->
+                androidx.core.view.WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply {
+                    isAppearanceLightStatusBars = lightPalette
+                    isAppearanceLightNavigationBars = lightPalette
+                }
             }
+        }
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Stable ownership across navigation: prepare once, pause when covered,
+            // and resume immediately when Library or Settings reveals the wallpaper.
+            AppBackground(preferences = settings, playback = playback, controller = controller,
+                visible = !((sheetState.currentState || sheetState.targetState) && playback.isVideo))
             Surface(
                 modifier = Modifier.fillMaxSize(),
                 // A light palette needs an opaque-enough base over black/custom media.
@@ -165,6 +186,11 @@ fun GreaterArtApp(
             AnimatedContent(
                 targetState = screen,
                 transitionSpec = {
+                    if (playback.isVideo) {
+                        // A shared decoder cannot display two outgoing/incoming
+                        // surfaces at once. Switch ownership without an overlap.
+                        androidx.compose.animation.EnterTransition.None togetherWith androidx.compose.animation.ExitTransition.None
+                    } else {
                     val spring = spring<IntOffset>(
                         stiffness = Spring.StiffnessMediumLow,
                         dampingRatio = Spring.DampingRatioNoBouncy,
@@ -176,6 +202,7 @@ fun GreaterArtApp(
                     } else {
                         slideInHorizontally(spring, initialOffsetX = { -it / 3 }) + fadeIn() togetherWith
                             slideOutHorizontally(spring, targetOffsetX = { it }) + fadeOut()
+                    }
                     }
                 },
                 label = "screen",
@@ -190,7 +217,7 @@ fun GreaterArtApp(
                                 playback = playback,
                                 artwork = artwork,
                                 language = settings.appLanguage,
-                                onOpen = { screen = Screen.NOW_PLAYING },
+                                onOpen = { playerOpen = true },
                                 onTogglePlay = viewModel::togglePlayPause,
                                 onPrevious = viewModel::previous,
                                 onNext = viewModel::next,
@@ -219,42 +246,17 @@ fun GreaterArtApp(
                         onLoadThumbnail = viewModel::loadThumbnail,
                         onPreloadAhead = viewModel::preloadThumbnailsStartingAt,
                         onOpenSettings = { screen = Screen.SETTINGS },
+                        onEditDisplay = { editDisplay = it },
+                        onCreateRule = { createRule = true },
+                        onAddSelected = viewModel::addAllToPlaylist,
+                        onCreateSelected = viewModel::createSelectionPlaylist,
                         onPlay = {
                             viewModel.play(it)
-                            screen = Screen.NOW_PLAYING
+                            playerOpen = true
                         },
                     )
                 }
-                Screen.NOW_PLAYING -> NowPlayingScreen(
-                        playback = playback,
-                        artwork = artwork,
-                        queue = queue,
-                        lyrics = lyrics,
-                        showFileDetails = settings.showFileDetails,
-                        editableQueue = settings.editableQueue,
-                        language = settings.appLanguage,
-                        controller = controller,
-                        contentPadding = PaddingValues(0.dp),
-                        isPictureInPicture = isPictureInPicture,
-                        onVideoBoundsChanged = onVideoBoundsChanged,
-                        onPictureInPicture = onEnterPictureInPicture,
-                        onBack = { screen = Screen.LIBRARY },
-                        onTogglePlay = viewModel::togglePlayPause,
-                        onPrevious = viewModel::previous,
-                        onNext = viewModel::next,
-                        onSeek = viewModel::seekTo,
-                        onSpeed = viewModel::setSpeed,
-                        onRepeat = viewModel::cycleRepeatMode,
-                        onSleepTimer = viewModel::setSleepTimer,
-                        sleepTimer = sleepTimer,
-                        seekOffsetMs = settings.seekOffsetMs,
-                        onSeekBy = viewModel::seekBy,
-                        onPlayQueueItem = viewModel::playQueueItem,
-                        onLoadThumbnail = viewModel::loadThumbnail,
-                        onLoadWaveform = viewModel::loadWaveform,
-                        onMoveQueueItem = viewModel::moveQueueItem,
-                        onRemoveQueueItem = viewModel::removeQueueItem,
-                    )
+                Screen.NOW_PLAYING -> Unit // Legacy saved enum; playback now lives in the overlay.
                 Screen.SETTINGS -> SettingsScreen(
                     appName = appName,
                     preferences = settings,
@@ -309,6 +311,8 @@ fun GreaterArtApp(
                     onSeekOffset = viewModel::setSeekOffset,
                     onJokeAdsEnabled = viewModel::setJokeAdsEnabled,
                     onShowSleepControl = viewModel::setShowSleepControl,
+                    onShowAbRepeat = viewModel::setShowAbRepeat,
+                    onExtendedSearch = viewModel::setExtendedSearch,
                     onFolderExcluded = viewModel::setFolderExcluded,
                     onReplayGainEnabled = viewModel::setReplayGainEnabled,
                     onBackup = { backupPicker.launch("Greater-Art-settings.json") },
@@ -326,13 +330,33 @@ fun GreaterArtApp(
                 )
             }
             }
+            PlayerOverlay(sheetState, isPictureInPicture, { playerOpen = false }) {
+                NowPlayingScreen(playback, artwork, queue, lyrics, settings.showFileDetails, settings.editableQueue,
+                    settings.appLanguage, controller, PaddingValues(0.dp), isPictureInPicture,
+                    onVideoBoundsChanged, onEnterPictureInPicture,
+                    { screen = Screen.LIBRARY; playerOpen = false }, { playerOpen = false },
+                    viewModel::togglePlayPause, viewModel::previous, viewModel::next, viewModel::seekTo,
+                    viewModel::setSpeed, viewModel::cycleRepeatMode, viewModel::setSleepTimer, sleepTimer,
+                    settings.seekOffsetMs, viewModel::seekBy, viewModel::playQueueItem, viewModel::loadThumbnail,
+                    viewModel::loadWaveform, viewModel::moveQueueItem, viewModel::removeQueueItem)
+            }
+            val undoMessage by viewModel.undoMessage.collectAsStateWithLifecycle()
+            undoMessage?.let { message ->
+                androidx.compose.material3.Snackbar(modifier = Modifier.align(Alignment.BottomCenter), action = {
+                    androidx.compose.material3.TextButton(onClick = viewModel::undoLastEdit) { androidx.compose.material3.Text(uiText(settings.appLanguage, "Undo", "復原")) }
+                }) { androidx.compose.material3.Text(message) }
+            }
             if (settings.developerMode) {
                 // Diagnostics are deliberately collected only while the inspector is
                 // enabled. Thumbnail warmup changes these counters hundreds of times;
                 // collecting them at the app root caused avoidable full-screen churn.
                 val thumbnailStats by viewModel.thumbnailStats.collectAsStateWithLifecycle()
                 val waveformDiagnostics by viewModel.waveformDiagnostics.collectAsStateWithLifecycle()
-                val regions = when (screen) {
+                val engineReport by com.local.listentomusic.playback.PlaybackDiagnostics.report.collectAsStateWithLifecycle()
+                val indexStatus by viewModel.indexStatus.collectAsStateWithLifecycle()
+                val viewport = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                val regions = when (if (playerOpen) Screen.NOW_PLAYING else screen) {
                     Screen.LIBRARY -> listOf("LIBRARY_TOP_BAR", "SEARCH_AND_SORT", "MEDIA_LIST", "MINI_PLAYER")
                     Screen.NOW_PLAYING -> listOf("MEDIA_STAGE", "TRACK_TITLE", "PLAYBACK_CONTROLS", "TIMELINE", "QUEUE", "LYRICS")
                     Screen.SETTINGS -> listOf("SETTINGS_TOP_BAR", "APPEARANCE", "PLAYBACK", "SONG_LISTS", "CACHE", "PRIVACY")
@@ -343,8 +367,8 @@ fun GreaterArtApp(
                 DeveloperDiagnostics(
                     report = buildString {
                         appendLine("version=${com.local.listentomusic.BuildConfig.VERSION_NAME}")
-                        appendLine("screen=${screen.name}")
-                        appendLine("media=${playback.currentPath ?: "none"}")
+                        appendLine("screen=${screen.name} playerOverlay=$playerOpen")
+                        appendLine("media=${playback.currentPath?.let { com.local.listentomusic.model.sourceMediaPath(it).substringAfterLast('.') } ?: "none"} (paths omitted)")
                         appendLine("playing=${playback.isPlaying} video=${playback.isVideo}")
                         appendLine("position=${playback.positionMs} duration=${playback.durationMs}")
                         appendLine("playerState=${controller?.playbackState ?: -1} buffered=${controller?.bufferedPosition ?: 0L}")
@@ -354,13 +378,23 @@ fun GreaterArtApp(
                         appendLine("floating=${settings.floatingWindowMode} auto=${settings.autoPictureInPicture}")
                         appendLine("background=${settings.backgroundMode} theme=${settings.themeMode}")
                         appendLine("thumbs=memory:${thumbnailStats.memoryHits} disk:${thumbnailStats.diskHits} made:${thumbnailStats.generated} failed:${thumbnailStats.failed} active:${thumbnailStats.inFlight}")
-                        appendLine("waveform=${waveformDiagnostics.status} file=${waveformDiagnostics.fileName ?: "none"}")
+                        appendLine("waveform=${waveformDiagnostics.status}")
                         appendLine("waveformError=${waveformDiagnostics.error ?: "none"}")
                         val storageGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.R ||
                             Environment.isExternalStorageManager()
                         appendLine("storage=$storageGranted overlay=${Settings.canDrawOverlays(context)}")
                         appendLine("device=${Build.MANUFACTURER} ${Build.MODEL} api=${Build.VERSION.SDK_INT}")
                         appendLine("warning=$warning")
+                        appendLine("\nAUDIO ENGINE")
+                        appendLine(engineReport)
+                        appendLine("\nVIEWPORT / PERFORMANCE")
+                        appendLine("viewportPx=${viewport.width}x${viewport.height} density=${density.density} fontScale=${density.fontScale}")
+                        appendLine("heapUsedMiB=${(Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / 1_048_576} heapLimitMiB=${Runtime.getRuntime().maxMemory() / 1_048_576}")
+                        appendLine("tapToFirstFrameMs=${com.local.listentomusic.playback.PlaybackDiagnostics.firstFrameDelayMs ?: "not reported"}")
+                        appendLine("$indexStatus")
+                        appendLine("abControls=${settings.showAbRepeat} extendedSearch=${settings.extendedSearch} thumbPreload=${settings.preloadThumbnails}")
+                        appendLine("displayOverrides=${settings.localOverrides.size} rulePlaylists=${settings.playlists.count { it.rule != null }}")
+                        appendLine("No logs, file paths or listening history are uploaded.")
                     },
                     regions = regions,
                     warning = warning,
@@ -385,6 +419,9 @@ fun GreaterArtApp(
             )
             if (showDuplicates) DuplicateDialog(library.files, playback.currentPath,
                 onDismiss = { showDuplicates = false }, onChanged = viewModel::rescan)
+            editDisplay?.let { file -> DisplayOverrideDialog(file, settings.localOverrides[file.path], settings.appLanguage,
+                viewModel::loadThumbnail, { title, cover -> viewModel.setLocalOverride(file.path, title, cover) }, { editDisplay = null }) }
+            if (createRule) RulePlaylistDialog(settings.appLanguage, viewModel::createRulePlaylist, { createRule = false })
         }
         }
     }

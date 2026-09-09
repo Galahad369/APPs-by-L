@@ -8,7 +8,8 @@ import java.nio.charset.StandardCharsets
 import java.util.Locale
 import java.io.RandomAccessFile
 
-data class LyricLine(val timeMs: Long, val text: String)
+data class LyricWord(val timeMs: Long, val text: String)
+data class LyricLine(val timeMs: Long, val text: String, val words: List<LyricWord> = emptyList())
 
 data class LocalLyrics(val sourcePath: String, val lines: List<LyricLine>)
 
@@ -20,7 +21,16 @@ internal fun parseLrc(content: String): List<LyricLine> {
     return content.lineSequence().flatMap { rawLine ->
         val matches = timestampPattern.findAll(rawLine).toList()
         if (matches.isEmpty()) return@flatMap emptySequence()
-        val text = rawLine.substring(matches.last().range.last + 1).trim()
+        val body = rawLine.substring(matches.last().range.last + 1).trim()
+        val stamps = Regex("<(\\d{1,3}):(\\d{2})(?:[.:](\\d{1,3}))?>").findAll(body).toList()
+        val words = stamps.mapIndexedNotNull { index, word ->
+            val seconds = word.groupValues[2].toLong()
+            if (seconds > 59) return@mapIndexedNotNull null
+            val label = body.substring(word.range.last + 1, stamps.getOrNull(index + 1)?.range?.first ?: body.length)
+            if (label.isEmpty()) null else LyricWord(word.groupValues[1].toLong() * 60_000 + seconds * 1000 +
+                word.groupValues[3].padEnd(3, '0').toLong() + offsetMs, label)
+        }
+        val text = body.replace(Regex("<[^>]*>"), "")
         if (text.isEmpty()) return@flatMap emptySequence()
         matches.asSequence().mapNotNull { match ->
             val minutes = match.groupValues[1].toLongOrNull() ?: return@mapNotNull null
@@ -36,6 +46,7 @@ internal fun parseLrc(content: String): List<LyricLine> {
             LyricLine(
                 (minutes * 60_000L + seconds * 1_000L + fractionMs + offsetMs).coerceAtLeast(0L),
                 text,
+                words,
             )
         }
     }.sortedBy(LyricLine::timeMs).toList()
@@ -44,15 +55,17 @@ internal fun parseLrc(content: String): List<LyricLine> {
 internal fun findMatchingLrc(mediaPath: String): File? {
     val media = File(mediaPath)
     val parent = media.parentFile ?: return null
-    val direct = File(parent, "${media.nameWithoutExtension}.lrc")
-    if (direct.isFile && direct.canRead()) return direct
+    for (extension in listOf("ttml", "lrc", "srt")) {
+        val direct = File(parent, "${media.nameWithoutExtension}.$extension")
+        if (direct.isFile && direct.canRead()) return direct
+    }
     val acceptedStems = setOf(
         media.nameWithoutExtension.lowercase(Locale.ROOT),
         media.name.lowercase(Locale.ROOT),
     )
     return parent.listFiles()?.firstOrNull { candidate ->
         candidate.isFile && candidate.canRead() &&
-            candidate.extension.equals("lrc", ignoreCase = true) &&
+            candidate.extension.lowercase(Locale.ROOT) in setOf("lrc", "ttml", "srt") &&
             candidate.nameWithoutExtension.lowercase(Locale.ROOT) in acceptedStems
     }
 }
@@ -61,7 +74,11 @@ fun loadLocalLyrics(mediaPath: String?): LocalLyrics? {
     if (mediaPath.isNullOrBlank()) return null
     val file = findMatchingLrc(mediaPath)
     if (file != null) {
-        val lines = runCatching { parseLrc(decodeLyrics(file.readBytes())) }.getOrNull().orEmpty()
+        val lines = runCatching {
+            require(file.length() <= 1_048_576)
+            val content = decodeLyrics(file.readBytes())
+            when (file.extension.lowercase(Locale.ROOT)) { "ttml" -> parseTtml(content); "srt" -> parseSrt(content); else -> parseLrc(content) }
+        }.getOrNull().orEmpty()
         lines.takeIf { it.isNotEmpty() }?.let { return LocalLyrics(file.absolutePath, it) }
     }
     return loadEmbeddedLyrics(File(mediaPath))

@@ -102,6 +102,7 @@ data class PlaybackUiState(
     val errorMessage: String? = null,
     val appLanguage: AppLanguage = AppLanguage.ENGLISH,
     val showSleepControl: Boolean = false,
+    val showAbRepeat: Boolean = false,
 ) {
     val hasMedia: Boolean get() = currentPath != null
     val isVideo: Boolean
@@ -119,8 +120,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val thumbnailStats = thumbnailRepository.stats
     val waveformDiagnostics = waveformRepository.diagnostics
     private var userPreferences = UserPreferences()
+    private var preferencesLoaded = false
     private var scannedFiles: List<MediaFile> = emptyList()
     private var orderedFiles: List<MediaFile> = emptyList()
+    private val metadataIndex = com.local.listentomusic.data.MetadataIndex(application)
+    private var metadataJob: Job? = null
+    private var sortingJob: Job? = null
+    private var undoAction: (suspend () -> Unit)? = null
+    private var undoJob: Job? = null
+    val undoMessage = MutableStateFlow<String?>(null)
+    val indexStatus = MutableStateFlow("Basic filenames")
+    private val libraryObserver = com.local.listentomusic.data.LibraryObserver(application) { rescan() }
+    fun startLibraryObservation() { libraryObserver.start() }
+    fun stopLibraryObservation() { libraryObserver.stop() }
 
     private val _library = MutableStateFlow(LibraryUiState())
     val library: StateFlow<LibraryUiState> = _library.asStateFlow()
@@ -158,7 +170,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var videoFrameRendered = false
 
     private val playerListener = object : Player.Listener {
-        override fun onEvents(player: Player, events: Player.Events) = publishPlayback(player)
+        override fun onEvents(player: Player, events: Player.Events) {
+            publishPlayback(player)
+            if (events.contains(Player.EVENT_TIMELINE_CHANGED) || events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION)) syncPlaybackQueue()
+        }
 
         override fun onPlayerError(error: PlaybackException) {
             lastPlaybackError = "This file could not be decoded on this device. Trying the next item."
@@ -188,6 +203,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         override fun onRenderedFirstFrame() {
+            val diagnostics = com.local.listentomusic.playback.PlaybackDiagnostics
+            if (diagnostics.requestedAtMs > 0 && diagnostics.firstFrameDelayMs == null) diagnostics.firstFrameDelayMs = android.os.SystemClock.elapsedRealtime() - diagnostics.requestedAtMs
             videoFrameRendered = true
             _controller.value?.let(::publishPlayback)
         }
@@ -196,26 +213,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     init {
         viewModelScope.launch {
             preferences.values.collect {
+                val firstPreferences = !preferencesLoaded
+                preferencesLoaded = true
+                val searchChanged = userPreferences.extendedSearch != it.extendedSearch
+                val libraryChanged = userPreferences.sortMode != it.sortMode || userPreferences.customOrder != it.customOrder ||
+                    userPreferences.playlists != it.playlists || userPreferences.activePlaylistId != it.activePlaylistId ||
+                    userPreferences.localOverrides != it.localOverrides || searchChanged
                 userPreferences = it
                 _settings.value = it
-                applySortingAndFilter()
+                if (!it.showAbRepeat) com.local.listentomusic.playback.PracticeLoop.clear()
+                _controller.value?.let(::publishPlayback)
+                if (libraryChanged) applySortingAndFilter()
+                if (searchChanged) refreshMetadata()
+                if (firstPreferences) rescan()
             }
         }
         connectController()
-        rescan()
     }
 
     fun rescan() {
+        if (!preferencesLoaded) return
         if (!hasStorageAccess()) {
             _library.value = _library.value.copy(status = LibraryStatus.NEEDS_PERMISSION)
             return
         }
         if (scanJob?.isActive == true) return
         scanJob = viewModelScope.launch {
-            _library.value = _library.value.copy(status = LibraryStatus.SCANNING)
+            if (_library.value.files.isEmpty()) _library.value = _library.value.copy(status = LibraryStatus.SCANNING)
             when (val result = MediaScanner.scan(userPreferences.excludedFolders.toSet())) {
                 is ScanResult.Success -> {
                     scannedFiles = result.files
+                    refreshMetadata()
                     applySortingAndFilter()
                     _library.value = _library.value.copy(status = LibraryStatus.READY)
                     thumbnailWarmupJob?.cancel()
@@ -291,8 +319,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun playNow(player: Player, file: MediaFile) {
+        com.local.listentomusic.playback.PlaybackDiagnostics.requestedAtMs = android.os.SystemClock.elapsedRealtime()
+        com.local.listentomusic.playback.PlaybackDiagnostics.firstFrameDelayMs = null
         lastPlaybackError = null
-        val queue = orderedFiles.ifEmpty { listOf(file) }
+        val queue = orderedFiles.takeIf { files -> files.any { it.path == file.path } } ?: listOf(file)
         val index = queue.indexOfFirst { it.path == file.path }.coerceAtLeast(0)
         val resumeAt = if (userPreferences.resumePlayback && file.path == userPreferences.lastPath) {
             userPreferences.lastPositionMs
@@ -300,12 +330,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         player.setMediaItems(queue.map(MediaFile::toMediaItem), index, resumeAt)
         player.playWhenReady = true
         player.prepare()
+        // Yield decoder/IO capacity to playback startup, then resume the bounded
+        // warmup. Cancelling it permanently on every tap left most covers cold.
+        thumbnailWarmupJob?.cancel()
+        if (userPreferences.preloadThumbnails) thumbnailWarmupJob = viewModelScope.launch {
+            delay(600)
+            warmThumbnailsInStages(orderedFiles.take(MAX_PRELOAD_ITEMS))
+        }
     }
 
     suspend fun loadThumbnail(file: MediaFile): Bitmap? = thumbnailRepository.load(file)
     suspend fun loadWaveform(path: String): FloatArray? {
         val file = scannedFiles.firstOrNull { it.path == path }
-        return waveformRepository.load(path, file?.sizeBytes ?: 0L, file?.modifiedMs ?: 0L)
+        val source = file?.sourcePath ?: com.local.listentomusic.model.sourceMediaPath(path)
+        val peaks = waveformRepository.load(source, file?.sizeBytes ?: 0L, file?.modifiedMs ?: 0L) ?: return null
+        if (file == null || file.clipStartMs == 0L && file.clipEndMs == null) return peaks
+        return withContext(Dispatchers.IO) {
+            val reader = MediaMetadataRetriever()
+            val duration = try { reader.setDataSource(source); reader.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0 }
+                catch (_: Exception) { 0L } finally { runCatching { reader.release() } }
+            if (duration <= 0) null else {
+                val start = (file.clipStartMs.toDouble() / duration * peaks.size).toInt().coerceIn(0, peaks.size)
+                val end = ((file.clipEndMs ?: duration).toDouble() / duration * peaks.size).toInt().coerceIn(start, peaks.size)
+                peaks.copyOfRange(start, end).takeIf { it.isNotEmpty() }
+            }
+        }
     }
 
     fun playQueueItem(file: MediaFile) {
@@ -323,11 +372,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     suspend fun loadCurrentArtwork(path: String?): Bitmap? {
         val file = scannedFiles.firstOrNull { it.path == path } ?: return null
-        return thumbnailRepository.load(file)
+        val override = userPreferences.localOverrides[file.path]
+        return thumbnailRepository.load(file.copy(coverUri = override?.coverUri.orEmpty()))
     }
 
     suspend fun loadLyrics(path: String?): LocalLyrics? = withContext(Dispatchers.IO) {
-        loadLocalLyrics(path)
+        val file = scannedFiles.firstOrNull { it.path == path }
+        val loaded = loadLocalLyrics(file?.sourcePath ?: path?.let { com.local.listentomusic.model.sourceMediaPath(it) })
+        if (file == null || file.clipStartMs == 0L && file.clipEndMs == null) loaded else loaded?.copy(lines = loaded.lines
+            .filter { it.timeMs >= file.clipStartMs && (file.clipEndMs == null || it.timeMs < file.clipEndMs) }
+            .map { line -> line.copy(timeMs = line.timeMs - file.clipStartMs, words = line.words.map { it.copy(timeMs = it.timeMs - file.clipStartMs) }) })
     }
 
     fun togglePlayPause() {
@@ -392,6 +446,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setDeveloperMode(value: Boolean) = updatePreference { preferences.setDeveloperMode(value) }
     fun setEditableQueue(value: Boolean) = updatePreference { preferences.setEditableQueue(value) }
     fun setShowSleepControl(value: Boolean) = updatePreference { preferences.setShowSleepControl(value) }
+    fun setShowAbRepeat(value: Boolean) = updatePreference { preferences.setShowAbRepeat(value) }
+    fun setExtendedSearch(value: Boolean) = updatePreference { preferences.setExtendedSearch(value) }
+    fun setLocalOverride(path: String, title: String, cover: String) = updatePreference {
+        preferences.setLocalOverride(path, com.local.listentomusic.model.LocalOverride(title.trim().take(300), cover))
+    }
+    fun createRulePlaylist(name: String, rule: com.local.listentomusic.model.PlaylistRule) = updatePreference {
+        if (name.isNotBlank()) preferences.setActivePlaylist(preferences.createRulePlaylist(name.take(60), rule))
+    }
+    fun undoLastEdit() {
+        val action = undoAction ?: return
+        undoAction = null; undoMessage.value = null; undoJob?.cancel()
+        viewModelScope.launch { action() }
+    }
+    private fun offerUndo(message: String, action: suspend () -> Unit) {
+        undoJob?.cancel(); undoAction = action; undoMessage.value = message
+        undoJob = viewModelScope.launch { delay(8_000); undoAction = null; undoMessage.value = null }
+    }
+    private fun refreshMetadata() {
+        metadataJob?.cancel()
+        if (!userPreferences.extendedSearch) { indexStatus.value = "Basic filenames"; return }
+        val snapshot = scannedFiles
+        metadataJob = viewModelScope.launch {
+            indexStatus.value = "Indexing ${snapshot.size} files (cached tags reused)"
+            delay(800)
+            metadataIndex.enrich(snapshot) { batch -> withContext(Dispatchers.Main) {
+                scannedFiles = batch; applySortingAndFilter()
+            } }
+            indexStatus.value = "Search index ready: ${snapshot.size} files"
+        }
+    }
     fun setReplayGainEnabled(value: Boolean) = updatePreference { preferences.setReplayGainEnabled(value) }
     fun setJokeAdsEnabled(value: Boolean) = updatePreference { preferences.setJokeAdsEnabled(value) }
     fun setFolderExcluded(folder: String, excluded: Boolean) = updatePreference {
@@ -439,12 +523,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun importM3u(uri: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
             val resolver = getApplication<Application>().contentResolver
-            val raw = runCatching { resolver.openInputStream(uri)?.bufferedReader()?.use { it.readLines() } }.getOrNull() ?: return@launch
+            val raw = runCatching { resolver.openInputStream(uri)?.bufferedReader()?.use { input ->
+                val data = StringBuilder(); val chars = CharArray(4096)
+                while (true) { val count = input.read(chars); if (count < 0) break; data.append(chars, 0, count); require(data.length <= 5_000_000) }
+                data.lines()
+            } }.getOrNull() ?: return@launch
             val byPath = scannedFiles.associateBy { File(it.path).canonicalPath }
             val byName = scannedFiles.groupBy { File(it.path).name.lowercase(Locale.ROOT) }
-            val paths = raw.asSequence().map(String::trim).filter { it.isNotBlank() && !it.startsWith("#") }
-                .mapNotNull { line ->
-                    val decoded = Uri.decode(line.removePrefix("file://"))
+            val paths = com.local.listentomusic.model.parseM3u(raw).asSequence()
+                .mapNotNull { entry ->
+                    val decoded = Uri.decode(entry.path.removePrefix("file://"))
+                    if (entry.start != null) {
+                        val candidates = scannedFiles.filter { it.clipStartMs == entry.start && it.clipEndMs == entry.end }
+                        return@mapNotNull (candidates.firstOrNull { it.sourcePath == decoded }
+                            ?: candidates.filter { File(it.sourcePath).name == File(decoded).name }.singleOrNull())?.path
+                    }
                     runCatching { File(decoded).canonicalPath }.getOrNull()?.let(byPath::get)?.path
                         ?: byName[File(decoded).name.lowercase(Locale.ROOT)]?.singleOrNull()?.path
                 }.distinct().toList()
@@ -461,10 +554,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun exportActiveM3u(uri: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
-            val lines = buildString {
-                appendLine("#EXTM3U")
-                orderedFiles.forEach { appendLine(it.path) }
-            }
+            val lines = com.local.listentomusic.model.exportM3u(orderedFiles)
             runCatching {
                 getApplication<Application>().contentResolver.openOutputStream(uri, "wt")
                     ?.bufferedWriter()?.use { it.write(lines) }
@@ -501,8 +591,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun playPlaylist(id: String) {
         val player = _controller.value ?: return
         val playlist = userPreferences.playlists.firstOrNull { it.id == id } ?: return
-        val byPath = orderedFiles.associateBy { it.path }
-        val queue = playlist.paths.mapNotNull(byPath::get)
+        val byPath = scannedFiles.associateBy { it.path }
+        val queue = playlist.rule?.let { rule -> scannedFiles.filter { rule.matches(it, MediaScanner.targetFolder().path) } }
+            ?: playlist.paths.mapNotNull(byPath::get)
         if (queue.isEmpty()) return
         lastPlaybackError = null
         player.setMediaItems(queue.map(MediaFile::toMediaItem), 0, 0L)
@@ -513,11 +604,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (name.isBlank()) return
         updatePreference { preferences.renamePlaylist(id, name) }
     }
-    fun deletePlaylist(id: String) = updatePreference { preferences.deletePlaylist(id) }
+    fun deletePlaylist(id: String) = updatePreference {
+        val old = userPreferences.playlists.firstOrNull { it.id == id } ?: return@updatePreference
+        preferences.deletePlaylist(id)
+        offerUndo("Playlist removed") { preferences.restorePlaylist(old) }
+    }
+    fun createSelectionPlaylist(name: String, paths: List<String>) = updatePreference {
+        if (name.isNotBlank()) preferences.setActivePlaylist(preferences.createPlaylistWithPaths(name.take(60), paths))
+    }
     fun addToPlaylist(id: String, path: String) = updatePreference { preferences.addToPlaylist(id, path) }
     fun removeFromActivePlaylist(path: String) {
         val id = userPreferences.activePlaylistId ?: return
-        updatePreference { preferences.removeFromPlaylist(id, path) }
+        val old = userPreferences.playlists.firstOrNull { it.id == id } ?: return
+        if (old.rule != null) return
+        updatePreference {
+            preferences.removeFromPlaylist(id, path)
+            offerUndo("Song removed from playlist") { preferences.restorePlaylistItem(id, path, old.paths.indexOf(path)) }
+        }
     }
 
     fun setPreloadThumbnails(value: Boolean) {
@@ -574,16 +677,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun moveQueueItem(fromIndex: Int, toIndex: Int) {
         val player = _controller.value ?: return
-        if (fromIndex !in _queue.value.indices || toIndex !in _queue.value.indices) return
+        if (fromIndex !in 0 until player.mediaItemCount || toIndex !in 0 until player.mediaItemCount) return
         player.moveMediaItem(fromIndex, toIndex)
-        _queue.value = _queue.value.toMutableList().apply { add(toIndex, removeAt(fromIndex)) }
+        // Listener callbacks may already have updated the queue synchronously.
+        // Read the player rather than applying the move twice to the UI snapshot.
+        syncPlaybackQueue()
     }
 
     fun removeQueueItem(index: Int) {
         val player = _controller.value ?: return
         if (index !in _queue.value.indices || player.mediaItemCount <= 1) return
+        val removed = player.getMediaItemAt(index)
         player.removeMediaItem(index)
-        _queue.value = _queue.value.toMutableList().apply { removeAt(index) }
+        syncPlaybackQueue()
+        offerUndo("Song removed from queue") {
+            if (_controller.value === player && (0 until player.mediaItemCount).none { player.getMediaItemAt(it).mediaId == removed.mediaId }) {
+                player.addMediaItem(index.coerceIn(0, player.mediaItemCount), removed); syncPlaybackQueue()
+            }
+        }
     }
 
     private suspend fun warmThumbnailsInStages(files: List<MediaFile>) {
@@ -712,7 +823,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val next = PlaybackUiState(
             connected = true,
             currentPath = path,
-            title = player.mediaMetadata.title?.toString()
+            title = orderedFiles.firstOrNull { it.path == path }?.name ?: player.mediaMetadata.title?.toString()
                 ?: player.currentMediaItem?.mediaId?.substringAfterLast('/')
                 ?: "Nothing playing",
             isPlaying = player.isPlaying,
@@ -730,6 +841,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             errorMessage = lastPlaybackError,
             appLanguage = userPreferences.appLanguage,
             showSleepControl = userPreferences.showSleepControl,
+            showAbRepeat = userPreferences.showAbRepeat,
         )
         // Skip identical emits. Every StateFlow update triggers a
         // recomposition storm across every screen that reads `playback`.
@@ -738,33 +850,56 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun applySortingAndFilter() {
-        val sortedLibrary = when (userPreferences.sortMode) {
+        sortingJob?.cancel()
+        val prefs = userPreferences
+        val raw = scannedFiles
+        val query = _library.value.query.trim()
+        sortingJob = viewModelScope.launch {
+        val (ordered, shown) = withContext(Dispatchers.Default) {
+        val decorated = raw.map { file -> prefs.localOverrides[file.path]?.let { override ->
+            file.copy(name = override.title.ifBlank { file.name }, coverUri = override.coverUri)
+        } ?: file }
+        val names = Comparator<MediaFile> { a, b -> com.local.listentomusic.model.naturalNames.compare(a.name, b.name) }
+        val sortedLibrary = when (prefs.sortMode) {
             SortMode.CUSTOM -> {
-                val rank = userPreferences.customOrder.withIndex().associate { it.value to it.index }
-                scannedFiles.sortedWith(
+                val rank = prefs.customOrder.withIndex().associate { it.value to it.index }
+                decorated.sortedWith(
                     compareBy<MediaFile> { rank[it.path] ?: Int.MAX_VALUE }
-                        .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+                        .then(names)
                 )
             }
-            SortMode.NAME_ASC -> scannedFiles.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
-            SortMode.NAME_DESC -> scannedFiles.sortedWith(compareByDescending<MediaFile> { it.name.lowercase() })
+            SortMode.NAME_ASC -> decorated.sortedWith(names)
+            SortMode.NAME_DESC -> decorated.sortedWith(names.reversed())
         }
-        orderedFiles = userPreferences.activePlaylistId
-            ?.let { id -> userPreferences.playlists.firstOrNull { it.id == id } }
+        val ordered = prefs.activePlaylistId
+            ?.let { id -> prefs.playlists.firstOrNull { it.id == id } }
             ?.let { playlist ->
-                val byPath = scannedFiles.associateBy(MediaFile::path)
-                playlist.paths.mapNotNull(byPath::get)
+                val byPath = decorated.associateBy(MediaFile::path)
+                playlist.rule?.let { rule -> sortedLibrary.filter { rule.matches(it, MediaScanner.targetFolder().path) } }
+                    ?: playlist.paths.mapNotNull(byPath::get)
             }
             ?: sortedLibrary
-        _queue.value = orderedFiles
-        val query = _library.value.query.trim()
-        val shown = if (query.isBlank()) orderedFiles else orderedFiles.filter {
-            it.name.contains(query, ignoreCase = true)
+        val normalized = com.local.listentomusic.model.searchText(query)
+        val shown = if (query.isBlank()) ordered else ordered.filter {
+            com.local.listentomusic.model.searchText(it.name).contains(normalized) ||
+                (prefs.extendedSearch && it.searchExtras.contains(normalized))
         }
+        ordered to shown
+        }
+        orderedFiles = ordered
+        syncPlaybackQueue()
         _library.value = _library.value.copy(
             files = shown,
-            sortMode = userPreferences.sortMode,
+            sortMode = prefs.sortMode,
         )
+        }
+    }
+
+    private fun syncPlaybackQueue() {
+        val player = _controller.value
+        if (player == null || player.mediaItemCount == 0) { _queue.value = orderedFiles; return }
+        val byId = (scannedFiles + orderedFiles).associateBy { it.path }
+        _queue.value = (0 until player.mediaItemCount).mapNotNull { byId[player.getMediaItemAt(it).mediaId] }
     }
 
     private fun hasStorageAccess(): Boolean {
@@ -791,8 +926,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val duration = withContext(Dispatchers.IO) {
                 val retriever = MediaMetadataRetriever()
                 try {
-                        retriever.setDataSource(path)
-                        retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+                        retriever.setDataSource(com.local.listentomusic.model.sourceMediaPath(path))
+                        val full = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+                        val clip = com.local.listentomusic.model.cueBounds(path)
+                        if (clip == null) full else full?.let { ((clip.second ?: it) - clip.first).coerceAtLeast(0) }
                 } catch (_: Exception) {
                     null
                 } finally {
@@ -806,6 +943,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     override fun onCleared() {
+        libraryObserver.stop()
         tickerJob?.cancel()
         thumbnailWarmupJob?.cancel()
         thumbnailAheadJob?.cancel()

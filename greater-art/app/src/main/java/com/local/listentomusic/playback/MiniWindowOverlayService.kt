@@ -62,9 +62,9 @@ class MiniWindowOverlayService : Service() {
     // A larger invisible hit box makes the drop reliable while the visible X stays compact.
     private val crossHitSize = 58
     private val crossSize = 34
-    private val crossMargin = 12
+    private val crossMargin = 16
     // Brighter red X for visibility against dark liquid metal backgrounds
-    private val crossBaseAlpha = 1f
+    private val crossBaseAlpha = 0.85f
 
     private var downX = 0f
     private var downY = 0f
@@ -89,10 +89,10 @@ class MiniWindowOverlayService : Service() {
         private const val CHANNEL_ID = "greater_art_playback"
         const val EXTRA_STOP_APP = "stop_app"
         const val EXTRA_OPEN_PLAYER = "open_player"
-        private const val AUDIO_WIDTH = 124
-        private const val AUDIO_HEIGHT = 40
-        private const val VIDEO_WIDTH = 108
-        private const val VIDEO_HEIGHT = 61
+        private const val AUDIO_WIDTH = 111
+		private const val AUDIO_HEIGHT = 64
+        private const val VIDEO_WIDTH = 111
+        private const val VIDEO_HEIGHT = 64
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -190,6 +190,7 @@ class MiniWindowOverlayService : Service() {
 
     // Dragging onto the center red cross closes the window and stops playback.
     private fun closeAndStopApp() {
+        ParallelPlayback.stopAll()
         // Stop media first. Calling stopSelf before this can race onDestroy and release
         // the controller before playback receives the stop command.
         controller?.run {

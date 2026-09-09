@@ -14,15 +14,27 @@ data class MediaFile(
     val sizeBytes: Long,
     val modifiedMs: Long,
     val kind: MediaKind,
+    val sourcePath: String = path,
+    val clipStartMs: Long = 0L,
+    val clipEndMs: Long? = null,
+    val artist: String = "",
+    val album: String = "",
+    val searchExtras: String = "",
+    val coverUri: String = "",
 ) {
     val id: String get() = path
 
     fun toMediaItem(): MediaItem = MediaItem.Builder()
         .setMediaId(path)
-        .setUri(Uri.fromFile(File(path)))
+        .setUri(Uri.fromFile(File(sourcePath)))
+        .setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
+            .setStartPositionMs(clipStartMs)
+            .apply { clipEndMs?.let { setEndPositionMs(it) } }.build())
         .setMediaMetadata(
             MediaMetadata.Builder()
                 .setTitle(name)
+                .setArtist(artist.takeIf { it.isNotBlank() })
+                .setAlbumTitle(album.takeIf { it.isNotBlank() })
                 .setMediaType(
                     if (kind == MediaKind.VIDEO) {
                         MediaMetadata.MEDIA_TYPE_VIDEO

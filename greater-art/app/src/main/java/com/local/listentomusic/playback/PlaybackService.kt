@@ -44,13 +44,22 @@ class PlaybackService : MediaLibraryService() {
     private var enhancer: android.media.audiofx.LoudnessEnhancer? = null
     private var widgetArtwork: android.graphics.Bitmap? = null
     private var widgetJob: Job? = null
+    private val layers = mutableListOf<LayerPlayer>()
+    private var focusHeld = false
+    private val focusRequest by lazy {
+        android.media.AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+            .setAudioAttributes(android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_MEDIA).setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC).build())
+            .setOnAudioFocusChangeListener { change ->
+                if (change < 0) { focusHeld = false; pauseEveryPlayer() }
+            }.build()
+    }
     private val audioManager by lazy { getSystemService(AudioManager::class.java) }
     private val audioDeviceCallback = object : AudioDeviceCallback() {
         override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) {
-            if (::player.isInitialized && player.isPlaying && removedDevices.any(::isBluetoothOutput)) {
+            if (::player.isInitialized && removedDevices.any(::isBluetoothOutput)) {
                 // Never spill private playback through the phone speaker after a
                 // Bluetooth headset/speaker disappears.
-                player.pause()
+                pauseEveryPlayer()
             }
         }
     }
@@ -85,13 +94,22 @@ class PlaybackService : MediaLibraryService() {
                     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
                     .setUsage(C.USAGE_MEDIA)
                     .build(),
-                true,
+                false, // One shared audio-focus owner for all ten possible voices.
             )
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
 
         player.skipSilenceEnabled = false
+        ParallelPlayback.addCommand = ::addLayer
+        ParallelPlayback.stopCommand = {
+            pauseEveryPlayer()
+            layers.toList().forEach { removeLayer(it.id) }
+            player.stop()
+        }
+        ParallelPlayback.removeCommand = ::removeLayer
+        ParallelPlayback.toggleCommand = { id -> layers.firstOrNull { it.id == id }?.player?.let { if (it.playWhenReady) it.pause() else it.play() } }
+        ParallelPlayback.volumeCommand = { id, level -> layers.firstOrNull { it.id == id }?.level = level; applyMixLevels(); publishLayers() }
         audioManager.registerAudioDeviceCallback(audioDeviceCallback, Handler(mainLooper))
         val saved = runBlocking(Dispatchers.IO) {
             runCatching { preferences.current() }.getOrDefault(UserPreferences())
@@ -100,10 +118,14 @@ class PlaybackService : MediaLibraryService() {
 
         mediaSession = MediaLibrarySession.Builder(this, player, LocalLibraryCallback(this, serviceScope)).build()
         player.addListener(object : Player.Listener {
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                if (playWhenReady) ensureFocus()
+                else if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY) pauseEveryPlayer()
+            }
             override fun onEvents(player: Player, events: Player.Events) {
                 PlaybackWidget.update(this@PlaybackService, player.mediaMetadata.title?.toString() ?: "Greater Art", player.isPlaying, widgetArtwork)
             }
-            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) { applyGain() }
+            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) { applyGain(); publishDiagnostics() }
             override fun onAudioSessionIdChanged(audioSessionId: Int) { applyGain() }
             override fun onIsPlayingChanged(isPlaying: Boolean) = scheduleSave()
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -114,19 +136,20 @@ class PlaybackService : MediaLibraryService() {
                 if (path != null && android.appwidget.AppWidgetManager.getInstance(this@PlaybackService)
                     .getAppWidgetIds(android.content.ComponentName(this@PlaybackService, PlaybackWidget::class.java)).isNotEmpty()) {
                     widgetJob = serviceScope.launch {
-                        val file = File(path)
+                        val file = File(com.local.listentomusic.model.sourceMediaPath(path))
                         val item = com.local.listentomusic.model.MediaFile(path, file.name, 0, file.length(), file.lastModified(),
-                            if (file.extension.lowercase() in MediaScanner.videoExtensions) com.local.listentomusic.model.MediaKind.VIDEO else com.local.listentomusic.model.MediaKind.AUDIO)
+                            if (file.extension.lowercase() in MediaScanner.videoExtensions) com.local.listentomusic.model.MediaKind.VIDEO else com.local.listentomusic.model.MediaKind.AUDIO, sourcePath = file.path,
+                            coverUri = preferences.current().localOverrides[path]?.coverUri.orEmpty())
                         widgetArtwork = com.local.listentomusic.data.ThumbnailRepository(this@PlaybackService).load(item)
                         PlaybackWidget.update(this@PlaybackService, player.mediaMetadata.title?.toString() ?: "Greater Art", player.isPlaying, widgetArtwork)
                     }
                 }
                 enhancer?.release()
                 enhancer = null
-                player.volume = 1f
+                player.volume = mixLevel(1f, layers.size)
                 scheduleSave()
             }
-            override fun onPlaybackStateChanged(playbackState: Int) = scheduleSave()
+            override fun onPlaybackStateChanged(playbackState: Int) { scheduleSave(); publishDiagnostics() }
             override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) = scheduleSave()
             override fun onRepeatModeChanged(repeatMode: Int) = scheduleSave()
             override fun onPlayerError(error: PlaybackException) {
@@ -179,6 +202,10 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        ParallelPlayback.detach()
+        layers.toList().forEach { layer -> removeSession(layer.session); layer.session.release(); layer.player.release() }
+        layers.clear()
+        audioManager.abandonAudioFocusRequest(focusRequest)
         enhancer?.release()
         enhancer = null
         saveJob?.cancel()
@@ -201,12 +228,13 @@ class PlaybackService : MediaLibraryService() {
         player.playbackParameters = androidx.media3.common.PlaybackParameters(saved.playbackSpeed)
         player.repeatMode = saved.repeatMode
         val path = saved.lastPath ?: return
-        val file = File(path)
+        val file = File(com.local.listentomusic.model.sourceMediaPath(path))
         if (!file.isFile || !file.canRead() || !MediaScanner.isInsideTarget(file)) return
 
         val item = MediaItem.Builder()
             .setMediaId(path)
             .setUri(android.net.Uri.fromFile(file))
+            .setClippingConfiguration(clipConfiguration(path))
             .setMediaMetadata(MediaMetadata.Builder().setTitle(file.name).build())
             .build()
         player.setMediaItem(item, if (saved.resumePlayback) saved.lastPositionMs else 0L)
@@ -218,7 +246,7 @@ class PlaybackService : MediaLibraryService() {
         enhancer?.release()
         enhancer = null
         player.volume = 1f
-        if (!gainEnabled) return
+        if (!gainEnabled) { applyMixLevels(); return }
         val gain = replayGainDb(player.currentTracks)
         if (gain <= 0) player.volume = Math.pow(10.0, gain / 20.0).toFloat()
         else if (player.audioSessionId != C.AUDIO_SESSION_ID_UNSET) {
@@ -230,6 +258,103 @@ class PlaybackService : MediaLibraryService() {
                 }
             }.onFailure { enhancer?.release(); enhancer = null }
         }
+        player.volume /= (layers.size + 1).toFloat()
+    }
+
+    private fun ensureFocus() {
+        if (focusHeld) return
+        focusHeld = runCatching { audioManager.requestAudioFocus(focusRequest) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED }.getOrDefault(false)
+        if (!focusHeld) pauseEveryPlayer()
+    }
+
+    private fun pauseEveryPlayer() {
+        if (::player.isInitialized) player.pause()
+        layers.forEach { it.player.pause() }
+        publishLayers()
+    }
+
+    private fun publishLayers() {
+        ParallelPlayback.publish(layers.map { MixLayer(it.id, it.title, it.player.playWhenReady, it.level, it.player.currentMediaItem?.mediaId.orEmpty()) })
+        publishDiagnostics()
+    }
+
+    private fun publishDiagnostics() {
+        if (!::player.isInitialized) return
+        PlaybackDiagnostics.report.value = buildString {
+            val audio = player.audioFormat
+            appendLine("audio mime=${audio?.sampleMimeType ?: "unknown"} codec=${audio?.codecs ?: "unknown"}")
+            appendLine("source sampleRate=${audio?.sampleRate ?: -1} channels=${audio?.channelCount ?: -1} pcmEncoding=${audio?.pcmEncoding ?: -1} bitrate=${audio?.bitrate ?: -1}")
+            appendLine("audioSession=${player.audioSessionId} speed=${player.playbackParameters.speed} focusHeld=$focusHeld")
+            appendLine("voices=${layers.size + 1}/10 extraPlaying=${layers.count { it.player.isPlaying }}")
+            appendLine("mainGain=${player.volume} extraBufferLimit=2MiB/voice")
+            appendLine("actual DAC format / bit-perfect output: not observable here")
+            appendLine("availableOutputs=" + getSystemService(android.media.AudioManager::class.java).getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS).joinToString { "type:${it.type} channels:${it.channelCounts.joinToString()}" })
+        }
+    }
+
+    private fun clipConfiguration(path: String): MediaItem.ClippingConfiguration {
+        val clip = com.local.listentomusic.model.cueBounds(path)
+        return MediaItem.ClippingConfiguration.Builder().apply {
+            clip?.let { setStartPositionMs(it.first); it.second?.let { end -> setEndPositionMs(end) } }
+        }.build()
+    }
+
+    private fun applyMixLevels() {
+        if (!gainEnabled) player.volume = mixLevel(1f, layers.size)
+        layers.forEach { it.player.volume = mixLevel(it.level, layers.size) }
+    }
+
+    private fun addLayer(path: String) {
+        if (layers.size >= ParallelPlayback.MAX_EXTRA_LAYERS) return
+        val file = File(com.local.listentomusic.model.sourceMediaPath(path))
+        if (!MediaScanner.isInsideTarget(file) || !file.isFile || file.extension.lowercase() !in MediaScanner.supportedExtensions) return
+        var extra: ExoPlayer? = null
+        var session: MediaSession? = null
+        runCatching {
+            val id = java.util.UUID.randomUUID().toString()
+            val engine = ExoPlayer.Builder(this, DefaultRenderersFactory(this).setEnableDecoderFallback(true))
+                .setLoadControl(DefaultLoadControl.Builder().setBufferDurationsMs(1_000, 5_000, 100, 200)
+                    .setTargetBufferBytes(2 * 1024 * 1024).setPrioritizeTimeOverSizeThresholds(false).build())
+                .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), false)
+                .setHandleAudioBecomingNoisy(true).setWakeMode(C.WAKE_MODE_LOCAL).build()
+            extra = engine
+            engine.trackSelectionParameters = engine.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true).build()
+            engine.repeatMode = Player.REPEAT_MODE_ONE
+            val mediaSession = MediaSession.Builder(this, engine).setId("mix-$id").build()
+            session = mediaSession
+            layers.add(LayerPlayer(id, file.nameWithoutExtension, engine, mediaSession))
+            addSession(mediaSession)
+            engine.addListener(object : Player.Listener {
+                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                    if (playWhenReady) ensureFocus()
+                    else if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY) pauseEveryPlayer()
+                    publishLayers()
+                }
+                override fun onPlayerError(error: PlaybackException) {
+                    Handler(mainLooper).post { removeLayer(id) }
+                    android.widget.Toast.makeText(this@PlaybackService, "Could not play this layer on this device", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            })
+            applyGain(); applyMixLevels()
+            engine.setMediaItem(MediaItem.Builder().setMediaId(path).setUri(android.net.Uri.fromFile(file))
+                .setClippingConfiguration(clipConfiguration(path))
+                .setMediaMetadata(MediaMetadata.Builder().setTitle(file.nameWithoutExtension).build()).build())
+            engine.prepare(); engine.play()
+            publishLayers()
+        }.onFailure {
+            layers.removeAll { it.player === extra }
+            session?.let { removeSession(it); it.release() }
+            extra?.release()
+            applyGain(); applyMixLevels(); publishLayers()
+            android.widget.Toast.makeText(this, "This device cannot open another layer", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun removeLayer(id: String) {
+        val layer = layers.firstOrNull { it.id == id } ?: return
+        layers.remove(layer)
+        removeSession(layer.session); layer.session.release(); layer.player.release()
+        applyGain(); applyMixLevels(); publishLayers()
     }
 
     private fun scheduleSave() {

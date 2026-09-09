@@ -30,7 +30,10 @@ jobs:
         id: asset
         shell: bash
         run: |
-          apk="greater-art/GreaterArt-${RELEASE_TAG}-debug.apk"
+          apk="greater-art/releases/GreaterArt-${RELEASE_TAG}-debug.apk"
+          if [ ! -f "$apk" ]; then
+            apk="greater-art/GreaterArt-${RELEASE_TAG}-debug.apk"
+          fi
           test -f "$apk"
           echo "apk=$apk" >> "$GITHUB_OUTPUT"
 

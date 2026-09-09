@@ -44,21 +44,19 @@ data class ThumbnailStats(
  * 1. memory LRU, 2. persistent disk cache, 3. Android system thumbnail API,
  * 4. MediaMetadataRetriever fallback. No network image loader is involved.
  */
-class ThumbnailRepository(context: Context) {
+class ThumbnailRepository(private val context: Context) {
     private val cacheDirectory = File(context.cacheDir, "media_thumbnails").apply { mkdirs() }
-    private val keyLocks = ConcurrentHashMap<String, Mutex>()
     // Two workers keep warmup from competing with scrolling and playback.
     // Visible requests still bypass this background gate.
-    private val preloadWorkers = Semaphore(3)
+    private val preloadWorkers = Semaphore(2)
+    private val decodeWorkers = Semaphore(2)
+    private val locks = Array(64) { Mutex() }
+    private val pruned = java.util.concurrent.atomic.AtomicBoolean(false)
     private val recentFailures = ConcurrentHashMap<String, Long>()
     private val _stats = MutableStateFlow(ThumbnailStats())
     val stats: StateFlow<ThumbnailStats> = _stats.asStateFlow()
     private val memoryCache = object : LruCache<String, Bitmap>(memoryBudgetKb()) {
         override fun sizeOf(key: String, value: Bitmap): Int = max(1, value.byteCount / 1024)
-    }
-
-    init {
-        pruneDiskCache()
     }
 
     suspend fun load(file: MediaFile): Bitmap? = withContext(Dispatchers.IO) {
@@ -70,7 +68,7 @@ class ThumbnailRepository(context: Context) {
         if (System.currentTimeMillis() - (recentFailures[key] ?: 0L) < FAILURE_RETRY_MS) return@withContext null
         _stats.update { it.copy(inFlight = it.inFlight + 1) }
 
-        val mutex = keyLocks.computeIfAbsent(key) { Mutex() }
+        val mutex = locks[(key.hashCode() and Int.MAX_VALUE) % locks.size]
         try {
             mutex.withLock {
                 memoryCache.get(key)?.let { return@withLock it }
@@ -80,7 +78,7 @@ class ThumbnailRepository(context: Context) {
                     return@withLock it
                 }
 
-                val generated = generate(file) ?: run {
+                val generated = decodeWorkers.withPermit { generate(file) } ?: run {
                     recentFailures[key] = System.currentTimeMillis()
                     _stats.update { value -> value.copy(failed = value.failed + 1) }
                     return@withLock null
@@ -92,12 +90,12 @@ class ThumbnailRepository(context: Context) {
                 generated
             }
         } finally {
-            keyLocks.remove(key, mutex)
             _stats.update { it.copy(inFlight = (it.inFlight - 1).coerceAtLeast(0)) }
         }
     }
 
     suspend fun preload(files: List<MediaFile>) = supervisorScope {
+        if (pruned.compareAndSet(false, true)) withContext(Dispatchers.IO) { pruneDiskCache() }
         // Preserve caller priority. Sorting every video before audio starved the
         // actually visible rows in mixed libraries.
         val queue = ConcurrentLinkedQueue(files.distinctBy(MediaFile::path))
@@ -119,13 +117,32 @@ class ThumbnailRepository(context: Context) {
         Unit
     }
 
-    private fun generate(file: MediaFile): Bitmap? = when (file.kind) {
+    private fun generate(file: MediaFile): Bitmap? = customArtwork(file.coverUri) ?: when (file.kind) {
         MediaKind.VIDEO -> createVideoThumbnail(file) ?: createSiblingArtwork(file)
         MediaKind.AUDIO -> createEmbeddedArtwork(file) ?: createSiblingArtwork(file)
     }
 
+    private fun customArtwork(uri: String): Bitmap? = if (uri.isBlank()) null else runCatching {
+        if (Build.VERSION.SDK_INT < 28) {
+            val parsed = android.net.Uri.parse(uri)
+            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            context.contentResolver.openInputStream(parsed)?.use { BitmapFactory.decodeStream(it, null, options) }
+            if (options.outWidth <= 0 || options.outHeight <= 0) return@runCatching null
+            options.inJustDecodeBounds = false
+            while (maxOf(options.outWidth, options.outHeight) / options.inSampleSize > 768) options.inSampleSize *= 2
+            return@runCatching context.contentResolver.openInputStream(parsed)?.use { BitmapFactory.decodeStream(it, null, options) }
+        }
+        val source = android.graphics.ImageDecoder.createSource(context.contentResolver, android.net.Uri.parse(uri))
+        android.graphics.ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+            val ratio = 384f / maxOf(info.size.width, info.size.height).coerceAtLeast(1)
+            decoder.setTargetSize((info.size.width * ratio.coerceAtMost(1f)).toInt().coerceAtLeast(1),
+                (info.size.height * ratio.coerceAtMost(1f)).toInt().coerceAtLeast(1))
+            decoder.allocator = android.graphics.ImageDecoder.ALLOCATOR_SOFTWARE
+        }
+    }.getOrNull()
+
     private fun createVideoThumbnail(media: MediaFile): Bitmap? {
-        val source = File(media.path)
+        val source = File(media.sourcePath)
         val systemThumbnail = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             runCatching {
                 ThumbnailUtils.createVideoThumbnail(source, Size(VIDEO_WIDTH, VIDEO_HEIGHT), null)
@@ -137,7 +154,7 @@ class ThumbnailRepository(context: Context) {
 
         val retriever = MediaMetadataRetriever()
         return try {
-            retriever.setDataSource(media.path)
+            retriever.setDataSource(media.sourcePath)
             val frame = (if (Build.VERSION.SDK_INT >= 27) {
                 retriever.getScaledFrameAtTime(1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, VIDEO_WIDTH, VIDEO_HEIGHT)
             } else retriever.getFrameAtTime(1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC))
@@ -154,7 +171,7 @@ class ThumbnailRepository(context: Context) {
     private fun createEmbeddedArtwork(media: MediaFile): Bitmap? {
         val retriever = MediaMetadataRetriever()
         return try {
-            retriever.setDataSource(media.path)
+            retriever.setDataSource(media.sourcePath)
             val bytes = retriever.embeddedPicture ?: return null
             decodeSampled(bytes, ARTWORK_SIZE, ARTWORK_SIZE)
         } catch (_: Exception) {
@@ -166,7 +183,7 @@ class ThumbnailRepository(context: Context) {
 
     /** Same-name cover first, then conventional folder artwork. Entirely local. */
     private fun createSiblingArtwork(media: MediaFile): Bitmap? {
-        val artwork = findSiblingArtwork(File(media.path)) ?: return null
+        val artwork = findSiblingArtwork(File(media.sourcePath)) ?: return null
         return decodeSampledFile(artwork, ARTWORK_SIZE, ARTWORK_SIZE)
     }
 
@@ -250,9 +267,9 @@ class ThumbnailRepository(context: Context) {
     }
 
     private fun cacheKey(file: MediaFile): String {
-        val source = File(file.path)
+        val source = File(file.sourcePath)
         val artStamp = findSiblingArtwork(source)?.lastModified() ?: 0L
-        val fingerprint = "${file.path}|${file.sizeBytes}|${file.modifiedMs}|$artStamp"
+        val fingerprint = "${file.sourcePath}|${file.sizeBytes}|${file.modifiedMs}|$artStamp|${file.coverUri}"
         return MessageDigest.getInstance("SHA-256")
             .digest(fingerprint.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }

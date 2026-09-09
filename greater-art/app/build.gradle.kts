@@ -11,17 +11,19 @@ android {
         applicationId = "com.local.listentomusic"
         minSdk = 26
         targetSdk = 37
-        versionCode = 52
-        versionName = "1.8.0"
+        versionCode = 57
+        versionName = "1.9.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
     }
 
+    val pinnedSideloadKeystore = File(System.getProperty("user.home"), ".android/debug.keystore")
+
     signingConfigs {
         // Pin the existing sideload keystore so updates retain the same signature.
         create("release") {
-            storeFile = File(System.getProperty("user.home"), ".android/debug.keystore")
+            storeFile = pinnedSideloadKeystore
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
@@ -38,7 +40,12 @@ android {
             signingConfig = signingConfigs["release"]
         }
         getByName("debug") {
-            signingConfig = signingConfigs["release"]
+            // Developer machines use the pinned sideload identity. Clean CI runners do not
+            // contain that private file, so their disposable debug build uses AGP's normal
+            // debug identity. CI artifacts are verification-only and are never releases.
+            if (pinnedSideloadKeystore.isFile) {
+                signingConfig = signingConfigs["release"]
+            }
         }
     }
 

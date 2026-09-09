@@ -46,10 +46,11 @@ class LocalLibraryCallback(private val context: Context, private val scope: Coro
         if (controller.packageName == context.packageName) {
             // Internal queues already came from our scanner. Avoid another complete
             // recursive scan on every row tap; validate only the requested paths.
-            return@future mediaItems.filter { request ->
-                val file = java.io.File(request.mediaId)
-                MediaScanner.isInsideTarget(file) && file.isFile && file.extension.lowercase() in MediaScanner.supportedExtensions
-            }
+            return@future withContext(Dispatchers.IO) { mediaItems.filter { request ->
+                val uri = request.localConfiguration?.uri
+                val file = java.io.File(com.local.listentomusic.model.sourceMediaPath(request.mediaId))
+                uri?.scheme == "file" && uri.path == file.path && MediaScanner.isInsideTarget(file) && file.isFile && file.extension.lowercase() in MediaScanner.supportedExtensions
+            } }
         }
         val allowed = files().filter { controller.packageName == context.packageName || it.kind == MediaKind.AUDIO }
         val byId = allowed.associateBy { it.path }
