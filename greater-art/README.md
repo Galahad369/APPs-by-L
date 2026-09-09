@@ -78,6 +78,11 @@ persisted Storage Access Framework folder selection.
 
 Requirements: JDK 21 and Android SDK/API 37.
 
+Local debug builds use the existing pinned sideload keystore when it is present, so
+installed updates keep the same identity. Clean CI runners use a disposable debug key
+for verification only; CI artifacts are not release APKs. Release signing never falls
+back, and no keystore or signing secret is stored in this repository.
+
 ```powershell
 $env:JAVA_HOME = 'C:\Program Files\Android\openjdk\jdk-21.0.8'
 $env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"

@@ -8,6 +8,19 @@
 
 ## Current State
 
+### September 9 — clean-runner signing fix
+
+- GitHub's Android CI and CodeQL builds failed before analysis because `debug` was
+  unconditionally assigned the private sideload keystore at `~/.android/debug.keystore`.
+  Clean runners correctly do not contain that local file.
+- Debug builds now use the pinned sideload identity only when that exact file exists.
+  A clean runner falls back to Android Gradle Plugin's disposable debug identity.
+  Release builds remain pinned, no keystore is committed, and published/versioned APKs
+  must still be built locally with the pinned certificate.
+- Verified both paths: the normal local test/lint/build passed, and an isolated
+  `user.home` with no keystore successfully generated a disposable debug key and built.
+  The versioned 1.9.3 APK hash remains unchanged.
+
 ### September 9 — 1.9.3 corrected Now Playing layout (newest)
 
 - The screenshot-style layout belongs to Now Playing, not Library. The mistaken local
