@@ -367,7 +367,7 @@ fun GreaterArtApp(
                 DeveloperDiagnostics(
                     report = buildString {
                         appendLine("version=${com.local.listentomusic.BuildConfig.VERSION_NAME}")
-                        appendLine("screen=${screen.name} playerOverlay=$playerOpen")
+                        appendLine("screen=${if (playerOpen) Screen.NOW_PLAYING.name else screen.name} playerOverlay=$playerOpen")
                         appendLine("media=${playback.currentPath?.let { com.local.listentomusic.model.sourceMediaPath(it).substringAfterLast('.') } ?: "none"} (paths omitted)")
                         appendLine("playing=${playback.isPlaying} video=${playback.isVideo}")
                         appendLine("position=${playback.positionMs} duration=${playback.durationMs}")

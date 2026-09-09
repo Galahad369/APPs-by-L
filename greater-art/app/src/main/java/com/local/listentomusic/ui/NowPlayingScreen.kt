@@ -18,6 +18,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.foundation.layout.Arrangement
@@ -39,6 +41,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
@@ -61,7 +64,6 @@ import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
-import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.RemoveCircleOutline
@@ -172,9 +174,9 @@ fun NowPlayingScreen(
     }
 
     BoxWithConstraints(
-        modifier = Modifier.fillMaxSize().padding(contentPadding)
-            .background(Color.Transparent),
-    ) {
+            modifier = Modifier.fillMaxSize().padding(contentPadding)
+                .background(Brush.verticalGradient(listOf(Color(0xFF080808), Color(0xFF0C0C0C), Color(0xFF0A0A0A)))),
+        ) {
         val landscape = maxWidth > maxHeight
         val portraitVideoHeight = minOf(maxWidth / playback.videoAspectRatio.coerceIn(0.75f, 2.25f), maxHeight * 0.40f)
         val immersiveVideo = playback.isVideo && (fullscreen || landscape)
@@ -874,20 +876,18 @@ private fun WaveformTimeline(
     }
 
     Slider(
-        value = fraction,
-        onValueChange = { seeking = true; seekFraction = it.coerceIn(0f, 1f) },
-        onValueChangeFinished = {
-            if (hasDuration) {
-                onSeek((playback.durationMs.toDouble() * seekFraction).toLong())
-            }
-            seeking = false
-        },
-        valueRange = 0f..1f,
-        enabled = hasDuration,
-        modifier = Modifier.fillMaxWidth().height(56.dp),
-        thumb = {
-            Box(Modifier.size(8.dp).clip(CircleShape).background(if (hasDuration) active else Color.Transparent))
-        },
+            value = fraction,
+            onValueChange = { seeking = true; seekFraction = it.coerceIn(0f, 1f) },
+            onValueChangeFinished = {
+                if (hasDuration) {
+                    onSeek((playback.durationMs.toDouble() * seekFraction).toLong())
+                }
+                seeking = false
+            },
+            valueRange = 0f..1f,
+            enabled = hasDuration,
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            thumb = {},
         track = {
             Canvas(Modifier.fillMaxWidth().height(44.dp)) {
                 val bars = displayPeaks?.size ?: 72
@@ -1033,7 +1033,11 @@ private fun PlayerBottomControls(
             Icon(Icons.Rounded.SkipPrevious, "Previous", modifier = Modifier.size(36.dp))
         }
         LiquidMetalSurface(
-            modifier = Modifier.size(52.dp).clickable(onClick = onTogglePlay),
+                    modifier = Modifier.size(52.dp).clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                        onClick = onTogglePlay
+                    ),
             shape = CircleShape,
             contentAlignment = Alignment.Center,
         ) {
@@ -1047,13 +1051,22 @@ private fun PlayerBottomControls(
         IconButton(onClick = onNext, enabled = playback.hasNext) {
             Icon(Icons.Rounded.SkipNext, "Next", modifier = Modifier.size(36.dp))
         }
-        Box {
-            IconButton(onClick = { speedMenuOpen = true }, modifier = Modifier.size(48.dp)) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Rounded.Speed, uiText(playback.appLanguage, "Playback speed", "播放速度"), Modifier.size(20.dp), tint = accent)
-                    Text(speedLabel(playback.speed), style = MaterialTheme.typography.labelSmall, maxLines = 1)
-                }
-            }
+        Box(Modifier.graphicsLayer {
+                        val t = (playback.speed - 0.5f) / 2.5f
+                        rotationZ = (t * 45f).coerceIn(0f, 45f)
+                    }) {
+                    val speedIcon = when {
+                                            playback.speed <= 0.5f -> Icons.Rounded.KeyboardArrowUp
+                                            playback.speed <= 1.5f -> Icons.Rounded.KeyboardArrowUp
+                                            playback.speed <= 2f -> Icons.AutoMirrored.Rounded.ArrowForward
+                                            else -> Icons.Rounded.KeyboardArrowDown
+                                        }
+                    IconButton(onClick = { speedMenuOpen = true }, modifier = Modifier.size(48.dp)) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(speedIcon, uiText(playback.appLanguage, "Playback speed", "播放速度"), Modifier.size(20.dp), tint = accent)
+                            Text(speedLabel(playback.speed), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                        }
+                    }
             DropdownMenu(speedMenuOpen, { speedMenuOpen = false }) {
                 playbackSpeeds.forEach { speed -> DropdownMenuItem(
                     text = { Text(if (speed == playback.speed) "✓  ${speedLabel(speed)}" else speedLabel(speed)) },
@@ -1072,8 +1085,6 @@ private fun SecondaryControlRow(
     onSleepTimer: (Long) -> Unit,
     sleepTimer: SleepTimerState,
 ) {
-    var mixerOpen by remember { mutableStateOf(false) }
-    if (mixerOpen) ParallelMixerDialog(queue, playback.appLanguage, onLoadThumbnail) { mixerOpen = false }
     var expanded by rememberSaveable { mutableStateOf(false) }
     val practice by com.local.listentomusic.playback.PracticeLoop.state.collectAsState()
     var sleepMenuOpen by remember { mutableStateOf(false) }
@@ -1107,10 +1118,6 @@ private fun SecondaryControlRow(
             shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(horizontal = 4.dp),
         ) {
             Text(when { practice.end != null -> "A–B ×"; practice.start != null -> "Set B"; else -> "Set A" }, style = MaterialTheme.typography.labelMedium)
-        }
-        Button(onClick = { mixerOpen = true }, modifier = Modifier.weight(1f).height(40.dp), colors = controlColors,
-            shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(horizontal = 4.dp)) {
-            Text(uiText(playback.appLanguage, "Mix", "混音"), style = MaterialTheme.typography.labelMedium)
         }
         if (playback.showSleepControl) Box(Modifier.weight(1f)) {
             Button(
