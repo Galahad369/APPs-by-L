@@ -21,6 +21,8 @@ import java.security.MessageDigest
 @Composable
 fun DuplicateDialog(files: List<MediaFile>, currentPath: String?, onDismiss: () -> Unit, onChanged: () -> Unit) {
     val context = LocalContext.current
+    val mixLayers by com.local.listentomusic.playback.ParallelPlayback.layers.collectAsState()
+    val protectedPaths = (mixLayers.map { com.local.listentomusic.model.sourceMediaPath(it.path) } + listOfNotNull(currentPath?.let { com.local.listentomusic.model.sourceMediaPath(it) })).toSet()
     val scope = rememberCoroutineScope()
     var groups by remember { mutableStateOf<List<List<MediaFile>>?>(null) }
     var message by remember { mutableStateOf("Checking same-size files locally…") }
@@ -29,7 +31,7 @@ fun DuplicateDialog(files: List<MediaFile>, currentPath: String?, onDismiss: () 
     }
     LaunchedEffect(Unit) {
         groups = withContext(Dispatchers.IO) {
-            files.filter { it.sizeBytes > 0 }.groupBy { it.sizeBytes }.values.filter { it.size > 1 }.flatMap { candidates ->
+            files.distinctBy { it.sourcePath }.map { it.copy(path = it.sourcePath) }.filter { it.sizeBytes > 0 }.groupBy { it.sizeBytes }.values.filter { it.size > 1 }.flatMap { candidates ->
                 candidates.mapNotNull { media ->
                     ensureActive()
                     runCatching {
@@ -60,7 +62,7 @@ fun DuplicateDialog(files: List<MediaFile>, currentPath: String?, onDismiss: () 
                     item { HorizontalDivider(Modifier.padding(vertical = 12.dp)) }
                     group.forEach { file -> item {
                         Text(file.path, style = MaterialTheme.typography.bodySmall)
-                        TextButton(enabled = file.path != currentPath, onClick = {
+                        TextButton(enabled = file.path !in protectedPaths, onClick = {
                             scope.launch {
                                 if (Build.VERSION.SDK_INT < 30) { message = "System-confirmed deletion requires Android 11 or newer."; return@launch }
                                 val uri = withContext(Dispatchers.IO) {

@@ -46,7 +46,8 @@ object MediaScanner {
     /** Pure folder traversal kept separate so recursive discovery can be unit-tested. */
     internal fun scanFolder(folder: File, excludedFolders: Set<String> = emptySet()): List<MediaFile> {
         val excluded = excludedFolders.map { it.replace('\\', '/').trim('/') }.filter { it.isNotBlank() }.toSet()
-        return folder.walkTopDown()
+        val sheets = mutableListOf<File>()
+        val files = folder.walkTopDown()
             .onEnter { dir ->
                 if (dir == folder) true else {
                     val relative = dir.relativeTo(folder).invariantSeparatorsPath
@@ -54,6 +55,7 @@ object MediaScanner {
                 }
             }
             .onFail { _, _ -> /* Ignore unreadable children and keep the rest of the library. */ }
+            .onEach { if (it.isFile && it.extension.equals("cue", true)) sheets += it }
             .filter { it.isFile && it.extension.lowercase() in supportedExtensions }
             // Keep the launch scan fast: do not open or decode every file here.
             // Thumbnails and expensive metadata are loaded from a bounded background cache.
@@ -72,6 +74,7 @@ object MediaScanner {
                 )
             }
             .toList()
+        return com.local.listentomusic.model.expandCueSheets(files, sheets)
     }
 }
 

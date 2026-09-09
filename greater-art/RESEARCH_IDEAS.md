@@ -1,10 +1,43 @@
 # Greater Art — Offline Player Research Notes
 
-Research date: 2026-09-04. These are ideas, not silently enabled features. Greater
+Research updated: 2026-09-08; implementation status updated 2026-09-09. Greater
 Art's rules remain: local-first, no ads, no analytics, no accounts and no Internet
 permission.
 
 ## Best Next Improvements
+
+The approved 1.9.1 batch now implements local title/cover overrides, natural sorting,
+optional artist/album/lyrics search, removal undo, query-spanning multi-selection,
+folder/extension/title rule playlists, enhanced local lyrics and CUE virtual tracks.
+Implementation is not a device-performance certification. Metadata cache reuse and
+debounced MediaStore refresh are present; a full incremental row-merge index is not.
+Mixer presets and live output peak meters remain proposals, not shipped features.
+
+The original eight-item batch below landed in 1.8.0. After phone testing 1.9.0, the
+strongest follow-ups are:
+
+1. **Local title/artwork overrides.** Fix ugly names or missing covers without rewriting
+   music files. [MissingCore Music](https://github.com/MissingCore/Music) documents
+   local metadata overrides and artwork customization. This directly helps artwork gaps.
+2. **Natural name sorting.** Put Track 2 before Track 10 within the existing A–Z/Z–A
+   choices. [Gramophone](https://github.com/FoedusProgramme/Gramophone) lists natural sorting.
+3. **Optional artist/album/lyrics search.** [Namida](https://github.com/namidaco/namida)
+   searches more than filenames. Keep simple search as default and build metadata off
+   the UI thread so launch time does not regress.
+4. **Incremental MediaStore index with file-scan fallback.** Gramophone uses MediaStore
+   for quick access. Greater Art should retain Download recursion for formats the system
+   misses, then merge changes rather than rebuild the entire index. Performance benefit
+   is a hypothesis until measured on the user's library.
+5. **Word-timed local lyrics.** Gramophone supports LRC/TTML/SRT and word/syllable timing.
+   Expand local parsing without introducing a lyrics download service.
+6. **Mixer presets and level meters.** Our own follow-on idea: explicitly save chosen
+   layers/levels, show decoder capacity and add a peak meter. User-created presets are
+   configurations, not automatic listening history.
+
+Sources were inspected on September 8. No third-party code was copied or dependency
+upgraded for these suggestions. Comparative performance was not benchmarked.
+
+### Previous batch (implemented in 1.8.0; device validation remains)
 
 1. **ReplayGain support** — read gain tags and normalize perceived loudness without
    modifying the original file. This is the strongest quality-of-life upgrade for a

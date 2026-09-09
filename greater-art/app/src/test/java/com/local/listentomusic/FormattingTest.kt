@@ -46,7 +46,7 @@ class FormattingTest {
         assertEquals(AppLanguage.ENGLISH, defaults.appLanguage)
         assertTrue(defaults.preloadThumbnails)
         assertFalse(defaults.showFileDetails)
-        assertEquals(AppBackgroundMode.DEFAULT, defaults.backgroundMode)
+        assertEquals(AppBackgroundMode.CURRENT_VIDEO, defaults.backgroundMode)
         assertEquals(0.55f, defaults.backgroundDim, 0.001f)
         assertEquals(
             setOf(SortMode.CUSTOM, SortMode.NAME_ASC, SortMode.NAME_DESC),

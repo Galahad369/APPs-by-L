@@ -113,6 +113,8 @@ fun SettingsScreen(
     onSeekOffset: (Long) -> Unit,
     onJokeAdsEnabled: (Boolean) -> Unit,
     onShowSleepControl: (Boolean) -> Unit,
+    onShowAbRepeat: (Boolean) -> Unit,
+    onExtendedSearch: (Boolean) -> Unit,
     onFolderExcluded: (String, Boolean) -> Unit,
     onReplayGainEnabled: (Boolean) -> Unit,
     onEqualizer: () -> Unit,
@@ -163,7 +165,7 @@ fun SettingsScreen(
                     uiText(language, "English is the default. Changes apply immediately.", "變更會立即套用。預設語言為英文。"),
                     AppLanguage.entries,
                     preferences.appLanguage,
-                    { if (it == AppLanguage.ENGLISH) "English" else "繁體中文" },
+                    { it.label },
                     onAppLanguage,
                 )
                 ChoiceSetting(
@@ -190,7 +192,7 @@ fun SettingsScreen(
                 )
                 ChoiceSetting(
                     uiText(language, "App background", "應用程式背景"),
-                    uiText(language, "Default is animated black liquid metal. Custom video backgrounds are always muted.", "預設為黑色液態金屬動畫。自訂影片背景永遠靜音。"),
+                    uiText(language, "Video wallpaper follows the current track across pages. Audio uses liquid metal. Wallpaper is always muted.", "影片背景會跟隨目前曲目並跨頁播放，純音訊使用液態金屬，背景永遠靜音。"),
                     AppBackgroundMode.entries,
                     preferences.backgroundMode,
                     {
@@ -263,6 +265,8 @@ fun SettingsScreen(
                 SwitchSetting("ReplayGain", uiText(language, "Use track gain tags with peak protection. Untagged files play unchanged; boosting needs a peak tag and device support.", "使用曲目增益標籤及峰值保護。沒有標籤時保持原音量，增強音量需要峰值標籤和裝置支援。"), preferences.replayGainEnabled, onReplayGainEnabled)
                 TextButton(onClick = onEqualizer, modifier = Modifier.padding(horizontal = 16.dp)) { Text(uiText(language, "Open system equalizer", "開啟系統等化器")) }
                 SwitchSetting(uiText(language, "Show sleep timer", "顯示睡眠計時器"), uiText(language, "Optional player control. Hidden by default.", "選用播放控制，預設隱藏。"), preferences.showSleepControl, onShowSleepControl)
+                SwitchSetting(uiText(language, "A–B practice controls", "A–B 練習控制"), uiText(language, "Mark a section to repeat. Turning this off clears the markers.", "標記要重複的段落，關閉時會清除標記。"), preferences.showAbRepeat, onShowAbRepeat)
+                SwitchSetting(uiText(language, "Extended local search", "進階本機搜尋"), uiText(language, "Search artist, album and lyrics. Builds a local cache in the background; off by default.", "搜尋歌手、專輯及歌詞，在背景建立本機索引，預設關閉。"), preferences.extendedSearch, onExtendedSearch)
                 ChoiceSetting(uiText(language, "Playback speed", "播放速度"), uiText(language, "Applied immediately and remembered locally.", "立即套用並儲存在本機。"), speeds, playback.speed, { "${it}×" }, onSpeed)
                 ChoiceSetting(
                     uiText(language, "Repeat", "循環"),

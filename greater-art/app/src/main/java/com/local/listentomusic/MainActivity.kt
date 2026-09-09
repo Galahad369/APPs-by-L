@@ -194,6 +194,7 @@ class MainActivity : ComponentActivity() {
             return false
         }
         intent.removeExtra(MiniWindowOverlayService.EXTRA_STOP_APP)
+        com.local.listentomusic.playback.ParallelPlayback.stopAll()
         stopService(Intent(this, MiniWindowOverlayService::class.java))
         stopService(Intent(this, PlaybackService::class.java))
         finishAndRemoveTask()

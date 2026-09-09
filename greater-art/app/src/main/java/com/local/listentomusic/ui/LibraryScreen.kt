@@ -107,6 +107,10 @@ fun LibraryScreen(
     onPreloadAhead: (Int, Int) -> Unit,
     onOpenSettings: () -> Unit,
     onPlay: (MediaFile) -> Unit,
+    onEditDisplay: (MediaFile) -> Unit,
+    onCreateRule: () -> Unit,
+    onAddSelected: (String, List<String>) -> Unit,
+    onCreateSelected: (String, List<String>) -> Unit,
 ) {
     val language = preferences.appLanguage
     val activePlaylist = preferences.playlists.firstOrNull { it.id == preferences.activePlaylistId }
@@ -117,7 +121,10 @@ fun LibraryScreen(
     var playlistName by remember { mutableStateOf("") }
     var seedKeyword by remember { mutableStateOf("") }
     var songListFile by remember { mutableStateOf<MediaFile?>(null) }
-
+    var selected by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(emptyList<String>()) }
+    var selectionMenu by remember { mutableStateOf(false) }
+    var selectionNameDialog by remember { mutableStateOf(false) }
+    var selectionName by remember { mutableStateOf("") }
     Scaffold(
         modifier = Modifier.padding(contentPadding),
         containerColor = Color.Transparent,
@@ -184,6 +191,20 @@ fun LibraryScreen(
         },
     ) { innerPadding ->
         Column(Modifier.fillMaxSize().padding(innerPadding)) {
+            if (selected.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("${selected.size}", style = MaterialTheme.typography.labelLarge)
+                TextButton(onClick = { selected = (selected + state.files.map { it.path }).distinct() }) { Text(uiText(language, "Select matches", "選取搜尋結果")) }
+                TextButton(onClick = { selected = emptyList() }) { Text(uiText(language, "Clear", "清除")) }
+                Box {
+                    TextButton(onClick = { selectionMenu = true }) { Text(uiText(language, "Add to…", "加入…")) }
+                    DropdownMenu(selectionMenu, { selectionMenu = false }) {
+                        preferences.playlists.filter { it.rule == null }.forEach { playlist ->
+                            DropdownMenuItem(text = { Text(playlist.name) }, onClick = { onAddSelected(playlist.id, selected); selected = emptyList(); selectionMenu = false })
+                        }
+                        DropdownMenuItem(text = { Text(uiText(language, "Create playlist", "建立播放清單")) }, onClick = { selectionMenu = false; selectionNameDialog = true })
+                    }
+                }
+            }
             OutlinedTextField(
                 value = state.query,
                 onValueChange = onQueryChange,
@@ -315,16 +336,16 @@ fun LibraryScreen(
                         ) { index, item ->
                             MediaFileRow(
                                 file = item,
-                                isCurrent = item.path == currentPath,
+                                isCurrent = if (selected.isNotEmpty()) item.path in selected else item.path == currentPath,
                                 index = index,
                                 itemCount = state.files.size,
-                                dragEnabled = state.query.isBlank() && (activePlaylist != null || state.sortMode == SortMode.CUSTOM),
+                                dragEnabled = selected.isEmpty() && activePlaylist?.rule == null && state.query.isBlank() && (activePlaylist != null || state.sortMode == SortMode.CUSTOM),
                                 onMove = onMoveItem,
                                 onLoadThumbnail = onLoadThumbnail,
                                 rowSize = preferences.libraryRowSize,
                                 showThumbnails = preferences.showThumbnails,
                                 showFileDetails = preferences.showFileDetails,
-                                onPlay = { onPlay(item) },
+                                onPlay = { if (selected.isEmpty()) onPlay(item) else selected = if (item.path in selected) selected - item.path else selected + item.path },
                                 onMore = { songListFile = item },
                                 moreDescription = uiText(language, "Song list", "歌曲清單"),
                             )
@@ -339,6 +360,10 @@ fun LibraryScreen(
         }
     }
 
+    if (selectionNameDialog) AlertDialog(onDismissRequest = { selectionNameDialog = false }, title = { Text(uiText(language, "Create playlist", "建立播放清單")) },
+        text = { OutlinedTextField(selectionName, { selectionName = it.take(60) }, singleLine = true) },
+        confirmButton = { TextButton(enabled = selectionName.isNotBlank(), onClick = { onCreateSelected(selectionName, selected); selected = emptyList(); selectionName = ""; selectionNameDialog = false }) { Text(uiText(language, "Create", "建立")) } },
+        dismissButton = { TextButton(onClick = { selectionNameDialog = false }) { Text(uiText(language, "Cancel", "取消")) } })
     if (createPlaylistOpen) CreatePlaylistDialog(
         language = language,
         name = playlistName,
@@ -362,12 +387,15 @@ fun LibraryScreen(
             title = { Text(uiText(language, "Song list", "歌曲清單")) },
             text = {
                 Column {
-                    if (activePlaylist != null && file.path in activePlaylist.paths) {
+                    TextButton(onClick = { songListFile = null; onEditDisplay(file) }) { Text(uiText(language, "Local title & cover", "本機標題與封面")) }
+                    TextButton(onClick = { selected = (selected + file.path).distinct(); songListFile = null }) { Text(uiText(language, "Select multiple", "選取多首")) }
+                    TextButton(onClick = { songListFile = null; onCreateRule() }) { Text(uiText(language, "Rule-based playlist", "規則播放清單")) }
+                    if (activePlaylist != null && activePlaylist.rule == null && file.path in activePlaylist.paths) {
                         TextButton(onClick = { onRemoveFromPlaylist(file.path); songListFile = null }) {
                             Text(uiText(language, "Remove from ${activePlaylist.name}", "從「${activePlaylist.name}」移除"))
                         }
                     }
-                    preferences.playlists.forEach { playlist ->
+                    preferences.playlists.filter { it.rule == null }.forEach { playlist ->
                         val added = file.path in playlist.paths
                         TextButton(
                             enabled = !added,
@@ -449,7 +477,7 @@ private fun MediaFileRow(
     moreDescription: String,
 ) {
     var accumulatedDrag by remember(index, file.path) { mutableFloatStateOf(0f) }
-    val thumbnail by produceState<Bitmap?>(null, file.path, "${file.sizeBytes}:${file.modifiedMs}:$showThumbnails") {
+    val thumbnail by produceState<Bitmap?>(null, file.path, "${file.sizeBytes}:${file.modifiedMs}:$showThumbnails:${file.coverUri}") {
         value = if (showThumbnails) onLoadThumbnail(file) else null
     }
     val dragModifier = if (dragEnabled) Modifier.pointerInput(index, itemCount) {
