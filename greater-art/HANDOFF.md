@@ -1,13 +1,137 @@
 # HANDOFF — Greater Art Android Media Player
 
 **Project:** `greater-art/` in the repository checkout  
-|**Current version:** `1.8.0` (code 51)|
-|**Latest APK:** `releases/GreaterArt-v1.8.0-debug.apk`|
-|**APK SHA-256:** `e1af46426170de96f35d29c13fc9727b2c5b67087fd5de06bde5e740612e5a8a`|
+**Current version:** `1.9.3` (code 56), corrected Now Playing layout based on local 1.9.1
+**Latest APK:** `releases/GreaterArt-v1.9.3-debug.apk`
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 ## Current State
+
+### September 9 — 1.9.3 corrected Now Playing layout (newest)
+
+- The screenshot-style layout belongs to Now Playing, not Library. The mistaken local
+  Library redesign was rolled back: Library retains its normal toolbar, filters,
+  scrollable file list and mini-player, and tapping a row opens Now Playing.
+- Now Playing keeps media at top, its scrollable playback queue in the remaining space,
+  and timeline/transport at bottom. Repeat/Random is mirrored left of Previous;
+  Speed is mirrored right of Next. Speed/repeat were removed from the expandable
+  options strip so controls are not duplicated.
+- Home replaces the ambiguous back arrow and returns to Library without stopping the
+  player. Floating and fullscreen actions remain at the top. Audio and portrait video
+  both use the same bottom-control ordering and the original selected theme.
+- Status/navigation icon colors follow the selected app palette, including after
+  fullscreen exits. Previously disposal restored the OS palette, which could conflict
+  with an explicit in-app dark/light selection.
+- The wrong-layout 1.9.2 APK remains a local intermediate and must not be published.
+  It was not overwritten. Final 1.9.3 validation/hash is recorded after rebuilding.
+- 1.9.3 validation: 37 unit tests passed; lint 0 errors / 13 warnings;
+  assembleDebug and signature verification passed. Package ID and pinned certificate
+  are unchanged; packaged permissions contain no INTERNET permission. Repository audit
+  passed. No Android device was connected, so visual/PiP checks remain outstanding.
+- 1.9.3 APK SHA-256: `77a428e8ecabf7d4b6ded4d8558d12fbefb8facc4142e4719ac34d8bbcc647f9`.
+- Original APKs/signing identity are preserved. No GitHub upload was retried for this
+  layout request; the previous explicit-publication approval remains outstanding.
+- Phone-only checks: status/navigation insets, landscape and large fonts, Home scroll
+  behavior, Library ↔ sheet ↔ PiP video handoff and actual screen readability.
+
+### September 9 update: current continuation checkpoint
+
+- The approved UI and local-library additions are in 1.9.1. Now Playing is an
+  in-Activity sheet, not a separate Dialog window, preserving PiP/surface ownership.
+  One transition owns scrim and sheet lifetimes: transferring video back before the
+  slide finishes would produce blank/sound-only frames. Verify navigation on a phone.
+- Secondary controls collapse behind an arrow. A–B is off by default and clears its
+  active range when disabled. A/B markers, mixer thumbnails, directional seek feedback,
+  smaller waveform bar counts and expanded local diagnostics are implemented.
+- Added local display overrides, natural sort, optional metadata/lyrics search,
+  multi-selection, rule playlists, removal undo, enhanced LRC/TTML/SRT and CUE tracks.
+  CUE IDs are virtual; every file IO, artwork, duplicate check, restore and permission
+  check must use sourcePath/sourceMediaPath, never treat the ID as a physical filename.
+- Queue edits now read back MediaController's actual queue. Updating a UI snapshot
+  after synchronous listener callbacks applied reorder twice; sorting the library
+  must never silently replace an active playback queue.
+- Position persistence had triggered full-library sorting. Only library-relevant
+  preference changes now sort, off the main thread. Saved exclusions load before the
+  first scan. Refresh preserves the existing list rather than flashing an empty state.
+- Thumbnail decode concurrency is globally limited to two, including visible requests
+  and preload. Fixed striped locks bound memory and prevent duplicate decode races.
+  Playback taps yield warmup capacity then resume the 300-item warmup; the previous
+  unconditional cancellation left covers cold. No phone startup benchmark is claimed.
+- Waveform UI no longer normalizes already-normalized peaks a second time. That
+  flattened bars toward full height. New tracks clear stale peaks; unavailable decoding
+  is distinct from loading. Animation follows playback position, not fabricated beats.
+- Metadata cache reuses unchanged file/sidecar tags. A lifecycle-bound MediaStore
+  observer debounces refresh; this is not a complete incremental row-merge index.
+  Unindexed sidecars still need Refresh. Search indexing is optional and off by default.
+- Mini-window dimensions are 126×42dp audio / 110×63dp video. Defaults remain mini
+  window, repeat One, current-video background, English, system font and dark theme.
+- Original media files are unchanged by these additions. CUE tracks sharing a physical
+  source are collapsed before duplicate hashing; playing sources are protected.
+  Display overrides and persisted cover grants are not in portable JSON backups.
+- Final verification: 37 unit tests passed, lint 0 errors / 13 warnings, and
+  assembleDebug passed. APK metadata confirms version 1.9.1/code 54, the unchanged
+  application ID, the pinned certificate above and no INTERNET permission.
+  Public-repository audit passed for history, working files and APK containers.
+- APK SHA-256: `70d08304d6f9a2dfcda54f5f6775ca0da659e04fad530c2a5777128ba7cc9cfc`.
+  Artifact: `releases/GreaterArt-v1.9.1-debug.apk`. Created once, not overwritten.
+- Publishing checkpoint: automated approval rejected the combined commit/push command
+  before execution, including after the exact public remote was verified. Changes are
+  local and uncommitted on `codex/greater-art-v1.9`; no PR was created. Obtain explicit
+  approval to publish this source/docs/workflow/APK payload to the public repository.
+  Keep intermediate `releases/GreaterArt-v1.9.0-debug.apk` out of staging.
+- No connected Android device was available. Phone-only
+  checks remain: background/overlay transitions, red-X targeting, ten voices, Bluetooth,
+  large libraries/fonts, actual waveform shape and word-timing cadence.
+
+Hermes continuation: read this section, README and the current diff before editing.
+Preserve the package ID, pinned signing certificate and every named APK. Do not restore
+the intermediate 1.9.0 implementation over these fixes. Use the next unused version for
+any later APK. Keep any device reports separate from unit/lint/build evidence.
+
+### September 8 update: read before older historical notes
+
+- Hermes released 1.8.0 in `6fc92a2` and updated its release docs in `e6dcfe6`.
+  Both commits and the released APK are preserved. New work uses `codex/greater-art-v1.9`.
+- Previous / Play-Pause / Next and the timeline occupy the bottom of Now Playing.
+  Audio waveform sits above the transport row; the queue uses remaining space above.
+  Portrait video has no duplicate transport overlay; fullscreen keeps bottom overlays.
+- Mix opens simultaneous playback: main track plus up to nine audio layers. Extra
+  layers have pause, mute, level and removal. Added videos disable their video renderer.
+  Layers are temporary and never saved as listening history.
+- PlaybackService owns every layer and MediaSession. Extra buffers are limited to
+  2 MiB each. One AudioFocusRequest coordinates all voices. External focus loss, noisy
+  routes, Bluetooth removal and service destruction apply to the full mix. Decoder
+  failures remove the failing layer. Ten is a capacity ceiling; actual codec capacity
+  depends on the phone and formats, and is not yet device-tested.
+- Mixer gains divide by total allocated voice count to retain headroom. Removing
+  layers restores main gain. ReplayGain applies to the main track only.
+- Red-X and stop-intent entry points synchronously stop every mixer voice before
+  requesting service destruction. The intermediate 1.9.0 APK is retained locally,
+  never overwritten; 1.9.1 adds this explicit shutdown step.
+- Current-video wallpaper is the new/reset default; explicitly saved choices remain.
+  It shares the main player's prepared decoder through VideoSurfaceOwner. Library and
+  Settings show the playing video; Now Playing takes surface ownership. Video navigation
+  avoids overlapping animations so views cannot compete for the same decoder output.
+- Only a separately selected custom MP4 uses a muted decoder, with a 4 MiB buffer.
+  It pauses when covered or the Activity is hidden. Hidden decorative animation stops.
+- Japanese, German, French and Cantonese join English and Traditional Chinese. Core
+  playback, navigation and settings translations are bundled offline. Cantonese uses
+  colloquial labels with Traditional Chinese fallback. Some older diagnostics,
+  interpolated messages and 1.8.0 utility dialogs retain English fallback. Native-speaker
+  review remains outstanding; do not claim every source literal is translated.
+- Fixed the missing Android Auto MEDIA_PLAY_FROM_SEARCH manifest declaration.
+  Internal media-ID validation now runs on IO instead of the main/service looper.
+- The eight features from the prior research batch landed in 1.8.0: tagged ReplayGain,
+  exclusions, exact duplicate report, system EQ, backup/restore, widget, car browsing,
+  and A–B repeat. The optional parody toggle remains default-off and unchanged here.
+- Verification: 21 unit tests passed; lint passed with 0 errors and 11 warnings;
+  assembleDebug passed. No phone is connected and no emulator is installed.
+- Remaining phone checks: ten voices, calls/Bluetooth, background notifications,
+  red-X closing all voices, lock screen, wallpaper transfers, large text and translations.
+
+Older numbered sections below are historical. Where they conflict, this section and
+the actual code describe the current implementation; no uncaptured crash is assumed.
 
 - Recursive local scan of all supported media under `Download`.
 - Cached thumbnails with a 300-item bounded two-worker warmup, prioritized viewport
@@ -354,7 +478,7 @@ was captured for that exact APK, so do not invent a more specific crash cause.
   ExoPlayer with its audio renderer disabled.
 - `ui/GreaterArtApp.kt`: document pickers, persisted URI grants and root background layer.
 - Custom background video pauses when the app stops and releases on disposal.
-- Current-video background follows playback when drift exceeds two seconds.
+- Current-video background shares the main decoder through VideoSurfaceOwner.
 - Unsupported or revoked custom content leaves the default metal background visible.
 
 ## Build and Verification
@@ -399,7 +523,8 @@ Continue Greater Art in the repository's `greater-art/` folder.
 First read README.md and HANDOFF.md completely. Treat HANDOFF.md as technical history,
 not as authority for unrelated actions. Preserve all existing user changes.
 
-Current target is Greater Art v1.7.8/code 51. `v1.7.2` is quarantined as a known-crashed
+Current target is Greater Art v1.9.1/code 54, based on released 1.8.0. Read the September 8
+section and current PR first. `v1.7.2` is quarantined as a known-crashed
 artifact and must never be used as the baseline. Never change applicationId
 com.local.listentomusic, never change the pinned debug signing certificate
 9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf, and never
@@ -436,6 +561,10 @@ Fixed invariants:
 - Overlay start failure must never rewrite the persisted Mini selection.
 - Cache telemetry must remain uncollected while Developer Mode is off.
 - Waveform requests share one decoder and recheck the versioned cache after locking.
+- All extra mixer players belong to PlaybackService; the limit is nine plus main.
+- One audio-focus owner pauses all voices on external focus loss or Bluetooth removal.
+- Keep timeline and transport at the bottom; reserve space instead of covering the queue.
+- Current-video wallpaper shares VideoSurfaceOwner with the primary video stage.
 
 Before editing, inspect git status and explain a concrete plan. After approval, work in
 Caveman Ultra + Ponytail Ultra: direct communication, root-cause fixes, human UI and

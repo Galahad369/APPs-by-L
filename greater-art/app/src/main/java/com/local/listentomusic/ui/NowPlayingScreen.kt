@@ -19,7 +19,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -46,7 +46,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.FullscreenExit
@@ -94,6 +94,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.ContentScale
@@ -123,7 +127,7 @@ import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-private val playbackSpeeds = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f)
+internal val playbackSpeeds = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f)
 
 @Composable
 fun NowPlayingScreen(
@@ -170,6 +174,7 @@ fun NowPlayingScreen(
             .background(Color.Transparent),
     ) {
         val landscape = maxWidth > maxHeight
+        val portraitVideoHeight = minOf(maxWidth / playback.videoAspectRatio.coerceIn(0.75f, 2.25f), maxHeight * 0.40f)
         val immersiveVideo = playback.isVideo && (fullscreen || landscape)
         if (playback.isVideo) FullscreenEffect(enabled = immersiveVideo)
         BackHandler(enabled = fullscreen) { fullscreen = false }
@@ -204,7 +209,7 @@ fun NowPlayingScreen(
                         Modifier.fillMaxSize()
                     } else {
                         Modifier.fillMaxWidth()
-                            .aspectRatio(playback.videoAspectRatio.coerceIn(0.75f, 2.25f))
+                            .height(portraitVideoHeight)
                     },
                 )
                 if (!immersiveVideo) {
@@ -217,6 +222,9 @@ fun NowPlayingScreen(
                         language = language,
                         onSpeed = onSpeed,
                         onRepeat = onRepeat,
+                        onPrevious = onPrevious,
+                        onTogglePlay = onTogglePlay,
+                        onNext = onNext,
                         onSleepTimer = onSleepTimer,
                         sleepTimer = sleepTimer,
                         onPlayQueueItem = onPlayQueueItem,
@@ -277,6 +285,7 @@ private fun VideoPlayerStage(
     modifier: Modifier,
 ) {
     var controlsVisible by rememberSaveable { mutableStateOf(true) }
+    var seekFeedback by remember { mutableStateOf(0L to 0L) }
     var seeking by remember { mutableStateOf(false) }
     var seekPosition by remember { mutableFloatStateOf(0f) }
     val hasDuration = playback.durationMs > 0L
@@ -291,17 +300,20 @@ private fun VideoPlayerStage(
     }
 
     Box(
-        modifier = modifier.background(Color.Black).pointerInput(Unit) {
+        modifier = modifier.background(Color.Black).pointerInput(seekOffsetMs) {
             detectTapGestures(
                 onTap = { controlsVisible = !controlsVisible },
                 onDoubleTap = { offset ->
-                    if (offset.x < size.width / 2) onSeekBy(-seekOffsetMs) else onSeekBy(seekOffsetMs)
+                    val delta = if (offset.x < size.width / 2) -seekOffsetMs else seekOffsetMs
+                    onSeekBy(delta)
+                    seekFeedback = delta to android.os.SystemClock.uptimeMillis()
                 },
             )
         },
         contentAlignment = Alignment.Center,
     ) {
         VideoSurface(playback.currentPath, controller, onVideoBoundsChanged, Modifier.fillMaxSize())
+        SeekFeedback(seekFeedback.first, seekFeedback.second, Modifier.align(if (seekFeedback.first < 0) Alignment.CenterStart else Alignment.CenterEnd))
 
         AnimatedVisibility(
             visible = controlsVisible,
@@ -327,7 +339,7 @@ private fun VideoPlayerStage(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     OverlayIconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back to library", tint = Color.White)
+                        Icon(Icons.Rounded.Home, uiText(playback.appLanguage, "Home", "首頁"), tint = Color.White)
                     }
                     Spacer(Modifier.weight(1f))
                     OverlayIconButton(onClick = onPictureInPicture) {
@@ -342,8 +354,9 @@ private fun VideoPlayerStage(
                     }
                 }
 
-                Row(
-                    modifier = Modifier.align(Alignment.Center).fillMaxWidth(),
+                if (immersive) Row(
+                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.navigationBars).padding(bottom = 64.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -374,7 +387,7 @@ private fun VideoPlayerStage(
                 } else {
                     Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                 }
-                Column(
+                if (immersive) Column(
                     modifier = timelineModifier.padding(horizontal = 14.dp, vertical = 7.dp),
                 ) {
                     CompactSlider(
@@ -427,23 +440,27 @@ private fun AudioPlayer(
     onMoveQueueItem: (Int, Int) -> Unit,
     onRemoveQueueItem: (Int) -> Unit,
 ) {
+    var waveformLoading by remember(playback.currentPath) { mutableStateOf(true) }
     val waveform by produceState<FloatArray?>(null, playback.currentPath) {
+        value = null
         // Playback and artwork get the first frame; stale requests are cancelled by
         // produceState when the user skips rapidly.
         delay(350)
         value = playback.currentPath?.let { onLoadWaveform(it) }
+        waveformLoading = false
     }
     BoxWithConstraints(
         modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)
             .windowInsetsPadding(WindowInsets.navigationBars),
     ) {
-        val artSize = minOf(maxWidth * 0.68f, maxHeight * 0.30f)
+        val artSize = minOf(maxWidth * 0.62f, maxHeight * 0.24f)
+        var seekFeedback by remember { mutableStateOf(0L to 0L) }
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
                 Icon(
-                    Icons.AutoMirrored.Rounded.ArrowBack,
-                    uiText(language, "Back to library", "返回音樂庫"),
+                    Icons.Rounded.Home,
+                    uiText(language, "Home", "首頁"),
                 )
             }
             Spacer(Modifier.weight(1f))
@@ -456,10 +473,12 @@ private fun AudioPlayer(
         }
         LiquidMetalSurface(
             modifier = Modifier.padding(vertical = 4.dp).size(artSize)
-                .pointerInput(Unit) {
+                .pointerInput(seekOffsetMs) {
                     detectTapGestures(
                         onDoubleTap = { offset ->
-                            if (offset.x < size.width / 2) onSeekBy(-seekOffsetMs) else onSeekBy(seekOffsetMs)
+                            val delta = if (offset.x < size.width / 2) -seekOffsetMs else seekOffsetMs
+                            onSeekBy(delta)
+                            seekFeedback = delta to android.os.SystemClock.uptimeMillis()
                         },
                     )
                 },
@@ -478,16 +497,17 @@ private fun AudioPlayer(
                     Icons.Rounded.MusicNote,
                     contentDescription = null,
                     modifier = Modifier.size(116.dp),
-                    tint = Color(0xFF8BE9D3),
+                    tint = MaterialTheme.colorScheme.secondary,
                 )
             }
+            SeekFeedback(seekFeedback.first, seekFeedback.second, Modifier.align(if (seekFeedback.first < 0) Alignment.CenterStart else Alignment.CenterEnd))
         }
         Column(
             modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 20.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                playback.title.substringBeforeLast('.', playback.title),
+                com.local.listentomusic.model.mediaTitle(playback.title, playback.currentPath),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 maxLines = 2,
@@ -495,12 +515,10 @@ private fun AudioPlayer(
                 textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(12.dp))
-            WaveformTimeline(playback, waveform, onSeek, language)
-            Transport(playback, onPrevious, onTogglePlay, onNext)
             SecondaryControlRow(
+                queue = queue,
+                onLoadThumbnail = onLoadThumbnail,
                 playback = playback,
-                onSpeed = onSpeed,
-                onRepeat = onRepeat,
                 onSleepTimer = onSleepTimer,
                 sleepTimer = sleepTimer,
             )
@@ -521,6 +539,8 @@ private fun AudioPlayer(
                 onRemoveQueueItem = onRemoveQueueItem,
                 modifier = Modifier.fillMaxWidth().weight(1f),
             )
+            WaveformTimeline(playback, waveform, onSeek, language, waveformLoading)
+            PlayerBottomControls(playback, onRepeat, onPrevious, onTogglePlay, onNext, onSpeed)
         }
         }
     }
@@ -536,6 +556,9 @@ private fun SecondaryControls(
     language: AppLanguage,
     onSpeed: (Float) -> Unit,
     onRepeat: () -> Unit,
+    onPrevious: () -> Unit,
+    onTogglePlay: () -> Unit,
+    onNext: () -> Unit,
     onSleepTimer: (Long) -> Unit,
     sleepTimer: SleepTimerState,
     onPlayQueueItem: (MediaFile) -> Unit,
@@ -553,7 +576,7 @@ private fun SecondaryControls(
         horizontalAlignment = Alignment.Start,
     ) {
         Text(
-            playback.title.substringBeforeLast('.', playback.title),
+            com.local.listentomusic.model.mediaTitle(playback.title, playback.currentPath),
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             maxLines = 2,
@@ -562,9 +585,9 @@ private fun SecondaryControls(
         )
         Spacer(Modifier.height(12.dp))
         SecondaryControlRow(
+            queue = queue,
+            onLoadThumbnail = onLoadThumbnail,
             playback = playback,
-            onSpeed = onSpeed,
-            onRepeat = onRepeat,
             onSleepTimer = onSleepTimer,
             sleepTimer = sleepTimer,
         )
@@ -585,6 +608,8 @@ private fun SecondaryControls(
             onRemoveQueueItem = onRemoveQueueItem,
             modifier = Modifier.fillMaxWidth().weight(1f),
         )
+        Timeline(playback, onSeek)
+        PlayerBottomControls(playback, onRepeat, onPrevious, onTogglePlay, onNext, onSpeed)
     }
 }
 
@@ -651,7 +676,7 @@ private fun NowPlayingQueue(
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
-                                file.name.substringBeforeLast('.', file.name),
+                                com.local.listentomusic.model.mediaTitle(file.name, file.sourcePath),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 style = MaterialTheme.typography.bodyMedium,
@@ -718,7 +743,13 @@ private fun SyncedLyricsPanel(
             key = { index, line -> "${line.timeMs}:$index" },
         ) { index, line ->
             Text(
-                text = line.text,
+                text = androidx.compose.ui.text.buildAnnotatedString {
+                    if (line.words.isEmpty()) append(line.text) else line.words.forEach { word ->
+                        pushStyle(androidx.compose.ui.text.SpanStyle(color = if (index == activeIndex && word.timeMs <= positionMs)
+                            MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.60f)))
+                        append(word.text); pop()
+                    }
+                },
                 modifier = Modifier.fillMaxWidth().clickable(enabled = isSynced) { onSeek(line.timeMs) }
                     .padding(vertical = 5.dp),
                 color = if (index == activeIndex) MaterialTheme.colorScheme.secondary
@@ -735,7 +766,7 @@ private fun SyncedLyricsPanel(
 }
 
 private fun queueDetails(file: MediaFile): String = buildList {
-    file.name.substringAfterLast('.', "").takeIf { it.isNotBlank() }?.uppercase()?.let(::add)
+    file.sourcePath.substringAfterLast('.', "").takeIf { it.isNotBlank() }?.uppercase()?.let(::add)
     file.durationMs.takeIf { it > 0L }?.let { add(formatDuration(it)) }
     file.sizeBytes.takeIf { it > 0L }?.let { add(formatBytes(it)) }
 }.joinToString("  •  ")
@@ -748,11 +779,11 @@ private fun formatBytes(bytes: Long): String = when {
 }
 
 @Composable
-private fun QueueThumbnail(
+internal fun QueueThumbnail(
     file: MediaFile,
     onLoadThumbnail: suspend (MediaFile) -> Bitmap?,
 ) {
-    val thumbnail by produceState<Bitmap?>(null, file.path, file.modifiedMs) {
+    val thumbnail by produceState<Bitmap?>(null, file.path, "${file.modifiedMs}:${file.coverUri}") {
         value = onLoadThumbnail(file)
     }
     Box(
@@ -780,8 +811,8 @@ private fun QueueThumbnail(
 
 @Composable
 private fun Timeline(playback: PlaybackUiState, onSeek: (Long) -> Unit) {
-    var seeking by remember { mutableStateOf(false) }
-    var seekPosition by remember { mutableFloatStateOf(0f) }
+    var seeking by remember(playback.currentPath) { mutableStateOf(false) }
+    var seekPosition by remember(playback.currentPath) { mutableFloatStateOf(0f) }
     val hasDuration = playback.durationMs > 0L
     val maximum = if (hasDuration) playback.durationMs.toFloat() else 1f
     val position = if (seeking) seekPosition else if (hasDuration) playback.positionMs.toFloat() else 0f
@@ -794,6 +825,7 @@ private fun Timeline(playback: PlaybackUiState, onSeek: (Long) -> Unit) {
         activeColor = MaterialTheme.colorScheme.secondary,
         inactiveColor = MaterialTheme.colorScheme.outlineVariant,
     )
+    PracticeMarkers(playback)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(formatDuration(if (seeking) position.toLong() else playback.positionMs), style = MaterialTheme.typography.labelMedium)
         Text(formatDuration(playback.durationMs), style = MaterialTheme.typography.labelMedium)
@@ -807,6 +839,7 @@ private fun WaveformTimeline(
     waveform: FloatArray?,
     onSeek: (Long) -> Unit,
     language: AppLanguage,
+    loading: Boolean,
 ) {
     var seeking by remember(playback.currentPath) { mutableStateOf(false) }
     var seekFraction by remember(playback.currentPath) { mutableFloatStateOf(0f) }
@@ -817,23 +850,22 @@ private fun WaveformTimeline(
     val playbackFraction = if (hasDuration) {
         playback.positionMs.toDouble().div(playback.durationMs.toDouble()).toFloat().coerceIn(0f, 1f)
     } else 0f
-    val fraction = if (seeking) seekFraction else playbackFraction
+    val animatedProgress by animateFloatAsState(playbackFraction, androidx.compose.animation.core.tween(if (playback.isPlaying) 450 else 0), label = "wave-progress")
+    val fraction = if (seeking) seekFraction else animatedProgress
     val active = MaterialTheme.colorScheme.secondary
     val inactive = MaterialTheme.colorScheme.outlineVariant
     val displayPeaks = remember(waveform) {
         waveform?.takeIf { it.isNotEmpty() }?.let { raw ->
-            // 4 bars per group = fewer, wider bars with stronger presence
-            val groupSize = 4
-            val groups = (raw.size + groupSize - 1) / groupSize
+            // Fixed visible count prevents thousands of tiny lines on a phone.
+            val groups = minOf(80, raw.size)
             val peaks = FloatArray(groups) { g ->
-                val first = g * groupSize
-                val last = ((g + 1) * groupSize).coerceAtMost(raw.size)
+                val first = g * raw.size / groups
+                val last = ((g + 1) * raw.size / groups).coerceAtMost(raw.size)
                 (first until last).maxOfOrNull { raw[it].takeIf(Float::isFinite) ?: 0f } ?: 0f
             }
-            // p75 reference keeps quiet passages visible instead of crushing them
-            val sorted = peaks.sorted()
-            val reference = sorted[(sorted.lastIndex * 0.75f).toInt()].coerceAtLeast(0.02f)
-            peaks.map { (it / reference).coerceIn(0f, 1f) }.toFloatArray()
+            // Repository already normalizes PCM. Normalizing it again flattened
+            // most bars at 1.0, destroying the real shape of the recording.
+            peaks.map { it.coerceIn(0f, 1f) }.toFloatArray()
         }
     }
 
@@ -868,8 +900,19 @@ private fun WaveformTimeline(
                         cap = StrokeCap.Round,
                     )
                 }
+                if (hasDuration) {
+                    val x = size.width * fraction
+                    drawLine(active.copy(alpha = 0.18f), Offset(x, 0f), Offset(x, size.height), 8.dp.toPx())
+                    drawLine(active, Offset(x, 0f), Offset(x, size.height), 1.dp.toPx())
+                }
             }
         },
+    )
+    PracticeMarkers(playback)
+    if (waveform == null) Text(
+        if (loading) uiText(language, "Waveform is being prepared; seeking is ready", "正在準備波形，仍可拖曳播放位置")
+        else uiText(language, "Waveform unavailable; seeking still works", "無法讀取波形，仍可拖曳播放位置"),
+        style = MaterialTheme.typography.labelSmall, color = inactive,
     )
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(
@@ -951,22 +994,42 @@ private fun CompactSlider(
 }
 
 @Composable
-private fun Transport(
+private fun PlayerBottomControls(
     playback: PlaybackUiState,
+    onRepeat: () -> Unit,
     onPrevious: () -> Unit,
     onTogglePlay: () -> Unit,
     onNext: () -> Unit,
+    onSpeed: (Float) -> Unit,
 ) {
+    var speedMenuOpen by remember { mutableStateOf(false) }
+    val accent = MaterialTheme.colorScheme.secondary
+    val cycleLabel = when {
+        playback.shuffleEnabled -> uiText(playback.appLanguage, "Random", "隨機")
+        playback.repeatMode == Player.REPEAT_MODE_ONE -> uiText(playback.appLanguage, "One", "單曲")
+        playback.repeatMode == Player.REPEAT_MODE_ALL -> uiText(playback.appLanguage, "All", "全部")
+        else -> uiText(playback.appLanguage, "Off", "關閉")
+    }
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onPrevious, enabled = playback.hasPrevious) {
+        IconButton(onClick = onRepeat, modifier = Modifier.size(48.dp)) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(when {
+                    playback.shuffleEnabled -> Icons.Rounded.Shuffle
+                    playback.repeatMode == Player.REPEAT_MODE_ONE -> Icons.Rounded.RepeatOne
+                    else -> Icons.Rounded.Repeat
+                }, uiText(playback.appLanguage, "Repeat mode", "重複模式"), Modifier.size(20.dp), tint = accent)
+                Text(cycleLabel, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+            }
+        }
+        IconButton(onClick = onPrevious, enabled = playback.hasPrevious || playback.positionMs > 4_000L) {
             Icon(Icons.Rounded.SkipPrevious, "Previous", modifier = Modifier.size(36.dp))
         }
         LiquidMetalSurface(
-            modifier = Modifier.size(68.dp).clickable(onClick = onTogglePlay),
+            modifier = Modifier.size(52.dp).clickable(onClick = onTogglePlay),
             shape = CircleShape,
             contentAlignment = Alignment.Center,
         ) {
@@ -980,18 +1043,34 @@ private fun Transport(
         IconButton(onClick = onNext, enabled = playback.hasNext) {
             Icon(Icons.Rounded.SkipNext, "Next", modifier = Modifier.size(36.dp))
         }
+        Box {
+            IconButton(onClick = { speedMenuOpen = true }, modifier = Modifier.size(48.dp)) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Rounded.Speed, uiText(playback.appLanguage, "Playback speed", "播放速度"), Modifier.size(20.dp), tint = accent)
+                    Text(speedLabel(playback.speed), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                }
+            }
+            DropdownMenu(speedMenuOpen, { speedMenuOpen = false }) {
+                playbackSpeeds.forEach { speed -> DropdownMenuItem(
+                    text = { Text(if (speed == playback.speed) "✓  ${speedLabel(speed)}" else speedLabel(speed)) },
+                    onClick = { speedMenuOpen = false; onSpeed(speed) },
+                ) }
+            }
+        }
     }
 }
 
 @Composable
 private fun SecondaryControlRow(
+    queue: List<MediaFile>,
+    onLoadThumbnail: suspend (MediaFile) -> Bitmap?,
     playback: PlaybackUiState,
-    onSpeed: (Float) -> Unit,
-    onRepeat: () -> Unit,
     onSleepTimer: (Long) -> Unit,
     sleepTimer: SleepTimerState,
 ) {
-    var speedMenuOpen by remember { mutableStateOf(false) }
+    var mixerOpen by remember { mutableStateOf(false) }
+    if (mixerOpen) ParallelMixerDialog(queue, playback.appLanguage, onLoadThumbnail) { mixerOpen = false }
+    var expanded by rememberSaveable { mutableStateOf(true) }
     val practice by com.local.listentomusic.playback.PracticeLoop.state.collectAsState()
     var sleepMenuOpen by remember { mutableStateOf(false) }
     val outline = MaterialTheme.colorScheme.outline
@@ -1002,69 +1081,32 @@ private fun SecondaryControlRow(
         disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
         disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
     )
-    val cycleLabel = when {
-        playback.shuffleEnabled -> uiText(playback.appLanguage, "Random", "隨機")
-        playback.repeatMode == Player.REPEAT_MODE_ONE -> uiText(playback.appLanguage, "One", "單曲")
-        playback.repeatMode == Player.REPEAT_MODE_ALL -> uiText(playback.appLanguage, "All", "全部")
-        else -> uiText(playback.appLanguage, "Off", "關閉")
-    }
     val sleepLabel = when {
         sleepTimer.endOfTrack -> uiText(playback.appLanguage, "End", "播完")
         sleepTimer.active -> formatSleepRemaining(sleepTimer.remainingMs)
         else -> uiText(playback.appLanguage, "Sleep", "睡眠")
     }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    IconButton(onClick = { expanded = !expanded }, modifier = Modifier.width(32.dp)) {
+        Icon(if (expanded) Icons.Rounded.KeyboardArrowDown else Icons.AutoMirrored.Rounded.ArrowForward,
+            uiText(playback.appLanguage, "Playback options", "播放選項"), modifier = Modifier.size(20.dp))
+    }
+    AnimatedVisibility(expanded, modifier = Modifier.weight(1f)) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.weight(1f)) {
-            Button(
-                onClick = { speedMenuOpen = true },
-                modifier = Modifier.fillMaxWidth().height(40.dp),
-                colors = controlColors,
-                shape = RoundedCornerShape(14.dp),
-                contentPadding = PaddingValues(horizontal = 7.dp),
-            ) {
-                Icon(Icons.Rounded.Speed, null, tint = activeColor, modifier = Modifier.size(17.dp))
-                Spacer(Modifier.width(4.dp))
-                Text(speedLabel(playback.speed), maxLines = 1, style = MaterialTheme.typography.labelMedium)
-            }
-            DropdownMenu(expanded = speedMenuOpen, onDismissRequest = { speedMenuOpen = false }) {
-                playbackSpeeds.forEach { speed ->
-                    DropdownMenuItem(
-                        text = { Text(if (speed == playback.speed) "✓  ${speedLabel(speed)}" else speedLabel(speed)) },
-                        onClick = { speedMenuOpen = false; onSpeed(speed) },
-                    )
-                }
-            }
-        }
-        Button(
-            onClick = onRepeat,
-            modifier = Modifier.weight(1f).height(40.dp),
-            colors = controlColors,
-            shape = RoundedCornerShape(14.dp),
-            contentPadding = PaddingValues(horizontal = 7.dp),
-        ) {
-            Icon(
-                when {
-                    playback.shuffleEnabled -> Icons.Rounded.Shuffle
-                    playback.repeatMode == Player.REPEAT_MODE_ONE -> Icons.Rounded.RepeatOne
-                    else -> Icons.Rounded.Repeat
-                },
-                null,
-                tint = if (playback.repeatMode == Player.REPEAT_MODE_OFF && !playback.shuffleEnabled) outline else activeColor,
-                modifier = Modifier.size(17.dp),
-            )
-            Spacer(Modifier.width(4.dp))
-            Text(cycleLabel, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
-        }
-        Button(
+        if (playback.showAbRepeat) Button(
             onClick = { com.local.listentomusic.playback.PracticeLoop.mark(playback.currentPath, playback.positionMs) },
             modifier = Modifier.weight(1f).height(40.dp), colors = controlColors,
             shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(horizontal = 4.dp),
         ) {
             Text(when { practice.end != null -> "A–B ×"; practice.start != null -> "Set B"; else -> "Set A" }, style = MaterialTheme.typography.labelMedium)
+        }
+        Button(onClick = { mixerOpen = true }, modifier = Modifier.weight(1f).height(40.dp), colors = controlColors,
+            shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(horizontal = 4.dp)) {
+            Text(uiText(playback.appLanguage, "Mix", "混音"), style = MaterialTheme.typography.labelMedium)
         }
         if (playback.showSleepControl) Box(Modifier.weight(1f)) {
             Button(
@@ -1103,6 +1145,25 @@ private fun SecondaryControlRow(
             }
         }
     }
+    }
+    }
+}
+
+@Composable
+private fun PracticeMarkers(playback: PlaybackUiState) {
+    val range by com.local.listentomusic.playback.PracticeLoop.state.collectAsState()
+    if (!playback.showAbRepeat || range.path != playback.currentPath || range.start == null || playback.durationMs <= 0) return
+    val color = MaterialTheme.colorScheme.secondary
+    Canvas(Modifier.fillMaxWidth().height(18.dp).padding(horizontal = 10.dp)) {
+        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { this.color = color.toArgb(); textSize = 10.sp.toPx(); typeface = android.graphics.Typeface.DEFAULT_BOLD }
+        listOf("A" to range.start, "B" to range.end).forEach { (label, time) ->
+            if (time != null) {
+                val x = (time.toDouble() / playback.durationMs).toFloat().coerceIn(0f, 1f) * size.width
+                drawLine(color, Offset(x, 0f), Offset(x, 5.dp.toPx()), 2.dp.toPx())
+                drawContext.canvas.nativeCanvas.drawText(label, (x - paint.measureText(label) / 2).coerceIn(0f, (size.width - paint.measureText(label)).coerceAtLeast(0f)), size.height - 1.dp.toPx(), paint)
+            }
+        }
+    }
 }
 
 private fun formatSleepRemaining(ms: Long): String {
@@ -1135,7 +1196,7 @@ private fun OverlayIconButton(
 }
 
 @Composable
-private fun VideoSurface(
+internal fun VideoSurface(
     mediaKey: String?,
     controller: MediaController?,
     onBoundsChanged: (Rect) -> Unit,
@@ -1152,11 +1213,11 @@ private fun VideoSurface(
                 useController = false
                 resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                 setKeepContentOnPlayerReset(true)
-                player = controller
+                com.local.listentomusic.ui.components.VideoSurfaceOwner.attach(controller, this)
             }
         },
-        update = { view -> if (view.player !== controller) view.player = controller },
-        onRelease = { it.player = null },
+        update = { view -> com.local.listentomusic.ui.components.VideoSurfaceOwner.attach(controller, view) },
+        onRelease = com.local.listentomusic.ui.components.VideoSurfaceOwner::detach,
         modifier = modifier.onGloballyPositioned { coordinates ->
             val bounds = coordinates.boundsInWindow()
             onBoundsChanged(
@@ -1175,7 +1236,7 @@ private fun VideoSurface(
 @Composable
 private fun FullscreenEffect(enabled: Boolean) {
     val activity = LocalContext.current.findActivity() ?: return
-    val systemDark = isSystemInDarkTheme()
+    val systemDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     DisposableEffect(activity, enabled, systemDark) {
         val insets = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
         if (enabled) {
@@ -1183,8 +1244,8 @@ private fun FullscreenEffect(enabled: Boolean) {
             insets.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             insets.hide(WindowInsetsCompat.Type.systemBars())
         } else {
-            insets.isAppearanceLightStatusBars = false
-            insets.isAppearanceLightNavigationBars = false
+            insets.isAppearanceLightStatusBars = !systemDark
+            insets.isAppearanceLightNavigationBars = !systemDark
         }
         onDispose {
             if (enabled) {
@@ -1197,11 +1258,11 @@ private fun FullscreenEffect(enabled: Boolean) {
     }
 }
 
-private tailrec fun Context.findActivity(): Activity? = when (this) {
+internal tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.findActivity()
     else -> null
 }
 
-private fun speedLabel(speed: Float): String =
+internal fun speedLabel(speed: Float): String =
     if (speed % 1f == 0f) "${speed.toInt()}×" else "$speed×"

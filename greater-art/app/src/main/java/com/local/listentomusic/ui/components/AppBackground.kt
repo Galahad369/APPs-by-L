@@ -51,6 +51,7 @@ fun AppBackground(
     playback: PlaybackUiState,
     controller: MediaController?,
     modifier: Modifier = Modifier,
+    visible: Boolean = true,
 ) {
     val mode = preferences.backgroundMode
     val currentVideoUri = playback.currentPath
@@ -58,7 +59,7 @@ fun AppBackground(
         ?.let { Uri.fromFile(File(it)) }
 
     Box(modifier.fillMaxSize()) {
-        DefaultMetalBackground()
+        if (visible) DefaultMetalBackground() else Box(Modifier.fillMaxSize().background(Color.Black))
         when (mode) {
             AppBackgroundMode.DEFAULT -> Unit
             AppBackgroundMode.CUSTOM_IMAGE -> preferences.customBackgroundImageUri
@@ -66,20 +67,28 @@ fun AppBackground(
                 ?.let { BackgroundImage(it) }
             AppBackgroundMode.CUSTOM_VIDEO -> preferences.customBackgroundVideoUri
                 ?.let(Uri::parse)
-                ?.let { BackgroundVideo(source = it, shouldPlay = true) }
-            AppBackgroundMode.CURRENT_VIDEO -> currentVideoUri?.let {
-                BackgroundVideo(
-                    source = it,
-                    shouldPlay = playback.isPlaying,
-                    syncPositionMs = playback.positionMs,
-                )
-            }
+                ?.let { BackgroundVideo(source = it, shouldPlay = visible) }
+            AppBackgroundMode.CURRENT_VIDEO -> if (visible && currentVideoUri != null) CurrentVideoWallpaper(controller)
         }
         val isLight = androidx.compose.material3.MaterialTheme.colorScheme.background.luminance() > 0.5f
         val dim = if (mode == AppBackgroundMode.DEFAULT) 0.08f else preferences.backgroundDim
         val veil = if (mode == AppBackgroundMode.DEFAULT && isLight) Color.White else Color.Black
         Box(Modifier.matchParentSize().background(veil.copy(alpha = dim)))
     }
+}
+
+@Composable
+private fun CurrentVideoWallpaper(controller: MediaController?) {
+    // The service already prepares and buffers the current video. Reuse that decoder;
+    // wallpaper never changes volume, pause state or seek position.
+    AndroidView(factory = { context ->
+        (android.view.LayoutInflater.from(context).inflate(com.local.listentomusic.R.layout.background_video, android.widget.FrameLayout(context), false) as PlayerView).apply {
+            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            setKeepContentOnPlayerReset(true)
+            VideoSurfaceOwner.attach(controller, this)
+        }
+    }, update = { VideoSurfaceOwner.attach(controller, it) },
+        onRelease = VideoSurfaceOwner::detach, modifier = Modifier.fillMaxSize())
 }
 
 @Composable
@@ -147,6 +156,7 @@ private fun BackgroundVideo(
     source: Uri,
     shouldPlay: Boolean,
     syncPositionMs: Long? = null,
+    speed: Float = 1f,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -154,11 +164,15 @@ private fun BackgroundVideo(
         mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
     }
     val backgroundPlayer = remember(source) {
-        ExoPlayer.Builder(context.applicationContext).build().apply {
+        ExoPlayer.Builder(context.applicationContext)
+            .setLoadControl(androidx.media3.exoplayer.DefaultLoadControl.Builder()
+                .setBufferDurationsMs(1_000, 5_000, 100, 200).setTargetBufferBytes(4 * 1024 * 1024)
+                .setPrioritizeTimeOverSizeThresholds(false).build()).build().apply {
             volume = 0f
             repeatMode = Player.REPEAT_MODE_ONE
             trackSelectionParameters = trackSelectionParameters.buildUpon()
                 .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
+                .setMaxVideoSize(640, 360)
                 .build()
             setMediaItem(MediaItem.fromUri(source))
             prepare()
@@ -182,6 +196,7 @@ private fun BackgroundVideo(
     LaunchedEffect(backgroundPlayer, shouldPlay, lifecycleActive) {
         backgroundPlayer.playWhenReady = shouldPlay && lifecycleActive
     }
+    LaunchedEffect(backgroundPlayer, speed) { backgroundPlayer.setPlaybackSpeed(speed) }
     LaunchedEffect(backgroundPlayer, syncPositionMs) {
         val target = syncPositionMs ?: return@LaunchedEffect
         if (abs(backgroundPlayer.currentPosition - target) > 2_000L) backgroundPlayer.seekTo(target)
@@ -189,7 +204,7 @@ private fun BackgroundVideo(
 
     AndroidView(
         factory = { viewContext ->
-            PlayerView(viewContext).apply {
+            (android.view.LayoutInflater.from(viewContext).inflate(com.local.listentomusic.R.layout.background_video, android.widget.FrameLayout(viewContext), false) as PlayerView).apply {
                 useController = false
                 resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                 setKeepContentOnPlayerReset(true)

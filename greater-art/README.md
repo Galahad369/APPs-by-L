@@ -6,12 +6,33 @@ ads, analytics, accounts, telemetry, or network access.
 
 ## Features
 
+- v1.9.3 Now Playing layout: artwork/video above the scrollable playback queue, with
+  the timeline and Repeat / Previous / Play-Pause / Next / Speed fixed at the bottom.
+- Home returns to Library without stopping playback. Floating player and fullscreen
+  remain available at the top. Controls retain Greater Art's selected theme.
+- Now Playing opens as a large dismissible sheet over the current page. The arrow
+  collapses secondary controls; A–B practice is optional and off by default, with
+  visible A/B timeline markers when enabled. Double-tap seeking has directional feedback.
+- Local title/cover overrides, natural name sorting, multi-selection, rule playlists
+  and eight-second undo for playlist/queue removals. Original media is not rewritten.
+- Optional artist/album/lyrics search builds a local metadata cache off the UI thread.
+- CUE sheets expose separate tracks without splitting audio files. Local enhanced LRC
+  and common clock-time TTML support word highlighting; SRT provides line timing.
+- Optional parallel mixer: main track plus nine audio layers, with pause, mute, level
+  and removal for added layers. Video layers contribute sound only. Buffers and mixer
+  levels are bounded; actual simultaneous decoder capacity depends on the phone.
+- Current-video wallpaper follows playback across Library and Settings using the
+  main decoder. It is the new/reset default; audio falls back to liquid metal.
+- Japanese, German, French and Cantonese options with offline core-interface translations.
+  Some older utility and diagnostic text retains English fallback.
+
 - Recursive local scan of `Download` with a staged 300-item thumbnail warmup, bounded
   two-worker cache pipeline, embedded artwork and same-name/folder-cover fallback.
-- Media3 playback for audio and video through one `MediaSessionService`.
+- Media3 playback through a `MediaLibraryService` with background media controls.
 - Library search, custom drag order, name sorting, local playlists and M3U/M3U8 import/export.
 - Repeat-one default, gapless-friendly queues, speed controls, seek, next and previous.
-- One-line playback controls: speed, Off/One/All/Random cycle and sleep timer.
+- Collapsible secondary controls: speed, Off/One/All/Random and Mix. A–B practice
+  and the sleep timer are optional and hidden by default.
 - Compact one-line playback controls and an unlabelled scrollable queue with
   thumbnails and current-track highlight.
 - Synchronized local lyrics from a matching `.lrc`, with embedded MP3/FLAC/Opus lyrics fallback.
@@ -23,13 +44,13 @@ ads, analytics, accounts, telemetry, or network access.
 - Three floating modes:
   - `COMPACT` — Android-controlled compact picture-in-picture.
   - `FOLLOW_VIDEO` — picture-in-picture following the video's aspect ratio.
-  - `MINI_WINDOW` — default; 124×40dp audio or 108×61dp video system overlay.
+  - `MINI_WINDOW` — default; 126×42dp audio or 110×63dp video system overlay.
 - Four app backgrounds:
-  - Animated black liquid metal (default).
+  - Animated black liquid metal.
   - User-selected image (`image/*`, including PNG/JPEG/WebP supported by Android).
   - User-selected muted looping MP4.
-  - A muted, synchronized copy of the currently playing video.
-- English and Traditional Chinese interface options.
+  - Current video's shared surface (new/reset default), without duplicate audio.
+- English (default), Traditional Chinese, Japanese, German, French and Cantonese.
 - Dark/black liquid metal by default; light mode uses white liquid metal.
 - System text style by default plus platform families and six bundled open-licensed fonts.
 - Optional full-screen developer inspector with live player, first-frame, cache,
@@ -67,8 +88,7 @@ $env:GRADLE_USER_HOME = Join-Path $env:USERPROFILE '.gradle'
 Current release artifact:
 
 ```text
-releases/GreaterArt-v1.7.8-debug.apk
-SHA-256: e04a8c09dba381e7cd7d3e7f0c341037c2e30bd5a9a8343b2f57dc09f169515a
+releases/GreaterArt-v1.9.1-debug.apk
 ```
 
 Versioned APKs are never overwritten. Builds remain signed by the pinned personal
@@ -86,7 +106,8 @@ app/src/main/java/com/local/listentomusic/
 │   ├── ThumbnailRepository.kt        Memory/disk thumbnail and cover-art cache
 │   └── WaveformRepository.kt         Background PCM peak decoder/cache
 ├── playback/
-│   ├── PlaybackService.kt            Media3 MediaSessionService
+│   ├── PlaybackService.kt            Media3 service, mixer and shared audio focus
+│   ├── ParallelPlayback.kt           Temporary mixer commands and UI state
 │   └── MiniWindowOverlayService.kt   Tiny WindowManager overlay
 └── ui/
     ├── GreaterArtApp.kt              Navigation, pickers and app background layer
@@ -157,6 +178,59 @@ See [RESEARCH_IDEAS.md](RESEARCH_IDEAS.md) for privacy-compatible ideas compared
 against maintained open-source Android players.
 
 ## Current Verification Boundary
+
+For 1.9.3: 37 unit tests passed; lint reports 0 errors and 13 warnings; the debug
+build and APK signature verification passed. The application ID/signing certificate
+are unchanged and the packaged manifest has no INTERNET permission. No Android device
+was connected for this review build.
+
+APK: `releases/GreaterArt-v1.9.3-debug.apk`
+
+SHA-256: `77a428e8ecabf7d4b6ded4d8558d12fbefb8facc4142e4719ac34d8bbcc647f9`.
+
+The 1.9 series includes regression checks for mixer headroom, languages, natural
+sorting, playlist rules, CUE/M3U boundaries and local lyric parsing. Build checks do
+not establish phone performance: overlay dragging, Bluetooth/calls, ten concurrent
+decoders, large-font layout and scrolling still require a real device.
+
+## New local library tools
+
+Open a song's overflow menu to edit its display title/cover, enter multi-selection,
+or create a rule playlist. Selection survives changing the search query. Add selected
+files to an existing ordinary playlist or create one. Rule playlists combine folder,
+extension and title conditions; they do not use listening history.
+
+Enable extended search in Settings to include artist, album and local lyrics. Cached
+metadata is invalidated when the source or sidecar changes. MediaStore notifications
+trigger a debounced refresh while the app is visible; Download remains authoritative
+and is still traversed. Use Refresh for sidecars Android has not indexed.
+
+Place a same-name `.lrc`, `.ttml` or `.srt` beside the media. Word highlighting needs
+word timestamps in the file; ordinary LRC/SRT cannot invent them. TTML support covers
+common clock-time exports, not every TTML dialect. CUE references must resolve to
+audio already allowed by the library's Download scan. M3U exports retain CUE start/end
+directives; another player must support those directives to honor the boundaries.
+
+Title/cover overrides stay local and do not alter original files. Portable settings
+backups do not export cover access grants or local overrides. Resetting settings does
+not erase library overrides. Choose the original title/cover in its edit dialog to
+remove an override.
+
+## Parallel playback and background use
+
+Start a track, open Now Playing, and tap **Mix**. Add up to nine extra files from the
+current list. Added videos play sound only. Adjust a layer's slider, mute/pause it,
+or remove it. **Remove all layers** leaves the main track playing. Mixing lowers each
+voice for headroom; return to one voice for the original single-track level.
+
+Playback continues when changing pages or locking the screen through foreground media
+sessions. Calls, external audio-focus loss and Bluetooth removal pause every voice.
+The mini-window red X shuts down all layers. Android Force stop and manufacturer
+battery restrictions can still override background operation.
+
+The current-video wallpaper shares the prepared main decoder across Library and Settings;
+Now Playing takes its video surface back. Custom background MP4 remains muted and pauses
+while the app is hidden. No second decoder is created for current-video wallpaper.
 
 Unit tests, Android lint, compilation, manifest permissions and APK signature are
 checked locally. This computer currently has no connected Android device or emulator,

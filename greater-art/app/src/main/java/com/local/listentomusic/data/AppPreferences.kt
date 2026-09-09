@@ -33,7 +33,7 @@ data class UserPreferences(
     val autoPictureInPicture: Boolean = true,
     val floatingWindowMode: FloatingWindowMode = FloatingWindowMode.MINI_WINDOW,
     val appLanguage: AppLanguage = AppLanguage.ENGLISH,
-    val backgroundMode: AppBackgroundMode = AppBackgroundMode.DEFAULT,
+    val backgroundMode: AppBackgroundMode = AppBackgroundMode.CURRENT_VIDEO,
     val customBackgroundImageUri: String? = null,
     val customBackgroundVideoUri: String? = null,
     val backgroundDim: Float = 0.55f,
@@ -45,6 +45,9 @@ data class UserPreferences(
     val editableQueue: Boolean = false,
     val silianRail: Boolean = false,
     val showSleepControl: Boolean = false,
+    val showAbRepeat: Boolean = false,
+    val extendedSearch: Boolean = false,
+    val localOverrides: Map<String, com.local.listentomusic.model.LocalOverride> = emptyMap(),
     val replayGainEnabled: Boolean = false,
     val excludedFolders: List<String> = emptyList(),
     val jokeAdsEnabled: Boolean = false,
@@ -53,7 +56,10 @@ data class UserPreferences(
 enum class LibraryRowSize(val label: String) { SMALL("Small"), MEDIUM("Medium"), LARGE("Large") }
 enum class ThemeMode(val label: String) { SYSTEM("System"), LIGHT("Light"), DARK("Dark") }
 enum class FloatingWindowMode { COMPACT, FOLLOW_VIDEO, MINI_WINDOW }
-enum class AppLanguage { ENGLISH, TRADITIONAL_CHINESE }
+enum class AppLanguage(val label: String) {
+    ENGLISH("English"), TRADITIONAL_CHINESE("繁體中文"), JAPANESE("日本語"),
+    GERMAN("Deutsch"), FRENCH("Français"), CANTONESE("廣東話"),
+}
 enum class AppBackgroundMode { DEFAULT, CUSTOM_IMAGE, CUSTOM_VIDEO, CURRENT_VIDEO }
 enum class AppFont(val label: String) {
     SYSTEM("System"), SANS_SERIF("Sans serif"), SERIF("Serif"), MONOSPACE("Monospace"),
@@ -65,6 +71,7 @@ data class LocalPlaylist(
     val id: String,
     val name: String,
     val paths: List<String>,
+    val rule: com.local.listentomusic.model.PlaylistRule? = null,
 )
 
 class AppPreferences(private val context: Context) {
@@ -98,6 +105,9 @@ class AppPreferences(private val context: Context) {
         val editableQueue = booleanPreferencesKey("editable_queue")
         val silianRail = booleanPreferencesKey("silian_rail")
         val showSleepControl = booleanPreferencesKey("show_sleep_control")
+        val showAbRepeat = booleanPreferencesKey("show_ab_repeat")
+        val extendedSearch = booleanPreferencesKey("extended_search")
+        val localOverrides = stringPreferencesKey("local_overrides")
         val replayGainEnabled = booleanPreferencesKey("replay_gain_enabled")
         val excludedFolders = stringPreferencesKey("excluded_folders")
         val jokeAdsEnabled = booleanPreferencesKey("joke_ads_enabled")
@@ -140,7 +150,7 @@ class AppPreferences(private val context: Context) {
             appLanguage = enumValueOrDefault(prefs[Keys.appLanguage], AppLanguage.ENGLISH),
             backgroundMode = enumValueOrDefault(
                 prefs[Keys.backgroundMode],
-                AppBackgroundMode.DEFAULT,
+                AppBackgroundMode.CURRENT_VIDEO,
             ),
             customBackgroundImageUri = prefs[Keys.customBackgroundImageUri],
             customBackgroundVideoUri = prefs[Keys.customBackgroundVideoUri],
@@ -153,6 +163,9 @@ class AppPreferences(private val context: Context) {
             editableQueue = prefs[Keys.editableQueue] ?: false,
             silianRail = effectiveFont == AppFont.SILIAN_RAIL,
             showSleepControl = prefs[Keys.showSleepControl] ?: false,
+            showAbRepeat = prefs[Keys.showAbRepeat] ?: false,
+            extendedSearch = prefs[Keys.extendedSearch] ?: false,
+            localOverrides = decodeOverrides(prefs[Keys.localOverrides].orEmpty()),
             replayGainEnabled = prefs[Keys.replayGainEnabled] ?: false,
             excludedFolders = decodeOrder(prefs[Keys.excludedFolders].orEmpty()),
             jokeAdsEnabled = prefs[Keys.jokeAdsEnabled] ?: false,
@@ -168,7 +181,7 @@ class AppPreferences(private val context: Context) {
         Keys.playlists, Keys.activePlaylistId, Keys.excludedFolders)
     private val backupBooleans = listOf(Keys.showThumbnails, Keys.showFileDetails,
         Keys.preloadThumbnails, Keys.resumePlayback, Keys.autoPictureInPicture,
-        Keys.editableQueue, Keys.showSleepControl, Keys.replayGainEnabled)
+        Keys.editableQueue, Keys.showSleepControl, Keys.showAbRepeat, Keys.extendedSearch, Keys.replayGainEnabled)
 
     suspend fun exportBackup(): String {
         val prefs = context.dataStore.data.first()
@@ -261,6 +274,31 @@ class AppPreferences(private val context: Context) {
     suspend fun setDeveloperMode(value: Boolean) = edit { it[Keys.developerMode] = value }
     suspend fun setEditableQueue(value: Boolean) = edit { it[Keys.editableQueue] = value }
     suspend fun setShowSleepControl(value: Boolean) = edit { it[Keys.showSleepControl] = value }
+    suspend fun setShowAbRepeat(value: Boolean) = edit { it[Keys.showAbRepeat] = value }
+    suspend fun setExtendedSearch(value: Boolean) = edit { it[Keys.extendedSearch] = value }
+    suspend fun setLocalOverride(path: String, value: com.local.listentomusic.model.LocalOverride?) = edit { prefs ->
+        val entries = decodeOverrides(prefs[Keys.localOverrides].orEmpty()).toMutableMap()
+        if (value == null || (value.title.isBlank() && value.coverUri.isBlank())) entries.remove(path) else entries[path] = value
+        val json = org.json.JSONObject()
+        entries.forEach { (key, item) -> json.put(key, org.json.JSONObject().put("title", item.title).put("cover", item.coverUri)) }
+        prefs[Keys.localOverrides] = json.toString()
+    }
+
+    suspend fun createRulePlaylist(name: String, rule: com.local.listentomusic.model.PlaylistRule): String {
+        val id = UUID.randomUUID().toString()
+        updatePlaylists { it + LocalPlaylist(id, name.trim(), emptyList(), rule) }
+        return id
+    }
+
+    suspend fun restorePlaylist(playlist: LocalPlaylist) = updatePlaylists { current ->
+        if (current.any { it.id == playlist.id }) current else current + playlist
+    }
+    suspend fun restorePlaylistItem(id: String, path: String, index: Int) = updatePlaylists { current ->
+        current.map { playlist ->
+            if (playlist.id != id || path in playlist.paths || playlist.rule != null) playlist else
+                playlist.copy(paths = playlist.paths.toMutableList().apply { add(index.coerceIn(0, size), path) })
+        }
+    }
     suspend fun setReplayGainEnabled(value: Boolean) = edit { it[Keys.replayGainEnabled] = value }
     suspend fun setExcludedFolders(value: List<String>) = edit { prefs ->
         prefs[Keys.excludedFolders] = value.distinct().sorted().joinToString("\n") { encode(it) }
@@ -348,6 +386,8 @@ class AppPreferences(private val context: Context) {
             it.remove(Keys.editableQueue)
             it.remove(Keys.silianRail)
             it.remove(Keys.showSleepControl)
+            it.remove(Keys.showAbRepeat)
+            it.remove(Keys.extendedSearch)
             it.remove(Keys.replayGainEnabled)
             it.remove(Keys.excludedFolders)
             it.remove(Keys.jokeAdsEnabled)
@@ -382,20 +422,33 @@ class AppPreferences(private val context: Context) {
             encode(playlist.id),
             encode(playlist.name),
             playlist.paths.joinToString(",", transform = ::encode),
+            playlist.rule?.let { rule -> encode(org.json.JSONObject().put("folder", rule.folder).put("extension", rule.extension).put("text", rule.text).toString()) }.orEmpty(),
         ).joinToString("|")
     }
 
     private fun decodePlaylists(encoded: String): List<LocalPlaylist> = encoded.lineSequence().mapNotNull { line ->
-        val parts = line.split('|', limit = 3)
-        if (parts.size != 3) return@mapNotNull null
+        val parts = line.split('|', limit = 4)
+        if (parts.size < 3) return@mapNotNull null
         val id = decode(parts[0]) ?: return@mapNotNull null
         val name = decode(parts[1])?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
         val paths = if (parts[2].isBlank()) emptyList() else parts[2].split(',').mapNotNull(::decode)
-        LocalPlaylist(id, name, paths.distinct())
+        val rule = parts.getOrNull(3)?.takeIf { it.isNotBlank() }?.let(::decode)?.let { raw -> runCatching {
+            val json = org.json.JSONObject(raw)
+            com.local.listentomusic.model.PlaylistRule(json.optString("folder"), json.optString("extension"), json.optString("text"))
+        }.getOrNull() }
+        LocalPlaylist(id, name, paths.distinct(), rule)
     }.toList()
 
     private fun encode(value: String): String =
         Base64.encodeToString(value.toByteArray(Charsets.UTF_8), Base64.NO_WRAP or Base64.URL_SAFE)
+
+    private fun decodeOverrides(raw: String): Map<String, com.local.listentomusic.model.LocalOverride> = runCatching {
+        val json = org.json.JSONObject(raw)
+        json.keys().asSequence().associateWith { key ->
+            val value = json.getJSONObject(key)
+            com.local.listentomusic.model.LocalOverride(value.optString("title"), value.optString("cover"))
+        }
+    }.getOrDefault(emptyMap())
 
     private fun decode(value: String): String? = runCatching {
         Base64.decode(value, Base64.NO_WRAP or Base64.URL_SAFE).toString(Charsets.UTF_8)
