@@ -1051,16 +1051,13 @@ private fun PlayerBottomControls(
         IconButton(onClick = onNext, enabled = playback.hasNext) {
             Icon(Icons.Rounded.SkipNext, "Next", modifier = Modifier.size(36.dp))
         }
-        Box(Modifier.graphicsLayer {
-                        val t = (playback.speed - 0.5f) / 2.5f
-                        rotationZ = (t * 45f).coerceIn(0f, 45f)
-                    }) {
+        Box {
                     val speedIcon = when {
-                                            playback.speed <= 0.5f -> Icons.Rounded.KeyboardArrowUp
-                                            playback.speed <= 1.5f -> Icons.Rounded.KeyboardArrowUp
-                                            playback.speed <= 2f -> Icons.AutoMirrored.Rounded.ArrowForward
-                                            else -> Icons.Rounded.KeyboardArrowDown
-                                        }
+                        playback.speed <= 0.5f -> Icons.Rounded.KeyboardArrowUp
+                        playback.speed <= 1.5f -> Icons.Rounded.KeyboardArrowUp
+                        playback.speed <= 2f -> Icons.AutoMirrored.Rounded.ArrowForward
+                        else -> Icons.Rounded.KeyboardArrowDown
+                    }
                     IconButton(onClick = { speedMenuOpen = true }, modifier = Modifier.size(48.dp)) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(speedIcon, uiText(playback.appLanguage, "Playback speed", "播放速度"), Modifier.size(20.dp), tint = accent)
@@ -1101,12 +1098,24 @@ private fun SecondaryControlRow(
         sleepTimer.active -> formatSleepRemaining(sleepTimer.remainingMs)
         else -> uiText(playback.appLanguage, "Sleep", "睡眠")
     }
+    var mixExpanded by remember { mutableStateOf(false) }
+    var optionsExpanded by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-    IconButton(onClick = { expanded = !expanded }, modifier = Modifier.width(32.dp)) {
-        Icon(if (expanded) Icons.Rounded.KeyboardArrowDown else Icons.AutoMirrored.Rounded.ArrowForward,
+    IconButton(onClick = { mixExpanded = !mixExpanded }, modifier = Modifier.width(32.dp)) {
+        Icon(if (mixExpanded) Icons.Rounded.KeyboardArrowDown else Icons.AutoMirrored.Rounded.ArrowForward,
+            uiText(playback.appLanguage, "Mix", "混音"), modifier = Modifier.size(20.dp))
+    }
+    AnimatedVisibility(mixExpanded, modifier = Modifier.weight(1f)) {
+    Button(onClick = { /* mix toggle handled by player */ }, modifier = Modifier.fillMaxWidth().height(40.dp),
+        colors = controlColors, shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(horizontal = 7.dp)) {
+        Text(uiText(playback.appLanguage, "Mix", "混音"), style = MaterialTheme.typography.labelMedium)
+    }
+    }
+    IconButton(onClick = { optionsExpanded = !optionsExpanded }, modifier = Modifier.width(32.dp)) {
+        Icon(if (optionsExpanded) Icons.Rounded.KeyboardArrowDown else Icons.AutoMirrored.Rounded.ArrowForward,
             uiText(playback.appLanguage, "Playback options", "播放選項"), modifier = Modifier.size(20.dp))
     }
-    AnimatedVisibility(expanded, modifier = Modifier.weight(1f)) {
+    AnimatedVisibility(optionsExpanded, modifier = Modifier.weight(1f)) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),

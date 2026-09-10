@@ -284,7 +284,7 @@ class MiniWindowOverlayService : Service() {
             dp(crossHitSize), dp(crossHitSize),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
-            PixelFormat.TRANSLUCENT,
+            PixelFormat.RGBA_8888,
         ).apply {
             gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
             // Overlay bounds are already inset from system bars on affected Samsung builds.
