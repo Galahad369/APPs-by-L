@@ -1,25 +1,21 @@
-HERMES SESSION HANDOFF — 2026-09-10
+HERMES SESSION HANDOFF — 2026-09-11
 
-STATUS: Session active. v1.9.10 APK built successfully.
+STATUS: Session active. v1.9.11 APK built successfully.
 
 WHAT WAS ACCOMPLISHED:
-- v1.9.10 APK built successfully using JDK21 wrapper jar, gradle assembleDebug
-- SHA-256: 566192fefc6aed4b57f8623c5a3531d498b90c278c8ce0415a908f635413ec4a
-- APK located at: releases/GreaterArt-v1.9.10-debug.apk
-- Version bumped: 1.9.9 (code 60) → 1.9.10 (code 61) in app/build.gradle.kts
-- Mix button bug fixed: Mix button now opens ParallelMixerDialog to add/manage mix layers (main track + up to 9 audio layers)
-- Red X adjustments from v1.9.8: crossSize 38→37 (1px smaller), crossMargin 16→13 (3px higher)
-- Thumbnail pipeline verified clean: LRU + disk cache, striped mutexes, semaphore-bounded workers, failure cooldown, disk pruning, cache keys with file fingerprint
-- All five git patches verified via `git diff HEAD -- NowPlayingScreen.kt`:
-  1. Gradient background: Brush.verticalGradient(#080808→#0C0C0C→#0A0A0A) ✓
-  2. Speed icon rollback: graphicsLayer morphing removed, original Box restored ✓
-  3. Invisible pixel fix: PixelFormat.RGBA_8888, crossHitSize=61, crossSize=38, setLayerType(HARDWARE) ✓
-  4. Mix button: mixExpanded state + AnimatedVisibility expansion added ✓
-  5. screen=NOW_PLAYING diagnostics: GreaterArtApp.kt shows NOW_PLAYING when overlay open ✓
+- v1.9.11 APK built successfully using JDK21 wrapper jar, gradle assembleDebug
+- SHA-256: 5249d058e5304be04e22768d652b276f1ee080e464b4494b025f567427e1a4ae
+- APK located at: releases/GreaterArt-v1.9.11-debug.apk
+- Version bumped: 1.9.10 (code 61) → 1.9.11 (code 62) in app/build.gradle.kts
+- Mix control REMOVED from UI: arrow toggle was broken, dialog didn't open cleanly. Removed mixExpanded state, Mix button, and ParallelMixerDialog import from SecondaryControlRow. Now only "Playback options" (sleep timer, A-B repeat) remains.
+- Parallel mixer infrastructure preserved in codebase: ParallelPlayback.kt and PlaybackService.kt still have addCommand/removeCommand/toggleCommand/volumeCommand/stopCommand, MAX_EXTRA_LAYERS=9, mixLevel calculation
+- Red X adjustments: crossSize 37, crossMargin 13 (3px higher, 1px smaller)
+- Thumbnail pipeline verified clean
+- All five git patches verified
 
 TELEGRAM DELIVERY:
 - Not attempted (user said stop sending APKs)
-- APK available locally at releases/GreaterArt-v1.9.10-debug.apk
+- APK available locally at releases/GreaterArt-v1.9.11-debug.apk
 
 CONSTRAINTS (from HANDOFF.md):
 - No INTERNET permission changes, no appId/signing changes
@@ -30,9 +26,10 @@ CONSTRAINTS (from HANDOFF.md):
 NEXT STEPS:
 - Ready for device testing if needed
 - Telegram delivery requires proper chat_id configuration
-- Git tag v1.9.10 created
+- Git tag v1.9.11 created
 
 FILES MODIFIED (this session):
-- greater-art/app/build.gradle.kts — versionCode 60→61, versionName 1.9.9→1.9.10
-- greater-art/app/src/main/java/com/local/listentomusic/ui/NowPlayingScreen.kt — SecondaryControlRow Mix button now opens ParallelMixerDialog
-- greater-art/releases/GreaterArt-v1.9.10-debug.apk — built artifact
+- greater-art/app/build.gradle.kts — versionCode 61→62, versionName 1.9.10→1.9.11
+- greater-art/app/src/main/java/com/local/listentomusic/ui/NowPlayingScreen.kt — removed Mix button, ParallelMixerDialog import
+- greater-art/HANDOFF.md — added "Deferred Features" section documenting Mix removal
+- greater-art/releases/GreaterArt-v1.9.11-debug.apk — built artifact
