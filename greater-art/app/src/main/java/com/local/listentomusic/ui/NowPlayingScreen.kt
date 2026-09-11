@@ -1082,7 +1082,6 @@ private fun SecondaryControlRow(
     onSleepTimer: (Long) -> Unit,
     sleepTimer: SleepTimerState,
 ) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
     val practice by com.local.listentomusic.playback.PracticeLoop.state.collectAsState()
     var sleepMenuOpen by remember { mutableStateOf(false) }
     val outline = MaterialTheme.colorScheme.outline
@@ -1098,18 +1097,7 @@ private fun SecondaryControlRow(
         sleepTimer.active -> formatSleepRemaining(sleepTimer.remainingMs)
         else -> uiText(playback.appLanguage, "Sleep", "睡眠")
     }
-    var optionsExpanded by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-    IconButton(onClick = { optionsExpanded = !optionsExpanded }, modifier = Modifier.width(32.dp)) {
-        Icon(if (optionsExpanded) Icons.Rounded.KeyboardArrowDown else Icons.AutoMirrored.Rounded.ArrowForward,
-            uiText(playback.appLanguage, "Playback options", "播放選項"), modifier = Modifier.size(20.dp))
-    }
-    AnimatedVisibility(optionsExpanded, modifier = Modifier.weight(1f)) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
         if (playback.showAbRepeat) Button(
             onClick = { com.local.listentomusic.playback.PracticeLoop.mark(playback.currentPath, playback.positionMs) },
             modifier = Modifier.weight(1f).height(40.dp), colors = controlColors,
@@ -1153,8 +1141,6 @@ private fun SecondaryControlRow(
                 }
             }
         }
-    }
-    }
     }
 }
 

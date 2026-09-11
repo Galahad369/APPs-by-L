@@ -61,10 +61,10 @@ class MiniWindowOverlayService : Service() {
     // The visible target sits immediately above the real navigation-bar inset.
     // A larger invisible hit box makes the drop reliable while the visible X stays compact.
     private val crossHitSize = 61
-            private val crossSize = 37
-            private val crossMargin = 13
-    // Brighter red X for visibility against dark liquid metal backgrounds
-    private val crossBaseAlpha = 0.85f
+            private val crossSize = 28
+            private val crossMargin = 10
+        // Brighter red X for visibility against dark liquid metal backgrounds
+        private val crossBaseAlpha = 0.98f
 
     private var downX = 0f
     private var downY = 0f
@@ -269,17 +269,18 @@ class MiniWindowOverlayService : Service() {
     }
 
     private fun buildCross() {
-        crossView = FrameLayout(this).apply {
-            // This circle is the real hit area—not decoration with a different size.
-            // Its faint fill makes the exact quit zone visible without shouting.
-            background = crossTargetDrawable(active = false)
-        }
-        crossImg = ImageView(this).apply {
-            setImageResource(R.drawable.ic_red_cross)
-            setLayerType(View.LAYER_TYPE_HARDWARE, null)
-        }
-        crossView?.addView(crossImg!!, FrameLayout.LayoutParams(dp(crossSize), dp(crossSize)).apply { gravity = Gravity.CENTER })
-        crossView?.visibility = View.INVISIBLE
+            crossView = FrameLayout(this).apply {
+                // This circle is the real hit area—not decoration with a different size.
+                // Its faint fill makes the exact quit zone visible without shouting.
+                background = crossTargetDrawable(active = false)
+            }
+            crossImg = ImageView(this).apply {
+                setImageResource(R.drawable.ic_red_cross)
+                setColorFilter(0xFFFFFFFF.toInt(), android.graphics.PorterDuff.Mode.SRC_IN)
+                setLayerType(View.LAYER_TYPE_HARDWARE, null)
+            }
+            crossView?.addView(crossImg!!, FrameLayout.LayoutParams(dp(crossSize), dp(crossSize)).apply { gravity = Gravity.CENTER })
+            crossView?.visibility = View.INVISIBLE
         val layout = WindowManager.LayoutParams(
             dp(crossHitSize), dp(crossHitSize),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
