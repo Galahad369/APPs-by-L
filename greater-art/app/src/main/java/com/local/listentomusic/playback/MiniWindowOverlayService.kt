@@ -62,7 +62,7 @@ class MiniWindowOverlayService : Service() {
     // A larger invisible hit box makes the drop reliable while the visible X stays compact.
     private val crossHitSize = 61
             private val crossSize = 28
-            private val crossMargin = 10
+            private val crossMargin = 5
         // Brighter red X for visibility against dark liquid metal backgrounds
         private val crossBaseAlpha = 0.98f
 
