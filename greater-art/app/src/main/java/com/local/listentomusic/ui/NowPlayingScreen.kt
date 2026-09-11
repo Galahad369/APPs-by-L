@@ -126,7 +126,6 @@ import com.local.listentomusic.model.MediaKind
 import com.local.listentomusic.model.LocalLyrics
 import com.local.listentomusic.sleepTimerOptions
 import com.local.listentomusic.ui.components.LiquidMetalSurface
-import com.local.listentomusic.ui.ParallelMixerDialog
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -528,7 +527,6 @@ private fun AudioPlayer(
                                                 playback = playback,
                                                 onSleepTimer = onSleepTimer,
                                                 sleepTimer = sleepTimer,
-                                                language = language,
                                             )
             PlaybackError(playback.errorMessage)
             Spacer(Modifier.height(10.dp))
@@ -598,7 +596,6 @@ private fun SecondaryControls(
                                             playback = playback,
                                             onSleepTimer = onSleepTimer,
                                             sleepTimer = sleepTimer,
-                                            language = language,
                                         )
         PlaybackError(playback.errorMessage)
         Spacer(Modifier.height(12.dp))
@@ -1084,12 +1081,10 @@ private fun SecondaryControlRow(
     playback: PlaybackUiState,
     onSleepTimer: (Long) -> Unit,
     sleepTimer: SleepTimerState,
-    language: AppLanguage,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     val practice by com.local.listentomusic.playback.PracticeLoop.state.collectAsState()
     var sleepMenuOpen by remember { mutableStateOf(false) }
-    var showMixerDialog by remember { mutableStateOf(false) }
     val outline = MaterialTheme.colorScheme.outline
     val activeColor = MaterialTheme.colorScheme.secondary
     val controlColors = ButtonDefaults.buttonColors(
@@ -1103,20 +1098,8 @@ private fun SecondaryControlRow(
         sleepTimer.active -> formatSleepRemaining(sleepTimer.remainingMs)
         else -> uiText(playback.appLanguage, "Sleep", "睡眠")
     }
-    var mixExpanded by remember { mutableStateOf(false) }
     var optionsExpanded by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-    IconButton(onClick = { mixExpanded = !mixExpanded }, modifier = Modifier.width(32.dp)) {
-        Icon(if (mixExpanded) Icons.Rounded.KeyboardArrowDown else Icons.AutoMirrored.Rounded.ArrowForward,
-            uiText(playback.appLanguage, "Mix", "混音"), modifier = Modifier.size(20.dp))
-    }
-    AnimatedVisibility(mixExpanded, modifier = Modifier.weight(1f)) {
-    Button(onClick = { showMixerDialog = true }, modifier = Modifier.fillMaxWidth().height(40.dp),
-        colors = controlColors, shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(horizontal = 7.dp)) {
-        Text(uiText(playback.appLanguage, "Mix", "混音"), style = MaterialTheme.typography.labelMedium)
-    }
-    }
-    if (showMixerDialog) ParallelMixerDialog(queue, language, onLoadThumbnail) { showMixerDialog = false }
     IconButton(onClick = { optionsExpanded = !optionsExpanded }, modifier = Modifier.width(32.dp)) {
         Icon(if (optionsExpanded) Icons.Rounded.KeyboardArrowDown else Icons.AutoMirrored.Rounded.ArrowForward,
             uiText(playback.appLanguage, "Playback options", "播放選項"), modifier = Modifier.size(20.dp))

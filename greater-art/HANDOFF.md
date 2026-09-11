@@ -1,8 +1,8 @@
 # HANDOFF — Greater Art Android Media Player
 
 **Project:** `greater-art/` in the repository checkout  
-**Current version:** `1.9.4` (code 57), reference-aligned Now Playing layout
-**Latest APK:** `releases/GreaterArt-v1.9.4-debug.apk`
+**Current version:** `1.9.11` (code 62), Mix control removed, clean secondary controls  
+**Latest APK:** `releases/GreaterArt-v1.9.11-debug.apk`
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
@@ -501,6 +501,20 @@ boundaries so it cancels/restarts less often.
 `v1.7.2` is a known-crashed build. Keep its file untouched for forensic comparison,
 but never use it as a baseline, publish it as latest, or overwrite it. No device logcat
 was captured for that exact APK, so do not invent a more specific crash cause.
+
+## Deferred Features
+
+**Parallel Mixer (Mix) — removed from UI for v1.9.11**
+
+The ParallelMixerDialog and mix layer infrastructure exist in PlaybackService and
+ParallelPlayback but the Mix button in SecondaryControlRow was non-functional (arrow
+toggle broken, dialog not opening cleanly). Removed the Mix control entirely to keep
+the UI clean. The underlying mixer code (addCommand, removeCommand, toggleCommand,
+volumeCommand, stopCommand, MAX_EXTRA_LAYERS=9, mixLevel calculation) remains in
+ParallelPlayback.kt and PlaybackService.kt for future re-enablement.
+
+Re-add when: dedicated Mix button or long-press action is designed, arrow toggle
+behavior is fixed, and device testing confirms 10-voice playback stability.
 
 ## Background Implementation
 
