@@ -1,8 +1,8 @@
 # HANDOFF — Greater Art Android Media Player
 
 **Project:** `greater-art/` in the repository checkout  
-**Current version:** `1.9.11` (code 62), Mix control removed, clean secondary controls  
-**Latest APK:** `releases/GreaterArt-v1.9.11-debug.apk`
+**Current version:** `1.9.12` (code 63), Mix and options collapser removed, clean secondary controls  
+**Latest APK:** `releases/GreaterArt-v1.9.12-debug.apk`
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
@@ -515,6 +515,14 @@ ParallelPlayback.kt and PlaybackService.kt for future re-enablement.
 
 Re-add when: dedicated Mix button or long-press action is designed, arrow toggle
 behavior is fixed, and device testing confirms 10-voice playback stability.
+
+**Secondary controls collapser — removed for v1.9.12**
+
+The "Playback options" arrow toggle (optionsExpanded) was a dead collapser with
+nothing meaningful to hide — Sleep and A-B repeat are always shown when their
+preferences are enabled. Removed the toggle state, IconButton, and
+AnimatedVisibility wrapper. A-B and Sleep buttons now render inline when enabled.
+This keeps the row simple and avoids a broken arrow that expands to nothing.
 
 ## Background Implementation
 

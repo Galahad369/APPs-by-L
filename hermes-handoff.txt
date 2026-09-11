@@ -1,21 +1,25 @@
 HERMES SESSION HANDOFF — 2026-09-11
 
-STATUS: Session active. v1.9.11 APK built successfully.
+STATUS: Session active. v1.9.13 APK built successfully.
 
 WHAT WAS ACCOMPLISHED:
-- v1.9.11 APK built successfully using JDK21 wrapper jar, gradle assembleDebug
-- SHA-256: 5249d058e5304be04e22768d652b276f1ee080e464b4494b025f567427e1a4ae
-- APK located at: releases/GreaterArt-v1.9.11-debug.apk
-- Version bumped: 1.9.10 (code 61) → 1.9.11 (code 62) in app/build.gradle.kts
-- Mix control REMOVED from UI: arrow toggle was broken, dialog didn't open cleanly. Removed mixExpanded state, Mix button, and ParallelMixerDialog import from SecondaryControlRow. Now only "Playback options" (sleep timer, A-B repeat) remains.
-- Parallel mixer infrastructure preserved in codebase: ParallelPlayback.kt and PlaybackService.kt still have addCommand/removeCommand/toggleCommand/volumeCommand/stopCommand, MAX_EXTRA_LAYERS=9, mixLevel calculation
-- Red X adjustments: crossSize 37, crossMargin 13 (3px higher, 1px smaller)
-- Thumbnail pipeline verified clean
-- All five git patches verified
+- v1.9.13 APK built successfully using JDK21 wrapper jar, gradle assembleDebug
+- SHA-256: 8419f4c1274da8e60648429cee4785d84e8013edc3ce4811c9919a975516b608
+- APK located at: releases/GreaterArt-v1.9.13-debug.apk
+- Version bumped: 1.9.12 (code 63) → 1.9.13 (code 64) in app/build.gradle.kts
+- Red X adjustments:
+  - crossSize 34→28 (smaller white X icon, circle hit area unchanged at 61)
+  - crossMargin 13→10 (3px higher)
+  - crossBaseAlpha 0.85→0.98 (less transparent, nearly opaque)
+  - X icon tinted white via setColorFilter(SRC_IN) over red cross drawable
+- Mix control removed (v1.9.11)
+- Options collapser removed (v1.9.12)
+- Mixer infrastructure preserved in ParallelPlayback.kt / PlaybackService.kt
+- HANDOFF.md updated with Deferred Features section
 
 TELEGRAM DELIVERY:
 - Not attempted (user said stop sending APKs)
-- APK available locally at releases/GreaterArt-v1.9.11-debug.apk
+- APK available locally at releases/GreaterArt-v1.9.13-debug.apk
 
 CONSTRAINTS (from HANDOFF.md):
 - No INTERNET permission changes, no appId/signing changes
@@ -26,10 +30,9 @@ CONSTRAINTS (from HANDOFF.md):
 NEXT STEPS:
 - Ready for device testing if needed
 - Telegram delivery requires proper chat_id configuration
-- Git tag v1.9.11 created
+- Git tag v1.9.13 created
 
 FILES MODIFIED (this session):
-- greater-art/app/build.gradle.kts — versionCode 61→62, versionName 1.9.10→1.9.11
-- greater-art/app/src/main/java/com/local/listentomusic/ui/NowPlayingScreen.kt — removed Mix button, ParallelMixerDialog import
-- greater-art/HANDOFF.md — added "Deferred Features" section documenting Mix removal
-- greater-art/releases/GreaterArt-v1.9.11-debug.apk — built artifact
+- greater-art/app/build.gradle.kts — versionCode 63→64, versionName 1.9.12→1.9.13
+- greater-art/app/src/main/java/com/local/listentomusic/playback/MiniWindowOverlayService.kt — crossSize 34→28, crossMargin 13→10, crossBaseAlpha 0.85→0.98, white X tint
+- greater-art/releases/GreaterArt-v1.9.13-debug.apk — built artifact
