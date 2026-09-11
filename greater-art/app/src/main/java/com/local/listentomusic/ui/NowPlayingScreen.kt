@@ -522,12 +522,13 @@ private fun AudioPlayer(
             )
             Spacer(Modifier.height(12.dp))
             SecondaryControlRow(
-                queue = queue,
-                onLoadThumbnail = onLoadThumbnail,
-                playback = playback,
-                onSleepTimer = onSleepTimer,
-                sleepTimer = sleepTimer,
-            )
+                            queue = queue,
+                            onLoadThumbnail = onLoadThumbnail,
+                            playback = playback,
+                            onSleepTimer = onSleepTimer,
+                            sleepTimer = sleepTimer,
+                            onCycleMode = onRepeat,
+                        )
             PlaybackError(playback.errorMessage)
             Spacer(Modifier.height(10.dp))
             NowPlayingQueue(
@@ -591,12 +592,13 @@ private fun SecondaryControls(
         )
         Spacer(Modifier.height(12.dp))
         SecondaryControlRow(
-            queue = queue,
-            onLoadThumbnail = onLoadThumbnail,
-            playback = playback,
-            onSleepTimer = onSleepTimer,
-            sleepTimer = sleepTimer,
-        )
+                        queue = queue,
+                        onLoadThumbnail = onLoadThumbnail,
+                        playback = playback,
+                        onSleepTimer = onSleepTimer,
+                        sleepTimer = sleepTimer,
+                        onCycleMode = onRepeat,
+                    )
         PlaybackError(playback.errorMessage)
         Spacer(Modifier.height(12.dp))
         NowPlayingQueue(
@@ -1081,6 +1083,7 @@ private fun SecondaryControlRow(
     playback: PlaybackUiState,
     onSleepTimer: (Long) -> Unit,
     sleepTimer: SleepTimerState,
+    onCycleMode: () -> Unit,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     val practice by com.local.listentomusic.playback.PracticeLoop.state.collectAsState()
@@ -1106,7 +1109,7 @@ private fun SecondaryControlRow(
             uiText(playback.appLanguage, "Mix", "混音"), modifier = Modifier.size(20.dp))
     }
     AnimatedVisibility(mixExpanded, modifier = Modifier.weight(1f)) {
-    Button(onClick = { /* mix toggle handled by player */ }, modifier = Modifier.fillMaxWidth().height(40.dp),
+    Button(onClick = onCycleMode, modifier = Modifier.fillMaxWidth().height(40.dp),
         colors = controlColors, shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(horizontal = 7.dp)) {
         Text(uiText(playback.appLanguage, "Mix", "混音"), style = MaterialTheme.typography.labelMedium)
     }
