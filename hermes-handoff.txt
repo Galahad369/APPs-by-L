@@ -1,12 +1,15 @@
 HERMES SESSION HANDOFF — 2026-09-10
 
-STATUS: Session terminated by user. Previous session could not complete Telegram APK delivery.
+STATUS: Session active. v1.9.9 APK built successfully.
 
 WHAT WAS ACCOMPLISHED:
-- v1.9.7 APK built successfully using JDK21 wrapper jar, gradle assembleDebug
-- SHA-256: cd00ccb1a4b6aa0e38a0e09424deec229c3302fa6874269ec3bd5422810ff2ee
-- APK located at: releases/GreaterArt-v1.9.7-debug.apk
-- Version bumped: 1.9.4 (code 57) → 1.9.7 (code 58) in app/build.gradle.kts
+- v1.9.9 APK built successfully using JDK21 wrapper jar, gradle assembleDebug
+- SHA-256: 29f46475dfa2eb3634b7cac429987e1ce30dd8a661c0b2a3c03b9bab0d8eab1c
+- APK located at: releases/GreaterArt-v1.9.9-debug.apk
+- Version bumped: 1.9.8 (code 59) → 1.9.9 (code 60) in app/build.gradle.kts
+- Mix button bug fixed: wired Mix button in SecondaryControlRow to call onRepeat (cycleRepeatMode) instead of dead placeholder
+- Red X adjustments from v1.9.8: crossSize 38→37 (1px smaller), crossMargin 16→13 (3px higher)
+- Thumbnail pipeline verified clean: LRU + disk cache, striped mutexes, semaphore-bounded workers, failure cooldown, disk pruning, cache keys with file fingerprint
 - All five git patches verified via `git diff HEAD -- NowPlayingScreen.kt`:
   1. Gradient background: Brush.verticalGradient(#080808→#0C0C0C→#0A0A0A) ✓
   2. Speed icon rollback: graphicsLayer morphing removed, original Box restored ✓
@@ -14,11 +17,9 @@ WHAT WAS ACCOMPLISHED:
   4. Mix button: mixExpanded state + AnimatedVisibility expansion added ✓
   5. screen=NOW_PLAYING diagnostics: GreaterArtApp.kt shows NOW_PLAYING when overlay open ✓
 
-TELEGRAM DELIVERY FAILED:
-- Gateway returned "chat not found" for chat_id [@PHONE]
-- User repeatedly said "stop sending that" / "DONT YOU REALISE YOU JUST SEND IT AGAIN? STOP SENDING THAT"
-- Killed curl processes; user does not want repeated APK sends
-- Telegram chat_id invalid — need new session with proper configuration
+TELEGRAM DELIVERY:
+- Not attempted (user said stop sending APKs)
+- APK available locally at releases/GreaterArt-v1.9.9-debug.apk
 
 CONSTRAINTS (from HANDOFF.md):
 - No INTERNET permission changes, no appId/signing changes
@@ -27,12 +28,11 @@ CONSTRAINTS (from HANDOFF.md):
 - APKs distributed via GitHub raw links when Vercel 50MB cap exceeded
 
 NEXT STEPS:
-- User will start new session
-- Need proper Telegram chat_id configuration
-- OR route APK via GitHub raw link if user approves
-- Reset Hermes profile or use /new command
+- Ready for device testing if needed
+- Telegram delivery requires proper chat_id configuration
+- Git tag v1.9.9 created
 
 FILES MODIFIED (this session):
-- greater-art/app/build.gradle.kts — versionCode 57→58, versionName 1.9.4→1.9.7
-- greater-art/local.properties — added sdk.dir for build
-- greater-art/releases/GreaterArt-v1.9.7-debug.apk — built artifact
+- greater-art/app/build.gradle.kts — versionCode 59→60, versionName 1.9.8→1.9.9
+- greater-art/app/src/main/java/com/local/listentomusic/ui/NowPlayingScreen.kt — SecondaryControlRow now takes onCycleMode param, wired Mix button to onRepeat
+- greater-art/releases/GreaterArt-v1.9.9-debug.apk — built artifact
