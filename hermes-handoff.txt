@@ -1,13 +1,13 @@
 HERMES SESSION HANDOFF — 2026-09-10
 
-STATUS: Session active. v1.9.9 APK built successfully.
+STATUS: Session active. v1.9.10 APK built successfully.
 
 WHAT WAS ACCOMPLISHED:
-- v1.9.9 APK built successfully using JDK21 wrapper jar, gradle assembleDebug
-- SHA-256: 29f46475dfa2eb3634b7cac429987e1ce30dd8a661c0b2a3c03b9bab0d8eab1c
-- APK located at: releases/GreaterArt-v1.9.9-debug.apk
-- Version bumped: 1.9.8 (code 59) → 1.9.9 (code 60) in app/build.gradle.kts
-- Mix button bug fixed: wired Mix button in SecondaryControlRow to call onRepeat (cycleRepeatMode) instead of dead placeholder
+- v1.9.10 APK built successfully using JDK21 wrapper jar, gradle assembleDebug
+- SHA-256: 566192fefc6aed4b57f8623c5a3531d498b90c278c8ce0415a908f635413ec4a
+- APK located at: releases/GreaterArt-v1.9.10-debug.apk
+- Version bumped: 1.9.9 (code 60) → 1.9.10 (code 61) in app/build.gradle.kts
+- Mix button bug fixed: Mix button now opens ParallelMixerDialog to add/manage mix layers (main track + up to 9 audio layers)
 - Red X adjustments from v1.9.8: crossSize 38→37 (1px smaller), crossMargin 16→13 (3px higher)
 - Thumbnail pipeline verified clean: LRU + disk cache, striped mutexes, semaphore-bounded workers, failure cooldown, disk pruning, cache keys with file fingerprint
 - All five git patches verified via `git diff HEAD -- NowPlayingScreen.kt`:
@@ -19,7 +19,7 @@ WHAT WAS ACCOMPLISHED:
 
 TELEGRAM DELIVERY:
 - Not attempted (user said stop sending APKs)
-- APK available locally at releases/GreaterArt-v1.9.9-debug.apk
+- APK available locally at releases/GreaterArt-v1.9.10-debug.apk
 
 CONSTRAINTS (from HANDOFF.md):
 - No INTERNET permission changes, no appId/signing changes
@@ -30,9 +30,9 @@ CONSTRAINTS (from HANDOFF.md):
 NEXT STEPS:
 - Ready for device testing if needed
 - Telegram delivery requires proper chat_id configuration
-- Git tag v1.9.9 created
+- Git tag v1.9.10 created
 
 FILES MODIFIED (this session):
-- greater-art/app/build.gradle.kts — versionCode 59→60, versionName 1.9.8→1.9.9
-- greater-art/app/src/main/java/com/local/listentomusic/ui/NowPlayingScreen.kt — SecondaryControlRow now takes onCycleMode param, wired Mix button to onRepeat
-- greater-art/releases/GreaterArt-v1.9.9-debug.apk — built artifact
+- greater-art/app/build.gradle.kts — versionCode 60→61, versionName 1.9.9→1.9.10
+- greater-art/app/src/main/java/com/local/listentomusic/ui/NowPlayingScreen.kt — SecondaryControlRow Mix button now opens ParallelMixerDialog
+- greater-art/releases/GreaterArt-v1.9.10-debug.apk — built artifact
