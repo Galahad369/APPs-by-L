@@ -1,8 +1,8 @@
 # HANDOFF — Greater Art Android Media Player
 
 **Project:** `greater-art/` in the repository checkout  
-**Current version:** `1.9.12` (code 63), Mix and options collapser removed, clean secondary controls  
-**Latest APK:** `releases/GreaterArt-v1.9.12-debug.apk`
+**Current version:** `1.9.15` (code 66), queue stability + waveform preload + scroll perf fixes  
+**Latest APK:** `releases/GreaterArt-v1.9.15-debug.apk`
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
