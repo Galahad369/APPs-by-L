@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
     private var openPlayerRequest by mutableIntStateOf(0)
     private var playerScreenVisible = false
     private var videoSourceRect = Rect()
+    private var returnScan: kotlinx.coroutines.Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -94,9 +95,22 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        com.local.listentomusic.ui.components.VideoSurfaceOwner.setActivityForeground(true)
         // The Activity owns the foreground UI. Never leave a stale overlay above it.
         stopService(Intent(this, MiniWindowOverlayService::class.java))
-        viewModel.rescan()
+        viewModel.refreshPlaybackSession()
+        // Reconcile files changed while the observer was stopped, after the return transition.
+        returnScan?.cancel()
+        returnScan = lifecycleScope.launch {
+            if (viewModel.library.value.status == LibraryStatus.READY) kotlinx.coroutines.delay(1800)
+            viewModel.rescan()
+        }
+    }
+
+    override fun onPause() {
+        returnScan?.cancel()
+        com.local.listentomusic.ui.components.VideoSurfaceOwner.setActivityForeground(false)
+        super.onPause()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -181,6 +195,7 @@ class MainActivity : ComponentActivity() {
             return false
         }
         return runCatching {
+            com.local.listentomusic.ui.components.VideoSurfaceOwner.setActivityForeground(false)
             ContextCompat.startForegroundService(
                 this,
                 Intent(this, MiniWindowOverlayService::class.java),
@@ -205,6 +220,7 @@ class MainActivity : ComponentActivity() {
         if (intent?.getBooleanExtra(MiniWindowOverlayService.EXTRA_OPEN_PLAYER, false) != true) return
         intent.removeExtra(MiniWindowOverlayService.EXTRA_OPEN_PLAYER)
         openPlayerRequest++
+        playerScreenVisible = true
     }
 
     private fun buildPictureInPictureParams(autoEnter: Boolean): PictureInPictureParams {

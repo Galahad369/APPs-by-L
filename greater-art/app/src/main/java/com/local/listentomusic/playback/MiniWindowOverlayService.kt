@@ -59,12 +59,20 @@ class MiniWindowOverlayService : Service() {
     private val videoExtensions = setOf("mp4", "mov", "m4v", "mkv", "webm", "3gp", "ts", "mpeg", "mpg", "flv", "avi")
 
     // The visible target sits immediately above the real navigation-bar inset.
-    // A larger invisible hit box makes the drop reliable while the visible X stays compact.
-    private val crossHitSize = 61
-            private val crossSize = 28
-            private val crossMargin = 5
-        // Brighter red X for visibility against dark liquid metal backgrounds
-        private val crossBaseAlpha = 0.98f
+    // Visible circle and collision radius are identical. With BOTTOM gravity, larger y is higher.
+    private val crossHitSize = 57
+    private val crossSize = 25
+    private val crossMargin = 14
+    private val crossBaseAlpha = 1f
+    private var crossActive: Boolean? = null
+    private var framePending = false
+    private var openingApp = false
+    private var gestureGeneration = 0
+    private val dragFrame = Runnable {
+        framePending = false
+        updateRootLayout()
+        root?.post { if (dragging) updateCrossAppearance(miniOverlapsCross()) }
+    }
 
     private var downX = 0f
     private var downY = 0f
@@ -137,7 +145,7 @@ class MiniWindowOverlayService : Service() {
             isVideo.collect { v ->
                 artBox?.visibility = if (v) View.GONE else View.VISIBLE
                 videoView?.visibility = if (v) View.VISIBLE else View.GONE
-                closeBtn?.visibility = if (v) View.GONE else View.VISIBLE
+                closeBtn?.visibility = View.GONE
                 // Video mode is pure video: no box and no chrome.
                 root?.background = if (v) null else ContextCompat.getDrawable(this@MiniWindowOverlayService, R.drawable.mini_player_bg)
                 params?.width = dp(if (v) VIDEO_WIDTH else AUDIO_WIDTH)
@@ -176,15 +184,18 @@ class MiniWindowOverlayService : Service() {
 
     private fun openApp() {
         // Tapping the mini window returns to the full player, not the library.
-        stopSelf()
+        if (openingApp) return
+        openingApp = true
         try {
             startActivity(Intent(this, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
                     Intent.FLAG_ACTIVITY_SINGLE_TOP
                 putExtra(EXTRA_OPEN_PLAYER, true)
             })
+            // The resumed Activity removes this overlay. Keep it until launch succeeds.
+            root?.postDelayed({ openingApp = false }, 1000)
         } catch (t: Throwable) {
-            // The overlay has already stopped even if the Activity cannot be launched.
+            openingApp = false
         }
     }
 
@@ -221,19 +232,21 @@ class MiniWindowOverlayService : Service() {
             layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         }
         val row = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.HORIZONTAL
-            gravity = android.view.Gravity.CENTER_VERTICAL
+            orientation = android.widget.LinearLayout.VERTICAL
+            gravity = android.view.Gravity.CENTER
+            layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         }
         val note = ImageView(this).apply {
             setImageResource(R.drawable.ic_launcher_foreground)
-            layoutParams = android.widget.LinearLayout.LayoutParams(dp(22), dp(22)).apply { rightMargin = dp(6) }
+            layoutParams = android.widget.LinearLayout.LayoutParams(dp(34), dp(34))
         }
         titleView = TextView(this).apply {
             textSize = 11f
             setTextColor(0xFFF3F5F0.toInt())
             ellipsize = android.text.TextUtils.TruncateAt.END
             maxLines = 1
-            layoutParams = android.widget.LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            gravity = Gravity.CENTER
+            layoutParams = android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         }
         toggleBtn = ImageButton(this).apply {
             setImageResource(R.drawable.ic_play)
@@ -243,7 +256,8 @@ class MiniWindowOverlayService : Service() {
         }
         row.addView(note)
         row.addView(titleView!!)
-        row.addView(toggleBtn!!)
+        // Same interaction for audio and video: tap anywhere opens Now Playing;
+        // drag anywhere moves the window. No tiny competing child buttons.
         artBox?.addView(row)
 
         videoView = PlayerView(this).apply {
@@ -265,7 +279,6 @@ class MiniWindowOverlayService : Service() {
 
         root?.addView(artBox!!)
         root?.addView(videoView!!)
-        root?.addView(closeBtn!!)
     }
 
     private fun buildCross() {
@@ -331,12 +344,16 @@ class MiniWindowOverlayService : Service() {
         playing.value = p.isPlaying
         isVideo.value = p.currentMediaItem?.mediaMetadata?.mediaType == MediaMetadata.MEDIA_TYPE_VIDEO ||
             path?.substringAfterLast('.').orEmpty().lowercase() in videoExtensions
-        videoView?.player = if (isVideo.value) controller else null
+        videoView?.let { view ->
+            if (isVideo.value) com.local.listentomusic.ui.components.VideoSurfaceOwner.attach(controller, view, overlay = true)
+            else com.local.listentomusic.ui.components.VideoSurfaceOwner.detach(view)
+        }
     }
 
     private fun drag(view: View, event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                gestureGeneration++
                 downX = event.rawX
                 downY = event.rawY
                 startX = params?.x ?: 0
@@ -347,7 +364,8 @@ class MiniWindowOverlayService : Service() {
             MotionEvent.ACTION_MOVE -> {
                 val dx = event.rawX - downX
                 val dy = event.rawY - downY
-                if (!dragging && (abs(dx) > 8 || abs(dy) > 8)) {
+                val slop = android.view.ViewConfiguration.get(this).scaledTouchSlop
+                if (!dragging && (abs(dx) > slop || abs(dy) > slop)) {
                     dragging = true
                     updateCrossAppearance(false)
                     crossView?.visibility = View.VISIBLE
@@ -356,9 +374,10 @@ class MiniWindowOverlayService : Service() {
                     params?.x = startX + dx.toInt()
                     params?.y = startY + dy.toInt()
                     clampPosition()
-                    updateRootLayout()
-                    val overlap = miniOverlapsCross()
-                    updateCrossAppearance(overlap)
+                    if (!framePending) {
+                        framePending = true
+                        root?.postOnAnimation(dragFrame)
+                    }
                     return true
                 }
                 return true
@@ -367,15 +386,30 @@ class MiniWindowOverlayService : Service() {
                 val was = dragging
                 dragging = false
                 if (was) {
-                    val overlap = miniOverlapsCross()
-                    crossView?.visibility = View.INVISIBLE
-                    if (overlap) closeAndStopApp()
+                    root?.removeCallbacks(dragFrame)
+                    framePending = false
+                    updateRootLayout()
+                    // Read actual on-screen coordinates after the final layout, not
+                    // the previous move event's position.
+                    val generation = gestureGeneration
+                    root?.postOnAnimation {
+                        root?.postOnAnimation {
+                            if (generation == gestureGeneration) {
+                                val overlap = miniOverlapsCross()
+                                crossView?.visibility = View.INVISIBLE
+                                if (overlap) closeAndStopApp()
+                            }
+                        }
+                    }
                     return true
                 }
                 view.performClick()
                 return true
             }
             MotionEvent.ACTION_CANCEL -> {
+                gestureGeneration++
+                root?.removeCallbacks(dragFrame)
+                framePending = false
                 dragging = false
                 crossView?.visibility = View.INVISIBLE
                 return true
@@ -385,14 +419,16 @@ class MiniWindowOverlayService : Service() {
     }
 
     private fun updateCrossAppearance(active: Boolean) {
+        if (crossActive == active) return
+        crossActive = active
         crossImg?.alpha = if (active) 1f else crossBaseAlpha
         crossView?.background = crossTargetDrawable(active)
     }
 
     private fun crossTargetDrawable(active: Boolean) = GradientDrawable().apply {
         shape = GradientDrawable.OVAL
-        setColor(if (active) 0x48FF3B30 else 0x22FF3B30)
-        setStroke(dp(2).toInt(), if (active) 0xFF453A.toInt() else 0xB0FF453A.toInt())
+        setColor(if (active) 0x88FF3B30.toInt() else 0x55FF3B30)
+        setStroke(dp(2), if (active) 0xFFFF453A.toInt() else 0xDFFF453A.toInt())
     }
 
     private fun clampPosition() {
@@ -459,9 +495,10 @@ class MiniWindowOverlayService : Service() {
 
     override fun onDestroy() {
         scope.cancel()
+        root?.removeCallbacks(dragFrame)
         root?.let { runCatching { wm?.removeViewImmediate(it) } }
         crossView?.let { runCatching { wm?.removeViewImmediate(it) } }
-        videoView?.player = null
+        videoView?.let(com.local.listentomusic.ui.components.VideoSurfaceOwner::detach)
         controller?.removeListener(listener)
         controller = null
         future?.let(MediaController::releaseFuture)

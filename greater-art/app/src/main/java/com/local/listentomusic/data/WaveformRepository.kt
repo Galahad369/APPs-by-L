@@ -55,19 +55,25 @@ class WaveformRepository(context: Context) {
     // The player screen and media-transition warmup may request the same file at
     // once. One decoder prevents duplicate full-file work and codec contention.
     private val decodeMutex = Mutex()
+    private val memory = object : LinkedHashMap<String, FloatArray>(32, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, FloatArray>?) = size > 32
+    }
 
     suspend fun load(path: String, size: Long, modified: Long): FloatArray? = withContext(Dispatchers.IO) {
         val key = MessageDigest.getInstance("SHA-256")
             .digest("$path|$size|$modified|$BINS|$CACHE_VERSION".toByteArray())
             .joinToString("") { "%02x".format(it) }
         val cached = File(directory, "$key.bin")
+        synchronized(memory) { memory[key] }?.let { return@withContext it }
         read(cached)?.let {
+            synchronized(memory) { memory[key] = it }
             _diagnostics.value = WaveformDiagnostics(WaveformStatus.CACHE_HIT, File(path).name)
             return@withContext it
         }
         decodeMutex.withLock {
             // Another caller may have completed while this one waited.
             read(cached)?.let {
+                synchronized(memory) { memory[key] = it }
                 _diagnostics.value = WaveformDiagnostics(WaveformStatus.CACHE_HIT, File(path).name)
                 return@withLock it
             }
@@ -81,12 +87,14 @@ class WaveformRepository(context: Context) {
                 return@withLock null
             }
             runCatching { write(cached, decoded) }
+            synchronized(memory) { memory[key] = decoded }
             _diagnostics.value = WaveformDiagnostics(WaveformStatus.READY, File(path).name)
             decoded
         }
     }
 
     suspend fun clear() = withContext(Dispatchers.IO) {
+        synchronized(memory) { memory.clear() }
         directory.listFiles()?.forEach { file -> runCatching { file.delete() } }
         _diagnostics.value = WaveformDiagnostics()
     }
@@ -274,7 +282,7 @@ class WaveformRepository(context: Context) {
         DataInputStream(file.inputStream().buffered()).use { input ->
             val count = input.readInt()
             if (count != BINS) return null
-            FloatArray(count) { input.readFloat() }
+            FloatArray(count) { input.readFloat().also { require(it.isFinite() && it in 0f..1f) } }
         }
     }.getOrNull()
 

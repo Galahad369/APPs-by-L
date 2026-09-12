@@ -6,22 +6,35 @@ ads, analytics, accounts, telemetry, or network access.
 
 ## Features
 
+- v1.9.16 adds **Nodes**, an optional filename-similarity graph. Library remains the
+  default: swipe right (or tap Nodes) to enter. On Nodes, swipe left on the header or
+  tap Library to return. The canvas itself supports pan, pinch zoom, drag and tap-to-play.
+  Find / play a node provides a searchable text alternative to small visual targets.
+  Nodes includes physical media files across the scanned library, not just a filtered playlist.
+- Graph connections use raw filenames only: Unicode words/CJK runs, shared characters,
+  bigrams/trigrams and a small prefix boost. No tags, listening history or manual links.
+  Similarity and finite force-layout computation run off the UI thread. Edges and
+  settled coordinates are cached locally; hidden graphs have no physics animation loop.
+  See [graph implementation notes](docs/NODES.md) for the exact formula and large-library limits.
+- Mini-window return rebuilds Now Playing from the active media session without waiting
+  for a file scan. Audio and video overlays share the same tap/drag behavior and 111×64dp size.
+  Waveforms use stable physical-file cache keys and bounded current/next-track preloading.
+
 - v1.9.4 Now Playing layout: artwork/video above the scrollable playback queue, with
   the timeline and Repeat / Previous / Play-Pause / Next / Speed fixed at the bottom.
 - The stable top bar exposes Floating player / Home / Fullscreen / Close. Home returns
   to Library; Close dismisses the Now Playing sheet without stopping playback.
   Controls retain Greater Art's selected theme.
-- Now Playing opens as a large dismissible sheet over the current page. The arrow
-  collapses secondary controls; A–B practice is optional and off by default, with
+- Now Playing opens as a large dismissible sheet over the current page.
+  A–B practice is optional and off by default, with
   visible A/B timeline markers when enabled. Double-tap seeking has directional feedback.
 - Local title/cover overrides, natural name sorting, multi-selection, rule playlists
   and eight-second undo for playlist/queue removals. Original media is not rewritten.
 - Optional artist/album/lyrics search builds a local metadata cache off the UI thread.
 - CUE sheets expose separate tracks without splitting audio files. Local enhanced LRC
   and common clock-time TTML support word highlighting; SRT provides line timing.
-- Optional parallel mixer: main track plus nine audio layers, with pause, mute, level
-  and removal for added layers. Video layers contribute sound only. Buffers and mixer
-  levels are bounded; actual simultaneous decoder capacity depends on the phone.
+- Parallel mixer infrastructure is retained internally; its unfinished UI was removed
+  in 1.9.11 and is not presented as an available control.
 - Current-video wallpaper follows playback across Library and Settings using the
   main decoder. It is the new/reset default; audio falls back to liquid metal.
 - Japanese, German, French and Cantonese options with offline core-interface translations.
@@ -32,8 +45,8 @@ ads, analytics, accounts, telemetry, or network access.
 - Media3 playback through a `MediaLibraryService` with background media controls.
 - Library search, custom drag order, name sorting, local playlists and M3U/M3U8 import/export.
 - Repeat-one default, gapless-friendly queues, speed controls, seek, next and previous.
-- Collapsible secondary controls: speed, Off/One/All/Random and Mix. A–B practice
-  and the sleep timer are optional and hidden by default.
+- Speed and Off/One/All/Random controls. A–B practice and the sleep timer are optional
+  and hidden by default; enabled options are shown inline.
 - Compact one-line playback controls and an unlabelled scrollable queue with
   thumbnails and current-track highlight.
 - Synchronized local lyrics from a matching `.lrc`, with embedded MP3/FLAC/Opus lyrics fallback.
@@ -45,7 +58,7 @@ ads, analytics, accounts, telemetry, or network access.
 - Three floating modes:
   - `COMPACT` — Android-controlled compact picture-in-picture.
   - `FOLLOW_VIDEO` — picture-in-picture following the video's aspect ratio.
-  - `MINI_WINDOW` — default; 126×42dp audio or 110×63dp video system overlay.
+  - `MINI_WINDOW` — default; 111×64dp audio/video system overlay.
 - Four app backgrounds:
   - Animated black liquid metal.
   - User-selected image (`image/*`, including PNG/JPEG/WebP supported by Android).

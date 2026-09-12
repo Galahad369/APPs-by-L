@@ -19,6 +19,10 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
@@ -125,10 +129,13 @@ fun GreaterArtApp(
         value = viewModel.loadLyrics(playback.currentPath)
     }
     var screen by rememberSaveable { mutableStateOf(Screen.LIBRARY) }
-    var playerOpen by rememberSaveable { mutableStateOf(false) }
+    val libraryPager = rememberPagerState(initialPage = 1, pageCount = { 2 })
+    val navigationScope = rememberCoroutineScope()
+    LaunchedEffect(libraryPager.currentPage) { if (libraryPager.currentPage == 0) viewModel.requestGraph() }
+    var playerOpen by rememberSaveable { mutableStateOf(openPlayerRequest > 0) }
     var editDisplay by remember { mutableStateOf<com.local.listentomusic.model.MediaFile?>(null) }
     var createRule by remember { mutableStateOf(false) }
-    val sheetState = remember { androidx.compose.animation.core.MutableTransitionState(false) }
+    var sheetState by remember { mutableStateOf(androidx.compose.animation.core.MutableTransitionState(openPlayerRequest > 0)) }
     sheetState.targetState = playerOpen
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
@@ -141,9 +148,12 @@ fun GreaterArtApp(
     }
     var jokeDismissed by rememberSaveable { mutableStateOf(false) }
 
-    LaunchedEffect(openPlayerRequest, playback.hasMedia) {
-        if (openPlayerRequest > 0 && playback.hasMedia) {
+    LaunchedEffect(openPlayerRequest) {
+        if (openPlayerRequest > 0) {
+            viewModel.refreshPlaybackSession()
             playerOpen = true
+            // Overlay return is a direct reveal, not another slide through Library.
+            sheetState = androidx.compose.animation.core.MutableTransitionState(true)
             onOpenPlayerRequestConsumed(openPlayerRequest)
         }
     }
@@ -152,7 +162,11 @@ fun GreaterArtApp(
         onPlayerScreenChanged(playerOpen)
     }
 
-    BackHandler(enabled = screen != Screen.LIBRARY || playerOpen) { if (playerOpen) playerOpen = false else screen = Screen.LIBRARY }
+    BackHandler(enabled = screen != Screen.LIBRARY || playerOpen || libraryPager.currentPage == 0) {
+        if (playerOpen) playerOpen = false
+        else if (screen != Screen.LIBRARY) screen = Screen.LIBRARY
+        else navigationScope.launch { libraryPager.animateScrollToPage(1) }
+    }
 
     val appName = if (settings.silianRail) "PIERCE&PIERCE" else "Greater Art"
     GreaterArtTheme(
@@ -172,8 +186,8 @@ fun GreaterArtApp(
         Box(modifier = Modifier.fillMaxSize()) {
             // Stable ownership across navigation: prepare once, pause when covered,
             // and resume immediately when Library or Settings reveals the wallpaper.
-            AppBackground(preferences = settings, playback = playback, controller = controller,
-                visible = !((sheetState.currentState || sheetState.targetState) && playback.isVideo))
+            AppBackground(preferences = settings, currentPath = playback.currentPath, isVideo = playback.isVideo, controller = controller,
+                visible = !(sheetState.currentState || sheetState.targetState))
             Surface(
                 modifier = Modifier.fillMaxSize(),
                 // A light palette needs an opaque-enough base over black/custom media.
@@ -225,6 +239,15 @@ fun GreaterArtApp(
                         }
                     },
                 ) { padding ->
+                    HorizontalPager(state = libraryPager, modifier = Modifier.fillMaxSize(), key = { if (it == 0) "NODES" else "LIBRARY" }) { page ->
+                    if (page == 0) {
+                        val graph by viewModel.graph.collectAsStateWithLifecycle()
+                        val loading by viewModel.graphLoading.collectAsStateWithLifecycle()
+                        val error by viewModel.graphError.collectAsStateWithLifecycle()
+                        NodesScreen(graph, loading, error, playback.currentPath, padding,
+                            { navigationScope.launch { libraryPager.animateScrollToPage(1) } }, viewModel::requestGraph,
+                            { viewModel.playGraphNode(it); playerOpen = true })
+                    } else {
                     LibraryScreen(
                         appName = appName,
                         state = library,
@@ -246,6 +269,7 @@ fun GreaterArtApp(
                         onLoadThumbnail = viewModel::loadThumbnail,
                         onPreloadAhead = viewModel::preloadThumbnailsStartingAt,
                         onOpenSettings = { screen = Screen.SETTINGS },
+                        onOpenNodes = { navigationScope.launch { libraryPager.animateScrollToPage(0) } },
                         onEditDisplay = { editDisplay = it },
                         onCreateRule = { createRule = true },
                         onAddSelected = viewModel::addAllToPlaylist,
@@ -255,6 +279,8 @@ fun GreaterArtApp(
                             playerOpen = true
                         },
                     )
+                    }
+                    }
                 }
                 Screen.NOW_PLAYING -> Unit // Legacy saved enum; playback now lives in the overlay.
                 Screen.SETTINGS -> SettingsScreen(
@@ -334,7 +360,7 @@ fun GreaterArtApp(
                 NowPlayingScreen(playback, artwork, queue, lyrics, settings.showFileDetails, settings.editableQueue,
                     settings.appLanguage, controller, PaddingValues(0.dp), isPictureInPicture,
                     onVideoBoundsChanged, onEnterPictureInPicture,
-                    { screen = Screen.LIBRARY; playerOpen = false }, { playerOpen = false },
+                    { screen = Screen.LIBRARY; playerOpen = false; navigationScope.launch { libraryPager.scrollToPage(1) } }, { playerOpen = false },
                     viewModel::togglePlayPause, viewModel::previous, viewModel::next, viewModel::seekTo,
                     viewModel::setSpeed, viewModel::cycleRepeatMode, viewModel::setSleepTimer, sleepTimer,
                     settings.seekOffsetMs, viewModel::seekBy, viewModel::playQueueItem, viewModel::loadThumbnail,
@@ -357,7 +383,7 @@ fun GreaterArtApp(
                 val viewport = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
                 val density = androidx.compose.ui.platform.LocalDensity.current
                 val regions = when (if (playerOpen) Screen.NOW_PLAYING else screen) {
-                    Screen.LIBRARY -> listOf("LIBRARY_TOP_BAR", "SEARCH_AND_SORT", "MEDIA_LIST", "MINI_PLAYER")
+                    Screen.LIBRARY -> if (libraryPager.currentPage == 0) listOf("NODES", "GRAPH_CANVAS", "NODE_PICKER", "MINI_PLAYER") else listOf("LIBRARY_TOP_BAR", "SEARCH_AND_SORT", "MEDIA_LIST", "MINI_PLAYER")
                     Screen.NOW_PLAYING -> listOf("MEDIA_STAGE", "TRACK_TITLE", "PLAYBACK_CONTROLS", "TIMELINE", "QUEUE", "LYRICS")
                     Screen.SETTINGS -> listOf("SETTINGS_TOP_BAR", "APPEARANCE", "PLAYBACK", "SONG_LISTS", "CACHE", "PRIVACY")
                 }

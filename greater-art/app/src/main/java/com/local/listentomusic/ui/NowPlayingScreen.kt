@@ -458,7 +458,6 @@ private fun AudioPlayer(
         value = null
         // Playback and artwork get the first frame; stale requests are cancelled by
         // produceState when the user skips rapidly.
-        delay(350)
         value = playback.currentPath?.let { onLoadWaveform(it) }
         waveformLoading = false
     }
@@ -535,7 +534,7 @@ private fun AudioPlayer(
                 lyrics = lyrics,
                 showFileDetails = showFileDetails,
                 editableQueue = editableQueue,
-                positionMs = playback.positionMs,
+                positionMs = if (lyrics == null) 0L else playback.positionMs,
                 currentPath = playback.currentPath,
                 language = language,
                 onPlay = onPlayQueueItem,
@@ -604,7 +603,7 @@ private fun SecondaryControls(
             lyrics = lyrics,
             showFileDetails = showFileDetails,
             editableQueue = editableQueue,
-            positionMs = playback.positionMs,
+            positionMs = if (lyrics == null) 0L else playback.positionMs,
             currentPath = playback.currentPath,
             language = language,
             onPlay = onPlayQueueItem,
@@ -639,8 +638,8 @@ private fun NowPlayingQueue(
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = currentIndex.coerceAtLeast(0),
     )
-    LaunchedEffect(key1 = currentPath, key2 = currentIndex, key3 = queue.size) {
-        if (currentIndex >= 0) listState.animateScrollToItem(currentIndex)
+    LaunchedEffect(currentPath, currentIndex) {
+        if (currentIndex >= 0 && !listState.isScrollInProgress) listState.scrollToItem(currentIndex)
     }
     Column(modifier) {
         if (lyrics != null) {
@@ -666,7 +665,7 @@ private fun NowPlayingQueue(
                 state = listState,
                 contentPadding = PaddingValues(vertical = 4.dp),
             ) {
-                itemsIndexed(queue, key = { _, file -> file.path }) { index, file ->
+                itemsIndexed(queue, key = { index, file -> "$index:${file.path}" }, contentType = { _, _ -> "queue-song" }) { index, file ->
                     val selected = file.path == currentPath
                     Row(
                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
@@ -1235,6 +1234,17 @@ internal fun VideoSurface(
     onBoundsChanged: (Rect) -> Unit,
     modifier: Modifier,
 ) {
+    val surfaceLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    var surfaceActive by remember(surfaceLifecycle) { mutableStateOf(surfaceLifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) }
+    val activity = LocalContext.current.findActivity()
+    DisposableEffect(surfaceLifecycle) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) surfaceActive = true
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE) surfaceActive = activity?.isInPictureInPictureMode == true
+        }
+        surfaceLifecycle.addObserver(observer)
+        onDispose { surfaceLifecycle.removeObserver(observer) }
+    }
     key(mediaKey, controller) {
         AndroidView(
         factory = { context ->
@@ -1246,10 +1256,14 @@ internal fun VideoSurface(
                 useController = false
                 resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                 setKeepContentOnPlayerReset(true)
-                com.local.listentomusic.ui.components.VideoSurfaceOwner.attach(controller, this)
+                if (surfaceActive) com.local.listentomusic.ui.components.VideoSurfaceOwner.attach(controller, this)
             }
         },
-        update = { view -> com.local.listentomusic.ui.components.VideoSurfaceOwner.attach(controller, view) },
+        update = { view ->
+            if (surfaceActive || activity?.isInPictureInPictureMode == true)
+                com.local.listentomusic.ui.components.VideoSurfaceOwner.attach(controller, view)
+            else com.local.listentomusic.ui.components.VideoSurfaceOwner.detach(view)
+        },
         onRelease = com.local.listentomusic.ui.components.VideoSurfaceOwner::detach,
         modifier = modifier.onGloballyPositioned { coordinates ->
             val bounds = coordinates.boundsInWindow()
