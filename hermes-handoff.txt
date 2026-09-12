@@ -1,25 +1,24 @@
-HERMES SESSION HANDOFF — 2026-09-11
+HERMES SESSION HANDOFF — 2026-09-12
 
-STATUS: Session active. v1.9.13 APK built successfully.
+STATUS: Session active. v1.9.16 APK built successfully.
 
 WHAT WAS ACCOMPLISHED:
-- v1.9.13 APK built successfully using JDK21 wrapper jar, gradle assembleDebug
-- SHA-256: 8419f4c1274da8e60648429cee4785d84e8013edc3ce4811c9919a975516b608
-- APK located at: releases/GreaterArt-v1.9.13-debug.apk
-- Version bumped: 1.9.12 (code 63) → 1.9.13 (code 64) in app/build.gradle.kts
-- Red X adjustments:
-  - crossSize 34→28 (smaller white X icon, circle hit area unchanged at 61)
-  - crossMargin 13→10 (3px higher)
-  - crossBaseAlpha 0.85→0.98 (less transparent, nearly opaque)
-  - X icon tinted white via setColorFilter(SRC_IN) over red cross drawable
-- Mix control removed (v1.9.11)
-- Options collapser removed (v1.9.12)
-- Mixer infrastructure preserved in ParallelPlayback.kt / PlaybackService.kt
-- HANDOFF.md updated with Deferred Features section
+- v1.9.16 APK built successfully using JDK21 wrapper jar, gradle assembleDebug
+- SHA-256: f3f6d61743381006cd9e18d4593bd2d9891b9b7ae29c8ecd64ea703138822d4e
+- APK located at: releases/GreaterArt-v1.9.16-debug.apk
+- Version bumped: 1.9.15 (code 66) → 1.9.16 (code 67) in app/build.gradle.kts
+- Nodes graph added (v1.9.16): filename-similarity graph page left of Library, pan/pinch/drag/tap, searchable picker, off-main physics, versioned cache
+- Queue race fixed: session-order fallback + explicit controller sync, no more dropped items
+- Mini-window transition fixed: shared VideoSurfaceOwner, overlay stops after Activity resumes
+- Red X corrected: crossMargin 14dp, crossSize 57dp, icon 25dp, brighter stroke, frame-batched drag
+- Waveform: stable physical-file cache keys, bounded 32-entry memory cache, current+next-3 preload
+- Performance: defer rescan, isolate wallpaper, no animated metal under opaque content
+- All 60 tests pass, lint 0 errors, assembleDebug passed, no INTERNET permission
+- Signing matches existing APK (SHA-256: 9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf)
 
 TELEGRAM DELIVERY:
 - Not attempted (user said stop sending APKs)
-- APK available locally at releases/GreaterArt-v1.9.13-debug.apk
+- APK available locally at releases/GreaterArt-v1.9.16-debug.apk
 
 CONSTRAINTS (from HANDOFF.md):
 - No INTERNET permission changes, no appId/signing changes
@@ -28,11 +27,12 @@ CONSTRAINTS (from HANDOFF.md):
 - APKs distributed via GitHub raw links when Vercel 50MB cap exceeded
 
 NEXT STEPS:
-- Ready for device testing if needed
-- Telegram delivery requires proper chat_id configuration
-- Git tag v1.9.13 created
+- Real-device verification needed: mini-window return, video frame pacing, graph gestures, TalkBack
+- Vercel deployment requires explicit approval
 
 FILES MODIFIED (this session):
-- greater-art/app/build.gradle.kts — versionCode 63→64, versionName 1.9.12→1.9.13
-- greater-art/app/src/main/java/com/local/listentomusic/playback/MiniWindowOverlayService.kt — crossSize 34→28, crossMargin 13→10, crossBaseAlpha 0.85→0.98, white X tint
-- greater-art/releases/GreaterArt-v1.9.13-debug.apk — built artifact
+- greater-art/app/build.gradle.kts — versionCode 66→67, versionName 1.9.15→1.9.16
+- greater-art/releases/GreaterArt-v1.9.16-debug.apk — built artifact
+- greater-art/HANDOFF.md — v1.9.16 checkpoint added
+- greater-art/README.md — v1.9.16 features documented
+- greater-art/hermes-handoff.txt — updated to v1.9.16

@@ -54,19 +54,19 @@ class MiniWindowOverlayService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private val title = MutableStateFlow("")
-    private val playing = MutableStateFlow(false)
-    private val isVideo = MutableStateFlow(false)
-    private val videoExtensions = setOf("mp4", "mov", "m4v", "mkv", "webm", "3gp", "ts", "mpeg", "mpg", "flv", "avi")
+        private val playing = MutableStateFlow(false)
+        private val isVideo = MutableStateFlow(false)
+        private val videoExtensions = setOf("mp4", "mov", "m4v", "mkv", "webm", "3gp", "ts", "mpeg", "mpg", "flv", "avi")
 
-    // The visible target sits immediately above the real navigation-bar inset.
-    // Visible circle and collision radius are identical. With BOTTOM gravity, larger y is higher.
-    private val crossHitSize = 57
-    private val crossSize = 25
-    private val crossMargin = 14
-    private val crossBaseAlpha = 1f
-    private var crossActive: Boolean? = null
-    private var framePending = false
-    private var openingApp = false
+        // The visible target sits immediately above the real navigation-bar inset.
+        // Visible circle and collision radius are identical. With BOTTOM gravity, larger y is higher.
+        private val crossHitSize = 57
+        private val crossSize = 25
+        private val crossMargin = 19
+        private val crossBaseAlpha = 1f
+        private var crossActive: Boolean? = null
+        private var framePending = false
+        private var openingApp = false
     private var gestureGeneration = 0
     private val dragFrame = Runnable {
         framePending = false

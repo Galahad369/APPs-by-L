@@ -59,6 +59,7 @@ Hermes continuation: read this section and docs/NODES.md, then inspect the local
 Do not restore old queue mapNotNull logic, separate overlay surface ownership, or a
 per-frame graph physics loop. Do not commit/push unless the user newly authorizes it.
 Next release must use a new filename/version after the 1.9.16 artifact is created.
+For v1.9.17+ backlog and multi-model consult items, see `draft.md` — planning only, no code changes until approved.
 
 ### September 9 — 1.9.4 reference-aligned Now Playing (newest)
 
