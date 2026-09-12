@@ -639,7 +639,7 @@ private fun NowPlayingQueue(
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = currentIndex.coerceAtLeast(0),
     )
-    LaunchedEffect(currentPath, currentIndex, queue.size) {
+    LaunchedEffect(key1 = currentPath, key2 = currentIndex, key3 = queue.size) {
         if (currentIndex >= 0) listState.animateScrollToItem(currentIndex)
     }
     Column(modifier) {
@@ -850,9 +850,6 @@ private fun WaveformTimeline(
     var seeking by remember(playback.currentPath) { mutableStateOf(false) }
     var seekFraction by remember(playback.currentPath) { mutableFloatStateOf(0f) }
     val hasDuration = playback.durationMs > 0L
-    // Keep the Slider in a stable 0..1 range. Feeding millisecond-sized Float
-    // ranges into Material Slider can lose precision on long audio and leave the
-    // thumb visually pinned at the end even while playback is healthy.
     val playbackFraction = if (hasDuration) {
         playback.positionMs.toDouble().div(playback.durationMs.toDouble()).toFloat().coerceIn(0f, 1f)
     } else 0f
@@ -862,15 +859,12 @@ private fun WaveformTimeline(
     val inactive = MaterialTheme.colorScheme.outlineVariant
     val displayPeaks = remember(waveform) {
         waveform?.takeIf { it.isNotEmpty() }?.let { raw ->
-            // Fixed visible count prevents thousands of tiny lines on a phone.
-            val groups = minOf(80, raw.size)
+            val groups = minOf(60, raw.size)
             val peaks = FloatArray(groups) { g ->
                 val first = g * raw.size / groups
                 val last = ((g + 1) * raw.size / groups).coerceAtMost(raw.size)
                 (first until last).maxOfOrNull { raw[it].takeIf(Float::isFinite) ?: 0f } ?: 0f
             }
-            // Repository already normalizes PCM. Normalizing it again flattened
-            // most bars at 1.0, destroying the real shape of the recording.
             peaks.map { it.coerceIn(0f, 1f) }.toFloatArray()
         }
     }
@@ -890,7 +884,7 @@ private fun WaveformTimeline(
             thumb = {},
         track = {
             Canvas(Modifier.fillMaxWidth().height(44.dp)) {
-                val bars = displayPeaks?.size ?: 72
+                val bars = displayPeaks?.size ?: 60
                 val spacing = size.width / bars
                 repeat(bars) { index ->
                     val wave = displayPeaks?.getOrNull(index) ?: 0.025f
