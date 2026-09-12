@@ -63,8 +63,16 @@ try {
     $metadataPath = Join-Path $projectRoot "app\build\outputs\apk\debug\output-metadata.json"
     $metadata = Get-Content -Raw -LiteralPath $metadataPath | ConvertFrom-Json
     $sourceApk = Join-Path $projectRoot "app\build\outputs\apk\debug\$($metadata.elements[0].outputFile)"
-    $destination = Join-Path $projectRoot "GreaterArt-v$($metadata.elements[0].versionName)-debug.apk"
-    Copy-Item -LiteralPath $sourceApk -Destination $destination -Force
+    $destination = Join-Path $projectRoot "releases/GreaterArt-v$($metadata.elements[0].versionName)-debug.apk"
+    if (Test-Path -LiteralPath $destination) {
+        throw "Versioned APK already exists: $destination. Increase the version; never overwrite a release."
+    }
+    $apkSigner = Join-Path $androidSdk "build-tools/37.0.0/apksigner.bat"
+    $signature = & $apkSigner verify --print-certs $sourceApk
+    if ($LASTEXITCODE -ne 0 -or ($signature -join "`n") -notmatch "9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf") {
+        throw "APK signing identity does not match the pinned sideload certificate. Nothing was published."
+    }
+    [System.IO.File]::Copy($sourceApk, $destination, $false)
     Write-Output "Built and copied $destination"
 } finally {
     $env:ANDROID_HOME = $previousAndroidHome

@@ -7,7 +7,11 @@ import java.lang.ref.WeakReference
 /** Only one in-app view may own the shared player's video output. Main thread only. */
 object VideoSurfaceOwner {
     private var active = WeakReference<PlayerView>(null)
-    fun attach(player: Player?, target: PlayerView) {
+    private var activityForeground = false
+    fun setActivityForeground(value: Boolean) { activityForeground = value }
+    fun attach(player: Player?, target: PlayerView, overlay: Boolean = false) {
+        // A queued service callback must not steal output after the Activity resumes.
+        if (overlay && activityForeground) { detach(target); return }
         if (player == null) { detach(target); return }
         val previous = active.get()
         if (previous === target && target.player === player) return

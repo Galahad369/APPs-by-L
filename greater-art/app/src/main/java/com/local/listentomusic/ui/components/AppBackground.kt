@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -48,18 +49,21 @@ import kotlin.math.max
 @Composable
 fun AppBackground(
     preferences: UserPreferences,
-    playback: PlaybackUiState,
+    currentPath: String?,
+    isVideo: Boolean,
     controller: MediaController?,
     modifier: Modifier = Modifier,
     visible: Boolean = true,
 ) {
     val mode = preferences.backgroundMode
-    val currentVideoUri = playback.currentPath
-        ?.takeIf { playback.isVideo }
+    val currentVideoUri = currentPath
+        ?.takeIf { isVideo }
         ?.let { Uri.fromFile(File(it)) }
 
-    Box(modifier.fillMaxSize()) {
-        if (visible) DefaultMetalBackground() else Box(Modifier.fillMaxSize().background(Color.Black))
+    Box(modifier.fillMaxSize().graphicsLayer()) {
+        // Avoid an animated full-screen metal pass underneath opaque media wallpaper.
+        if (visible && (mode == AppBackgroundMode.DEFAULT || mode == AppBackgroundMode.CURRENT_VIDEO && currentVideoUri == null)) DefaultMetalBackground()
+        else Box(Modifier.fillMaxSize().background(androidx.compose.material3.MaterialTheme.colorScheme.background))
         when (mode) {
             AppBackgroundMode.DEFAULT -> Unit
             AppBackgroundMode.CUSTOM_IMAGE -> preferences.customBackgroundImageUri
@@ -79,15 +83,25 @@ fun AppBackground(
 
 @Composable
 private fun CurrentVideoWallpaper(controller: MediaController?) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var active by remember(lifecycleOwner) { mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) active = true
+            if (event == Lifecycle.Event.ON_PAUSE) active = false
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     // The service already prepares and buffers the current video. Reuse that decoder;
     // wallpaper never changes volume, pause state or seek position.
     AndroidView(factory = { context ->
         (android.view.LayoutInflater.from(context).inflate(com.local.listentomusic.R.layout.background_video, android.widget.FrameLayout(context), false) as PlayerView).apply {
             resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
             setKeepContentOnPlayerReset(true)
-            VideoSurfaceOwner.attach(controller, this)
+            if (active) VideoSurfaceOwner.attach(controller, this)
         }
-    }, update = { VideoSurfaceOwner.attach(controller, it) },
+    }, update = { if (active) VideoSurfaceOwner.attach(controller, it) else VideoSurfaceOwner.detach(it) },
         onRelease = VideoSurfaceOwner::detach, modifier = Modifier.fillMaxSize())
 }
 

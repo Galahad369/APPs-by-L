@@ -1,12 +1,64 @@
 # HANDOFF — Greater Art Android Media Player
 
 **Project:** `greater-art/` in the repository checkout  
-**Current version:** `1.9.15` (code 66), queue stability + waveform preload + scroll perf fixes  
-**Latest APK:** `releases/GreaterArt-v1.9.15-debug.apk`
+**Current version:** `1.9.16` (code 67), Nodes graph + mini-window/session/cache fixes
+**Latest APK:** `releases/GreaterArt-v1.9.16-debug.apk` (local verification checkpoint below)
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 ## Current State
+
+### September 12 — 1.9.16: read this before historical notes
+
+- LOCAL ONLY on main. User explicitly forbids commits/pushes for this work. No PR
+  was created. Preserve all existing APKs, package ID and pinned signing identity.
+- Added optional Nodes page to the left of Library; Library stays the default. See
+  `docs/NODES.md` for exact filename-only weights, Unicode handling, top-six edges,
+  approximate >1,000-node candidate search, finite off-main physics and versioned cache.
+  Graph includes physical source files, independent of playlist/search/title overrides.
+  Canvas pan/pinch/drag/tap stays separate from header-based page swiping. A searchable
+  node picker provides an accessible alternative. No extra permissions/network/history.
+- Missing queue ROOT CAUSE: `mapNotNull` discarded active session items absent from a
+  not-yet-completed scan, and controller connection never explicitly synchronized queue.
+  Session order now always has a metadata-based fallback entry; scanner enriches it later.
+  Return-to-player intents immediately reveal the player sheet and refresh session state.
+  Duplicate session IDs have distinct row keys. Queue-size changes no longer trigger an
+  animated scroll through the whole list. Unit tests cover cold/partial scans and duplicates.
+- Mini-window ROOT CAUSE: overlay used its own uncoordinated surface binding and stopped
+  itself before launching the Activity. Overlay and in-app surfaces now share
+  VideoSurfaceOwner; Activity surfaces release while paused and reclaim on resume/PiP.
+  Successful Activity resume removes the overlay; failed launch leaves it retryable.
+  Both MP3 and MP4 keep the existing 111×64dp dimensions and identical whole-window tap
+  and drag behavior. Removed competing tiny audio child buttons. MINI_WINDOW and automatic
+  floating remain the existing defaults; explicit user settings and permission denial are
+  respected. Home/app-switch leaving uses the selected mode for either media type.
+- X ROOT CAUSE: reducing y under Gravity.BOTTOM moved the target DOWN, contrary to older
+  handoff notes. Bottom margin is now 14dp (was 5), circle 57dp (was 61), icon 25dp (was 28).
+  Circle/ring are brighter; active stroke now has a valid opaque ARGB alpha. Collision
+  still uses the visible circle and actual window coordinates. Drag layout is frame-batched,
+  target drawables update only on hover-state changes, and release waits for final layout.
+- Waveform ROOT CAUSE: requests before scan completion used a 0/0 size/time cache identity,
+  causing later misses; transition-only warmup missed reconnects and video-to-audio lookahead.
+  Cache identity now stats the physical source on IO. Added bounded 32-entry peak memory
+  cache; current + next three queue entries warm serially, with cancellation on queue/track
+  change. Removed the screen's unconditional 350ms wait, and reject nonfinite cached peaks.
+  Device codec support still determines whether a waveform can be generated.
+- Performance: defer return rescan until after the transition; isolate wallpaper in a
+  graphics layer; don't feed playback-position ticks into wallpaper or lyric-free queues;
+  don't draw animated metal beneath opaque video/image or a covering player sheet.
+  The current-video wallpaper still reuses one playback decoder. No second decoder was
+  added to "fix" frame drops. Real-device scroll/frame-rate improvement is not yet measured.
+- Personal build script now refuses versioned APK overwrite and verifies the pinned
+  signature before copying to releases. Older versions are untouched.
+- Verification pending final rebuild: tests/lint/APK signature and hash recorded below.
+  ADB returned no connected devices. Phone-only checks: warm/cold overlay return, Home
+  for MP3/MP4, PiP mode, power-key behavior, drag collision on both navigation modes,
+  graph swiping/pinch/large fonts/TalkBack, video frame pacing and waveform decode formats.
+
+Hermes continuation: read this section and docs/NODES.md, then inspect the local diff.
+Do not restore old queue mapNotNull logic, separate overlay surface ownership, or a
+per-frame graph physics loop. Do not commit/push unless the user newly authorizes it.
+Next release must use a new filename/version after the 1.9.16 artifact is created.
 
 ### September 9 — 1.9.4 reference-aligned Now Playing (newest)
 

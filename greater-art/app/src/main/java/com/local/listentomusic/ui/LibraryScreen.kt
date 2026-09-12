@@ -106,6 +106,7 @@ fun LibraryScreen(
     onLoadThumbnail: suspend (MediaFile) -> Bitmap?,
     onPreloadAhead: (Int, Int) -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenNodes: () -> Unit,
     onPlay: (MediaFile) -> Unit,
     onEditDisplay: (MediaFile) -> Unit,
     onCreateRule: () -> Unit,
@@ -224,6 +225,7 @@ fun LibraryScreen(
                 Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                TextButton(onClick = onOpenNodes) { Text(uiText(language, "Nodes", "節點")) }
                 Box(Modifier.weight(1f)) {
                     Button(onClick = { playlistMenuOpen = true }) {
                         Icon(Icons.AutoMirrored.Rounded.QueueMusic, null)

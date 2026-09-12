@@ -39,6 +39,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -140,6 +144,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _queue = MutableStateFlow<List<MediaFile>>(emptyList())
     val queue: StateFlow<List<MediaFile>> = _queue.asStateFlow()
 
+    private val graphRepository = com.local.listentomusic.data.GraphRepository(application)
+    val graph = MutableStateFlow<com.local.listentomusic.graph.LibraryGraph?>(null)
+    val graphLoading = MutableStateFlow(false)
+    val graphError = MutableStateFlow<String?>(null)
+    private var graphRequested = false
+    private var graphJob: Job? = null
+    private var graphGeneration = 0
+
+    fun requestGraph() {
+        graphRequested = true
+        graphJob?.cancel()
+        val generation = ++graphGeneration
+        // Physical files only, independent of playlists, search and display-title overrides.
+        val files = scannedFiles
+        graphJob = viewModelScope.launch {
+            graphLoading.value = true
+            graphError.value = null
+            try {
+                val input = withContext(Dispatchers.Default) { files.distinctBy { it.sourcePath }.map {
+                    com.local.listentomusic.graph.GraphInput(it.sourcePath, File(it.sourcePath).name)
+                } }
+                graph.value = graphRepository.load(input)
+            }
+            catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (_: Exception) { graphError.value = "Could not prepare the graph. Your library and playback are unchanged." }
+            finally { if (generation == graphGeneration) graphLoading.value = false }
+        }
+    }
+
+    fun playGraphNode(path: String) {
+        val file = scannedFiles.firstOrNull { it.path == path } ?: scannedFiles.firstOrNull { it.sourcePath == path }
+            ?.copy(path = path, name = File(path).name, clipStartMs = 0, clipEndMs = null)
+        file?.let(::play)
+    }
+
     private val _playback = MutableStateFlow(PlaybackUiState())
     val playback: StateFlow<PlaybackUiState> = _playback.asStateFlow()
 
@@ -187,29 +226,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                     videoFrameRendered = false
-                    waveformWarmupJob?.cancel()
-                    waveformAheadJob?.cancel()
-                    mediaItem?.mediaId?.let { path ->
-                        val file = scannedFiles.firstOrNull { it.path == path }
-                        if (file?.kind == com.local.listentomusic.model.MediaKind.AUDIO) {
-                            waveformWarmupJob = viewModelScope.launch {
-                                // Give playback first claim on storage/codec resources.
-                                delay(600)
-                                loadWaveform(path)
-                            }
-                            // Preload next few queue items' waveforms
-                            waveformAheadJob = viewModelScope.launch {
-                                delay(800)
-                                val currentIdx = _queue.value.indexOfFirst { it.path == path }
-                                val nextItems = _queue.value.drop(currentIdx + 1).take(3)
-                                nextItems.forEach { item ->
-                                    if (item.kind == com.local.listentomusic.model.MediaKind.AUDIO) {
-                                        loadWaveform(item.path)
-                                    }
-                                }
-                            }
-                        }
-                    }
                     // Sleep timer in "end of track" mode fires when the next item lands.
                     val timer = _sleepTimer.value
                     if (timer.active && timer.endOfTrack) cancelSleepTimer()
@@ -242,6 +258,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         connectController()
+        // Also runs on service reconnection, not only on a new media-item event.
+        waveformWarmupJob = viewModelScope.launch {
+            combine(_queue, _playback.map { it.currentPath }.distinctUntilChanged()) { files, path -> files to path }
+                .collectLatest { (files, path) ->
+                    if (path == null) return@collectLatest
+                    delay(450)
+                    val index = files.indexOfFirst { it.path == path }
+                    val upcoming = if (index >= 0) (files.drop(index) + files.take(index)).take(4) else emptyList()
+                    // One producer: future-track decoding cannot jump ahead of the current track.
+                    upcoming.filter { it.kind == com.local.listentomusic.model.MediaKind.AUDIO }.forEach {
+                        loadWaveform(it.path)
+                        delay(250)
+                    }
+                }
+        }
     }
 
     fun rescan() {
@@ -256,6 +287,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             when (val result = MediaScanner.scan(userPreferences.excludedFolders.toSet())) {
                 is ScanResult.Success -> {
                     scannedFiles = result.files
+                    if (graphRequested) requestGraph()
                     refreshMetadata()
                     applySortingAndFilter()
                     _library.value = _library.value.copy(status = LibraryStatus.READY)
@@ -269,6 +301,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 is ScanResult.FolderMissing -> {
                     scannedFiles = emptyList()
+                    if (graphRequested) requestGraph()
                     applySortingAndFilter()
                     _library.value = _library.value.copy(
                         status = LibraryStatus.FOLDER_MISSING,
@@ -277,6 +310,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 is ScanResult.PermissionMissing -> {
                     scannedFiles = emptyList()
+                    if (graphRequested) requestGraph()
                     applySortingAndFilter()
                     _library.value = _library.value.copy(
                         status = LibraryStatus.CANNOT_READ,
@@ -354,9 +388,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     suspend fun loadThumbnail(file: MediaFile): Bitmap? = thumbnailRepository.load(file)
     suspend fun loadWaveform(path: String): FloatArray? {
-        val file = scannedFiles.firstOrNull { it.path == path }
+        val file = scannedFiles.firstOrNull { it.path == path } ?: _queue.value.firstOrNull { it.path == path }
         val source = file?.sourcePath ?: com.local.listentomusic.model.sourceMediaPath(path)
-        val peaks = waveformRepository.load(source, file?.sizeBytes ?: 0L, file?.modifiedMs ?: 0L) ?: return null
+        // Stat the physical source even before scanning finishes. Never cache under 0/0.
+        val identity = withContext(Dispatchers.IO) { File(source).let { it.length() to it.lastModified() } }
+        val peaks = waveformRepository.load(source, identity.first, identity.second) ?: return null
         if (file == null || file.clipStartMs == 0L && file.clipEndMs == null) return peaks
         return withContext(Dispatchers.IO) {
             val reader = MediaMetadataRetriever()
@@ -783,6 +819,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             runCatching { future.get() }.onSuccess { mediaController ->
                 _controller.value = mediaController
                 mediaController.addListener(playerListener)
+                syncPlaybackQueue()
                 publishPlayback(mediaController)
                 startTicker()
                 pendingPlay?.let { requested ->
@@ -911,8 +948,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun syncPlaybackQueue() {
         val player = _controller.value
         if (player == null || player.mediaItemCount == 0) { _queue.value = orderedFiles; return }
-        val byId = (scannedFiles + orderedFiles).associateBy { it.path }
-        _queue.value = (0 until player.mediaItemCount).mapNotNull { byId[player.getMediaItemAt(it).mediaId] }
+        val byId = (_queue.value + scannedFiles + orderedFiles).associateBy { it.path }
+        // Session is authoritative. A scan race must never drop playable queue entries.
+        val session = (0 until player.mediaItemCount).map(player::getMediaItemAt)
+        _queue.value = com.local.listentomusic.model.reconcileSessionQueue(session.map { it.mediaId }, byId) { index ->
+            com.local.listentomusic.model.mediaFileFromSession(session[index])
+        }
+    }
+
+    fun refreshPlaybackSession() {
+        syncPlaybackQueue()
+        _controller.value?.let(::publishPlayback)
     }
 
     private fun hasStorageAccess(): Boolean {
