@@ -524,6 +524,19 @@ preferences are enabled. Removed the toggle state, IconButton, and
 AnimatedVisibility wrapper. A-B and Sleep buttons now render inline when enabled.
 This keeps the row simple and avoids a broken arrow that expands to nothing.
 
+### September 11 — v1.9.13/v1.9.14 Red X refinements
+- crossMargin 13→10→5 (5px higher total)
+- crossSize 37→34→28 (smaller white X icon)
+- crossBaseAlpha 0.85→0.95→0.98 (nearly opaque)
+- White X via `setColorFilter(SRC_IN)` over red cross drawable
+- Hit area (crossHitSize=61) unchanged
+
+### September 12 — v1.9.15 queue stability + waveform preload + scroll perf
+- NowPlayingQueue: explicit `LaunchedEffect(key1, key2, key3)` keys fix scroll restoration on track change
+- WaveformTimeline: canvas bars 80→60 (25% fewer draw calls/frame)
+- Waveform preload: `waveformAheadJob` loads next 3 queue items after 800ms delay; current track after 600ms
+- LiquidMetalSurface unchanged; scroll lag reduced
+
 ## Background Implementation
 
 - `data/AppPreferences.kt`: `AppBackgroundMode`, persisted image/video URIs and dimming.
