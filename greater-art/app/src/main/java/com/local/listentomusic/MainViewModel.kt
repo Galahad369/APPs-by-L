@@ -158,16 +158,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var tickerJob: Job? = null
-    private var thumbnailWarmupJob: Job? = null
-    private var thumbnailAheadJob: Job? = null
-    private var scanJob: Job? = null
-    private var durationProbeJob: Job? = null
-    private var waveformWarmupJob: Job? = null
-    private var durationProbePath: String? = null
-    private val probedDurations = mutableMapOf<String, Long>()
-    private var pendingPlay: MediaFile? = null
-    private var lastPlaybackError: String? = null
-    private var videoFrameRendered = false
+        private var thumbnailWarmupJob: Job? = null
+        private var thumbnailAheadJob: Job? = null
+        private var scanJob: Job? = null
+        private var durationProbeJob: Job? = null
+        private var waveformWarmupJob: Job? = null
+        private var waveformAheadJob: Job? = null
+        private var durationProbePath: String? = null
+        private val probedDurations = mutableMapOf<String, Long>()
+        private var pendingPlay: MediaFile? = null
+        private var lastPlaybackError: String? = null
+        private var videoFrameRendered = false
 
     private val playerListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
@@ -185,22 +186,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-            videoFrameRendered = false
-            waveformWarmupJob?.cancel()
-            mediaItem?.mediaId?.let { path ->
-                val file = scannedFiles.firstOrNull { it.path == path }
-                if (file?.kind == com.local.listentomusic.model.MediaKind.AUDIO) {
-                    waveformWarmupJob = viewModelScope.launch {
-                        // Give playback first claim on storage/codec resources.
-                        delay(600)
-                        loadWaveform(path)
+                    videoFrameRendered = false
+                    waveformWarmupJob?.cancel()
+                    waveformAheadJob?.cancel()
+                    mediaItem?.mediaId?.let { path ->
+                        val file = scannedFiles.firstOrNull { it.path == path }
+                        if (file?.kind == com.local.listentomusic.model.MediaKind.AUDIO) {
+                            waveformWarmupJob = viewModelScope.launch {
+                                // Give playback first claim on storage/codec resources.
+                                delay(600)
+                                loadWaveform(path)
+                            }
+                            // Preload next few queue items' waveforms
+                            waveformAheadJob = viewModelScope.launch {
+                                delay(800)
+                                val currentIdx = _queue.value.indexOfFirst { it.path == path }
+                                val nextItems = _queue.value.drop(currentIdx + 1).take(3)
+                                nextItems.forEach { item ->
+                                    if (item.kind == com.local.listentomusic.model.MediaKind.AUDIO) {
+                                        loadWaveform(item.path)
+                                    }
+                                }
+                            }
+                        }
                     }
+                    // Sleep timer in "end of track" mode fires when the next item lands.
+                    val timer = _sleepTimer.value
+                    if (timer.active && timer.endOfTrack) cancelSleepTimer()
                 }
-            }
-            // Sleep timer in "end of track" mode fires when the next item lands.
-            val timer = _sleepTimer.value
-            if (timer.active && timer.endOfTrack) cancelSleepTimer()
-        }
 
         override fun onRenderedFirstFrame() {
             val diagnostics = com.local.listentomusic.playback.PlaybackDiagnostics
