@@ -18,6 +18,7 @@ import java.util.UUID
 private val Context.dataStore by preferencesDataStore(name = "listen_to_music_preferences")
 
 data class UserPreferences(
+    val graphOptions: com.local.listentomusic.graph.GraphOptions = com.local.listentomusic.graph.GraphOptions(),
     val sortMode: SortMode = SortMode.NAME_ASC,
     val customOrder: List<String> = emptyList(),
     val lastPath: String? = null,
@@ -76,6 +77,7 @@ data class LocalPlaylist(
 
 class AppPreferences(private val context: Context) {
     private object Keys {
+        val graphOptions = stringPreferencesKey("graph_options_v1")
         val sortMode = stringPreferencesKey("sort_mode")
         val customOrder = stringPreferencesKey("custom_order")
         val lastPath = stringPreferencesKey("last_path")
@@ -119,6 +121,7 @@ class AppPreferences(private val context: Context) {
         // state into the font picker so typography and identity cannot disagree.
         val effectiveFont = if (prefs[Keys.silianRail] == true) AppFont.SILIAN_RAIL else savedFont
         UserPreferences(
+            graphOptions = com.local.listentomusic.graph.GraphOptions.decode(prefs[Keys.graphOptions]),
             sortMode = runCatching {
                 SortMode.valueOf(prefs[Keys.sortMode] ?: SortMode.NAME_ASC.name)
             }.getOrDefault(SortMode.NAME_ASC),
@@ -173,10 +176,11 @@ class AppPreferences(private val context: Context) {
     }
 
     suspend fun current(): UserPreferences = values.first()
+    suspend fun setGraphOptions(value: com.local.listentomusic.graph.GraphOptions) = edit { it[Keys.graphOptions] = value.encode() }
 
     // Explicit portable preference allowlist: no last-played data, private background
     // document grants, diagnostics or joke toggle cross a backup boundary.
-    private val backupStrings = listOf(Keys.sortMode, Keys.customOrder, Keys.libraryRowSize,
+    private val backupStrings = listOf(Keys.graphOptions, Keys.sortMode, Keys.customOrder, Keys.libraryRowSize,
         Keys.themeMode, Keys.floatingWindowMode, Keys.appLanguage, Keys.appFont,
         Keys.playlists, Keys.activePlaylistId, Keys.excludedFolders)
     private val backupBooleans = listOf(Keys.showThumbnails, Keys.showFileDetails,
@@ -366,6 +370,7 @@ class AppPreferences(private val context: Context) {
 
     suspend fun resetAppSettings() {
         context.dataStore.edit {
+            it.remove(Keys.graphOptions)
             it.remove(Keys.libraryRowSize)
             it.remove(Keys.themeMode)
             it.remove(Keys.showThumbnails)

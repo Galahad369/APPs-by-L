@@ -129,9 +129,9 @@ fun GreaterArtApp(
         value = viewModel.loadLyrics(playback.currentPath)
     }
     var screen by rememberSaveable { mutableStateOf(Screen.LIBRARY) }
-    val libraryPager = rememberPagerState(initialPage = 1, pageCount = { 2 })
+    val libraryPager = rememberPagerState(initialPage = 0, pageCount = { 2 })
     val navigationScope = rememberCoroutineScope()
-    LaunchedEffect(libraryPager.currentPage) { if (libraryPager.currentPage == 0) viewModel.requestGraph() }
+    LaunchedEffect(libraryPager.currentPage) { if (libraryPager.currentPage == 1) viewModel.requestGraph() }
     var playerOpen by rememberSaveable { mutableStateOf(openPlayerRequest > 0) }
     var editDisplay by remember { mutableStateOf<com.local.listentomusic.model.MediaFile?>(null) }
     var createRule by remember { mutableStateOf(false) }
@@ -162,10 +162,10 @@ fun GreaterArtApp(
         onPlayerScreenChanged(playerOpen)
     }
 
-    BackHandler(enabled = screen != Screen.LIBRARY || playerOpen || libraryPager.currentPage == 0) {
+    BackHandler(enabled = screen != Screen.LIBRARY || playerOpen || libraryPager.currentPage == 1) {
         if (playerOpen) playerOpen = false
         else if (screen != Screen.LIBRARY) screen = Screen.LIBRARY
-        else navigationScope.launch { libraryPager.animateScrollToPage(1) }
+        else navigationScope.launch { libraryPager.animateScrollToPage(0) }
     }
 
     val appName = if (settings.silianRail) "PIERCE&PIERCE" else "Greater Art"
@@ -187,7 +187,8 @@ fun GreaterArtApp(
             // Stable ownership across navigation: prepare once, pause when covered,
             // and resume immediately when Library or Settings reveals the wallpaper.
             AppBackground(preferences = settings, currentPath = playback.currentPath, isVideo = playback.isVideo, controller = controller,
-                visible = !(sheetState.currentState || sheetState.targetState))
+                visible = !(sheetState.currentState || sheetState.targetState) &&
+                    !(screen == Screen.LIBRARY && libraryPager.settledPage == 1 && !libraryPager.isScrollInProgress))
             Surface(
                 modifier = Modifier.fillMaxSize(),
                 // A light palette needs an opaque-enough base over black/custom media.
@@ -239,14 +240,14 @@ fun GreaterArtApp(
                         }
                     },
                 ) { padding ->
-                    HorizontalPager(state = libraryPager, modifier = Modifier.fillMaxSize(), key = { if (it == 0) "NODES" else "LIBRARY" }) { page ->
-                    if (page == 0) {
+                    HorizontalPager(state = libraryPager, modifier = Modifier.fillMaxSize(), key = { if (it == 1) "NODES" else "LIBRARY" }) { page ->
+                    if (page == 1) {
                         val graph by viewModel.graph.collectAsStateWithLifecycle()
                         val loading by viewModel.graphLoading.collectAsStateWithLifecycle()
                         val error by viewModel.graphError.collectAsStateWithLifecycle()
                         NodesScreen(graph, loading, error, playback.currentPath, padding,
-                            { navigationScope.launch { libraryPager.animateScrollToPage(1) } }, viewModel::requestGraph,
-                            { viewModel.playGraphNode(it); playerOpen = true })
+                            { navigationScope.launch { libraryPager.animateScrollToPage(0) } }, viewModel::requestGraph,
+                            { viewModel.playGraphNode(it); playerOpen = true }, settings.graphOptions, viewModel::setGraphOptions)
                     } else {
                     LibraryScreen(
                         appName = appName,
@@ -269,7 +270,7 @@ fun GreaterArtApp(
                         onLoadThumbnail = viewModel::loadThumbnail,
                         onPreloadAhead = viewModel::preloadThumbnailsStartingAt,
                         onOpenSettings = { screen = Screen.SETTINGS },
-                        onOpenNodes = { navigationScope.launch { libraryPager.animateScrollToPage(0) } },
+                        onOpenNodes = { navigationScope.launch { libraryPager.animateScrollToPage(1) } },
                         onEditDisplay = { editDisplay = it },
                         onCreateRule = { createRule = true },
                         onAddSelected = viewModel::addAllToPlaylist,
@@ -360,7 +361,7 @@ fun GreaterArtApp(
                 NowPlayingScreen(playback, artwork, queue, lyrics, settings.showFileDetails, settings.editableQueue,
                     settings.appLanguage, controller, PaddingValues(0.dp), isPictureInPicture,
                     onVideoBoundsChanged, onEnterPictureInPicture,
-                    { screen = Screen.LIBRARY; playerOpen = false; navigationScope.launch { libraryPager.scrollToPage(1) } }, { playerOpen = false },
+                    { screen = Screen.LIBRARY; playerOpen = false; navigationScope.launch { libraryPager.scrollToPage(0) } }, { playerOpen = false },
                     viewModel::togglePlayPause, viewModel::previous, viewModel::next, viewModel::seekTo,
                     viewModel::setSpeed, viewModel::cycleRepeatMode, viewModel::setSleepTimer, sleepTimer,
                     settings.seekOffsetMs, viewModel::seekBy, viewModel::playQueueItem, viewModel::loadThumbnail,
@@ -383,7 +384,7 @@ fun GreaterArtApp(
                 val viewport = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
                 val density = androidx.compose.ui.platform.LocalDensity.current
                 val regions = when (if (playerOpen) Screen.NOW_PLAYING else screen) {
-                    Screen.LIBRARY -> if (libraryPager.currentPage == 0) listOf("NODES", "GRAPH_CANVAS", "NODE_PICKER", "MINI_PLAYER") else listOf("LIBRARY_TOP_BAR", "SEARCH_AND_SORT", "MEDIA_LIST", "MINI_PLAYER")
+                    Screen.LIBRARY -> if (libraryPager.currentPage == 1) listOf("NODES", "GRAPH_CANVAS", "GRAPH_CONTROLS", "NODE_PICKER", "MINI_PLAYER") else listOf("LIBRARY_TOP_BAR", "SEARCH_AND_SORT", "MEDIA_LIST", "MINI_PLAYER")
                     Screen.NOW_PLAYING -> listOf("MEDIA_STAGE", "TRACK_TITLE", "PLAYBACK_CONTROLS", "TIMELINE", "QUEUE", "LYRICS")
                     Screen.SETTINGS -> listOf("SETTINGS_TOP_BAR", "APPEARANCE", "PLAYBACK", "SONG_LISTS", "CACHE", "PRIVACY")
                 }
@@ -393,7 +394,7 @@ fun GreaterArtApp(
                 DeveloperDiagnostics(
                     report = buildString {
                         appendLine("version=${com.local.listentomusic.BuildConfig.VERSION_NAME}")
-                        appendLine("screen=${if (playerOpen) Screen.NOW_PLAYING.name else screen.name} playerOverlay=$playerOpen")
+                        appendLine("screen=${if (playerOpen) Screen.NOW_PLAYING.name else if (screen == Screen.LIBRARY && libraryPager.currentPage == 1) "NODES" else screen.name} playerOverlay=$playerOpen")
                         appendLine("media=${playback.currentPath?.let { com.local.listentomusic.model.sourceMediaPath(it).substringAfterLast('.') } ?: "none"} (paths omitted)")
                         appendLine("playing=${playback.isPlaying} video=${playback.isVideo}")
                         appendLine("position=${playback.positionMs} duration=${playback.durationMs}")
@@ -403,7 +404,7 @@ fun GreaterArtApp(
                         appendLine("repeat=${playback.repeatMode} random=${playback.shuffleEnabled}")
                         appendLine("floating=${settings.floatingWindowMode} auto=${settings.autoPictureInPicture}")
                         appendLine("background=${settings.backgroundMode} theme=${settings.themeMode}")
-                        appendLine("thumbs=memory:${thumbnailStats.memoryHits} disk:${thumbnailStats.diskHits} made:${thumbnailStats.generated} failed:${thumbnailStats.failed} active:${thumbnailStats.inFlight}")
+                        appendLine("thumbs=memory:${thumbnailStats.memoryHits} disk:${thumbnailStats.diskHits} made:${thumbnailStats.generated} failed:${thumbnailStats.failed} noCoverOrUnsupported:${thumbnailStats.missingArtwork} active:${thumbnailStats.inFlight}")
                         appendLine("waveform=${waveformDiagnostics.status}")
                         appendLine("waveformError=${waveformDiagnostics.error ?: "none"}")
                         val storageGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.R ||

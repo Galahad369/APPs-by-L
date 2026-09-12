@@ -1,5 +1,13 @@
 # Greater Art — Detailed Animation Implementation Draft (v1.9.17+)
 
+> Implementation checkpoint, 2026-09-13: adapted in v1.9.18. The examples below are
+> historical proposals, not executable patches. Several put composables/remember inside
+> Canvas, add a competing drag recognizer to Slider, reference nonexistent APIs, invent
+> 120 BPM/keyframes, or risk expanding a measuring container. Do not paste them back.
+> Actual implementation uses PlaybackMotion.kt, one draw-only waveform canvas, finite
+> seek feedback, lifecycle-aware subtle envelope motion, native Slider gestures, cached
+> cover readouts and attraction only to real A/B markers. See HANDOFF.md for verification.
+
 **Based on actual codebase investigation (2026-09-12)**
 
 ---
