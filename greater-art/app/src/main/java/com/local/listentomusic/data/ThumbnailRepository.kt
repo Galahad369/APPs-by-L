@@ -36,6 +36,7 @@ data class ThumbnailStats(
     val diskHits: Int = 0,
     val generated: Int = 0,
     val failed: Int = 0,
+    val missingArtwork: Int = 0,
     val inFlight: Int = 0,
 )
 
@@ -65,7 +66,6 @@ class ThumbnailRepository(private val context: Context) {
             _stats.update { value -> value.copy(memoryHits = value.memoryHits + 1) }
             return@withContext it
         }
-        if (System.currentTimeMillis() - (recentFailures[key] ?: 0L) < FAILURE_RETRY_MS) return@withContext null
         _stats.update { it.copy(inFlight = it.inFlight + 1) }
 
         val mutex = locks[(key.hashCode() and Int.MAX_VALUE) % locks.size]
@@ -77,10 +77,15 @@ class ThumbnailRepository(private val context: Context) {
                     _stats.update { value -> value.copy(diskHits = value.diskHits + 1) }
                     return@withLock it
                 }
+                if (System.currentTimeMillis() - (recentFailures[key] ?: 0L) < FAILURE_RETRY_MS) return@withLock null
 
                 val generated = decodeWorkers.withPermit { generate(file) } ?: run {
                     recentFailures[key] = System.currentTimeMillis()
-                    _stats.update { value -> value.copy(failed = value.failed + 1) }
+                    if (recentFailures.size > 600) recentFailures.clear()
+                    _stats.update { value ->
+                        if (file.kind == MediaKind.AUDIO && File(file.sourcePath).canRead()) value.copy(missingArtwork = value.missingArtwork + 1)
+                        else value.copy(failed = value.failed + 1)
+                    }
                     return@withLock null
                 }
                 memoryCache.put(key, generated)
@@ -118,7 +123,7 @@ class ThumbnailRepository(private val context: Context) {
     }
 
     private fun generate(file: MediaFile): Bitmap? = customArtwork(file.coverUri) ?: when (file.kind) {
-        MediaKind.VIDEO -> createVideoThumbnail(file) ?: createSiblingArtwork(file)
+        MediaKind.VIDEO -> createVideoThumbnail(file) ?: createIndexedVideoThumbnail(file) ?: createEmbeddedArtwork(file) ?: createSiblingArtwork(file)
         MediaKind.AUDIO -> createEmbeddedArtwork(file) ?: createSiblingArtwork(file)
     }
 
@@ -158,7 +163,8 @@ class ThumbnailRepository(private val context: Context) {
             val frame = (if (Build.VERSION.SDK_INT >= 27) {
                 retriever.getScaledFrameAtTime(1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, VIDEO_WIDTH, VIDEO_HEIGHT)
             } else retriever.getFrameAtTime(1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC))
-                ?: retriever.getFrameAtTime(-1L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                ?: (if (Build.VERSION.SDK_INT >= 27) retriever.getScaledFrameAtTime(-1L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, VIDEO_WIDTH, VIDEO_HEIGHT)
+                    else retriever.getFrameAtTime(-1L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC))
                 ?: return null
             centerCrop(frame, VIDEO_WIDTH, VIDEO_HEIGHT)
         } catch (_: Exception) {
@@ -179,6 +185,20 @@ class ThumbnailRepository(private val context: Context) {
         } finally {
             runCatching { retriever.release() }
         }
+    }
+
+    /** Reuse Android's indexed cover if direct container extraction was unavailable. */
+    private fun createIndexedVideoThumbnail(media: MediaFile): Bitmap? {
+        if (Build.VERSION.SDK_INT < 29) return null
+        return runCatching {
+            val collection = android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            context.contentResolver.query(collection, arrayOf(android.provider.MediaStore.MediaColumns._ID),
+                "${android.provider.MediaStore.MediaColumns.DATA} = ?", arrayOf(media.sourcePath), null)?.use { cursor ->
+                if (!cursor.moveToFirst()) return@use null
+                val uri = android.content.ContentUris.withAppendedId(collection, cursor.getLong(0))
+                context.contentResolver.loadThumbnail(uri, Size(VIDEO_WIDTH, VIDEO_HEIGHT), null)
+            }
+        }.getOrNull()
     }
 
     /** Same-name cover first, then conventional folder artwork. Entirely local. */
@@ -269,7 +289,7 @@ class ThumbnailRepository(private val context: Context) {
     private fun cacheKey(file: MediaFile): String {
         val source = File(file.sourcePath)
         val artStamp = findSiblingArtwork(source)?.lastModified() ?: 0L
-        val fingerprint = "${file.sourcePath}|${file.sizeBytes}|${file.modifiedMs}|$artStamp|${file.coverUri}"
+        val fingerprint = "${file.sourcePath}|${source.length()}|${source.lastModified()}|$artStamp|${file.coverUri}"
         return MessageDigest.getInstance("SHA-256")
             .digest(fingerprint.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }

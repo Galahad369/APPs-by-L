@@ -205,7 +205,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         private var waveformAheadJob: Job? = null
         private var durationProbePath: String? = null
         private val probedDurations = mutableMapOf<String, Long>()
-        private var pendingPlay: MediaFile? = null
+    private var pendingPlay: MediaFile? = null
+    private var expandRestoredQueue = false
         private var lastPlaybackError: String? = null
         private var videoFrameRendered = false
 
@@ -260,16 +261,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         connectController()
         // Also runs on service reconnection, not only on a new media-item event.
         waveformWarmupJob = viewModelScope.launch {
-            combine(_queue, _playback.map { it.currentPath }.distinctUntilChanged()) { files, path -> files to path }
-                .collectLatest { (files, path) ->
-                    if (path == null) return@collectLatest
-                    delay(450)
-                    val index = files.indexOfFirst { it.path == path }
-                    val upcoming = if (index >= 0) (files.drop(index) + files.take(index)).take(4) else emptyList()
+            combine(_queue, _library.map { it.files }.distinctUntilChanged(), _playback.map { it.currentPath }.distinctUntilChanged()) { queue, library, path ->
+                com.local.listentomusic.model.waveformWarmupPaths(queue, library, path)
+            }.distinctUntilChanged()
+                .collectLatest { upcoming ->
+                    delay(700)
                     // One producer: future-track decoding cannot jump ahead of the current track.
-                    upcoming.filter { it.kind == com.local.listentomusic.model.MediaKind.AUDIO }.forEach {
-                        loadWaveform(it.path)
-                        delay(250)
+                    upcoming.forEach {
+                        loadWaveform(it)
+                        delay(300)
                     }
                 }
         }
@@ -296,7 +296,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     thumbnailWarmupJob = if (userPreferences.preloadThumbnails) viewModelScope.launch {
                         // Warm a generous initial window while decoding remains bounded.
                         // Visible rows still bypass the preload throttle.
-                        warmThumbnailsInStages(orderedFiles.take(MAX_PRELOAD_ITEMS))
+                        sortingJob?.join()
+                        warmThumbnailsInStages((orderedFiles + result.files).distinctBy { it.path }.take(MAX_PRELOAD_ITEMS))
                     } else null
                 }
                 is ScanResult.FolderMissing -> {
@@ -366,10 +367,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun playNow(player: Player, file: MediaFile) {
+        expandRestoredQueue = false
         com.local.listentomusic.playback.PlaybackDiagnostics.requestedAtMs = android.os.SystemClock.elapsedRealtime()
         com.local.listentomusic.playback.PlaybackDiagnostics.firstFrameDelayMs = null
         lastPlaybackError = null
-        val queue = orderedFiles.takeIf { files -> files.any { it.path == file.path } } ?: listOf(file)
+        val queue = com.local.listentomusic.model.browsingQueue(file, orderedFiles, scannedFiles)
         val index = queue.indexOfFirst { it.path == file.path }.coerceAtLeast(0)
         val resumeAt = if (userPreferences.resumePlayback && file.path == userPreferences.lastPath) {
             userPreferences.lastPositionMs
@@ -420,7 +422,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     suspend fun loadCurrentArtwork(path: String?): Bitmap? {
-        val file = scannedFiles.firstOrNull { it.path == path } ?: return null
+        val file = scannedFiles.firstOrNull { it.path == path } ?: _queue.value.firstOrNull { it.path == path } ?: return null
         val override = userPreferences.localOverrides[file.path]
         return thumbnailRepository.load(file.copy(coverUri = override?.coverUri.orEmpty()))
     }
@@ -819,6 +821,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             runCatching { future.get() }.onSuccess { mediaController ->
                 _controller.value = mediaController
                 mediaController.addListener(playerListener)
+                expandRestoredQueue = mediaController.mediaItemCount == 1
+                if (expandRestoredQueue && orderedFiles.isNotEmpty()) applySortingAndFilter()
                 syncPlaybackQueue()
                 publishPlayback(mediaController)
                 startTicker()
@@ -937,6 +941,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         ordered to shown
         }
         orderedFiles = ordered
+        // A cold service restore contains only the remembered item. Append the library
+        // once without restarting it. Explicit one-song playlists/queue edits stay intact.
+        _controller.value?.let { player ->
+            if (expandRestoredQueue && ordered.isNotEmpty()) {
+                expandRestoredQueue = false
+                if (player.mediaItemCount == 1 && prefs.activePlaylistId == null) {
+                    val current = player.currentMediaItem?.mediaId
+                    player.addMediaItems(ordered.filter { it.path != current }.map(MediaFile::toMediaItem))
+                }
+            }
+        }
         syncPlaybackQueue()
         _library.value = _library.value.copy(
             files = shown,
@@ -955,6 +970,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             com.local.listentomusic.model.mediaFileFromSession(session[index])
         }
     }
+
+    fun setGraphOptions(options: com.local.listentomusic.graph.GraphOptions) = viewModelScope.launch { preferences.setGraphOptions(options) }
 
     fun refreshPlaybackSession() {
         syncPlaybackQueue()

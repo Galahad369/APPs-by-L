@@ -9,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -78,8 +79,9 @@ class WaveformRepository(context: Context) {
                 return@withLock it
             }
             _diagnostics.value = WaveformDiagnostics(WaveformStatus.DECODING, File(path).name)
-            val decoded = (if (File(path).extension.equals("wav", true)) decodeWav(path) else null)
-                ?: decode(path)
+            val decoded = withTimeoutOrNull(90_000L) {
+                (if (File(path).extension.equals("wav", true)) decodeWav(path) else null) ?: decode(path)
+            }
             if (decoded == null) {
                 if (_diagnostics.value.status != WaveformStatus.FAILED) {
                     _diagnostics.value = WaveformDiagnostics(WaveformStatus.FAILED, File(path).name, "No decodable PCM output")

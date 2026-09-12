@@ -62,7 +62,7 @@ class MiniWindowOverlayService : Service() {
         // Visible circle and collision radius are identical. With BOTTOM gravity, larger y is higher.
         private val crossHitSize = 57
         private val crossSize = 25
-        private val crossMargin = 19
+        private val crossMargin = 14
         private val crossBaseAlpha = 1f
         private var crossActive: Boolean? = null
         private var framePending = false
@@ -118,10 +118,14 @@ class MiniWindowOverlayService : Service() {
                 params = WindowManager.LayoutParams(
                     dp(AUDIO_WIDTH), dp(AUDIO_HEIGHT),
                     WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                     PixelFormat.RGBA_8888,
                 ).apply {
-            gravity = Gravity.TOP or Gravity.START
+            gravity = Gravity.TOP or Gravity.LEFT
+            if (Build.VERSION.SDK_INT >= 30) {
+                setFitInsetsTypes(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
+                setFitInsetsSides(WindowInsets.Side.TOP or WindowInsets.Side.BOTTOM)
+            }
             x = dp(12)
             y = dp(300)
         }
@@ -225,8 +229,8 @@ class MiniWindowOverlayService : Service() {
         root = FrameLayout(this)
         // Dark translucency keeps video letterboxing clean; audio mode uses the chip drawable.
         root?.setBackgroundColor(0xCC0A0C0B.toInt())
-        val pad = dp(4)
-        root?.setPadding(pad, pad, pad, pad)
+        // No invisible content gutter: the visible frame reaches the window's edge.
+        root?.setPadding(0, 0, 0, 0)
 
         artBox = FrameLayout(this).apply {
             layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
@@ -427,15 +431,21 @@ class MiniWindowOverlayService : Service() {
 
     private fun crossTargetDrawable(active: Boolean) = GradientDrawable().apply {
         shape = GradientDrawable.OVAL
-        setColor(if (active) 0x88FF3B30.toInt() else 0x55FF3B30)
+        setColor(if (active) 0xF2FF3B30.toInt() else 0xC4D92D25.toInt())
         setStroke(dp(2), if (active) 0xFFFF453A.toInt() else 0xDFFF453A.toInt())
     }
 
     private fun clampPosition() {
         val layout = params ?: return
+        val bounds = if (Build.VERSION.SDK_INT >= 30) wm?.currentWindowMetrics?.bounds else null
         val metrics = resources.displayMetrics
-        layout.x = layout.x.coerceIn(0, (metrics.widthPixels - layout.width).coerceAtLeast(0))
-        layout.y = layout.y.coerceIn(0, (metrics.heightPixels - layout.height).coerceAtLeast(0))
+        layout.x = layout.x.coerceIn(0, ((bounds?.width() ?: metrics.widthPixels) - layout.width).coerceAtLeast(0))
+        val verticalInsets = if (Build.VERSION.SDK_INT >= 30) {
+            val insets = wm?.currentWindowMetrics?.windowInsets?.getInsetsIgnoringVisibility(WindowInsets.Type.systemBars())
+            (insets?.top ?: 0) + (insets?.bottom ?: 0)
+        } else 0
+        val height = (bounds?.height() ?: metrics.heightPixels) - verticalInsets
+        layout.y = layout.y.coerceIn(0, (height - layout.height).coerceAtLeast(0))
     }
 
     // Read both overlay locations from Android. Reconstructing either rectangle from

@@ -6,11 +6,21 @@ ads, analytics, accounts, telemetry, or network access.
 
 ## Features
 
-- v1.9.16 adds **Nodes**, an optional filename-similarity graph. Library remains the
-  default: swipe right (or tap Nodes) to enter. On Nodes, swipe left on the header or
+- v1.9.18 refines **Nodes**, an optional filename-similarity graph. Library remains the
+  default: swipe left (or tap Nodes) to enter. On Nodes, swipe right on the header or
   tap Library to return. The canvas itself supports pan, pinch zoom, drag and tap-to-play.
   Find / play a node provides a searchable text alternative to small visual targets.
   Nodes includes physical media files across the scanned library, not just a filtered playlist.
+- Nodes has a focused vault-style surface, a double-ring/play marker for the current
+  track and node sizes weighted by strong filename connections. Controls persist link
+  threshold, node size, edge visibility, labels, isolated nodes and connection weighting.
+- Playback motion uses a single waveform canvas with a short staggered reveal and
+  subtle decorative breathing. Cover scale follows the cached amplitude envelope,
+  not invented BPM; paused/hidden playback stops decorative motion. Scrubbing shows
+  a lifted timestamp/cached cover without decoding on every drag. Only actual A/B
+  markers attract the seek position, never fabricated keyframe/10% markers.
+- Double-tap seek feedback has directional chevrons/rings and accumulates repeated
+  seeks. Playback speed uses a compact gauge with an animated needle.
 - Graph connections use raw filenames only: Unicode words/CJK runs, shared characters,
   bigrams/trigrams and a small prefix boost. No tags, listening history or manual links.
   Similarity and finite force-layout computation run off the UI thread. Edges and
@@ -18,7 +28,10 @@ ads, analytics, accounts, telemetry, or network access.
   See [graph implementation notes](docs/NODES.md) for the exact formula and large-library limits.
 - Mini-window return rebuilds Now Playing from the active media session without waiting
   for a file scan. Audio and video overlays share the same tap/drag behavior and 111×64dp size.
-  Waveforms use stable physical-file cache keys and bounded current/next-track preloading.
+  Waveforms use stable physical-file cache keys and a rolling eight-source audio warmup,
+  including startup before anything is playing. Slow/stalled waveform decoding times out
+  independently of playback. Coverless/unsupported audio is distinguished from thumbnail
+  extraction failures in the local developer panel; missing artwork is not a memory failure.
 
 - v1.9.4 Now Playing layout: artwork/video above the scrollable playback queue, with
   the timeline and Repeat / Previous / Play-Pause / Next / Speed fixed at the bottom.

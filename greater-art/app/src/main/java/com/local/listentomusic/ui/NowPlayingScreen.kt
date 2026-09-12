@@ -20,6 +20,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.foundation.layout.Arrangement
@@ -461,6 +462,9 @@ private fun AudioPlayer(
         value = playback.currentPath?.let { onLoadWaveform(it) }
         waveformLoading = false
     }
+    val artworkMotion = motionActive(playback.isPlaying)
+    val artworkScale = animateFloatAsState(if (artworkMotion) 1.004f + .008f * waveformEnvelope(waveform, playback.positionMs, playback.durationMs) else 1f,
+        androidx.compose.animation.core.tween(480), label = "cover-envelope")
     BoxWithConstraints(
         modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)
             .windowInsetsPadding(WindowInsets.navigationBars),
@@ -478,6 +482,7 @@ private fun AudioPlayer(
         )
         LiquidMetalSurface(
             modifier = Modifier.padding(vertical = 4.dp).size(artSize)
+                .graphicsLayer { scaleX = artworkScale.value; scaleY = artworkScale.value }
                 .pointerInput(seekOffsetMs) {
                     detectTapGestures(
                         onDoubleTap = { offset ->
@@ -544,7 +549,7 @@ private fun AudioPlayer(
                 onRemoveQueueItem = onRemoveQueueItem,
                 modifier = Modifier.fillMaxWidth().weight(1f),
             )
-            WaveformTimeline(playback, waveform, onSeek, language, waveformLoading)
+            WaveformTimeline(playback, waveform, onSeek, language, waveformLoading, artwork)
             PlayerBottomControls(playback, onRepeat, onPrevious, onTogglePlay, onNext, onSpeed)
         }
         }
@@ -823,7 +828,12 @@ private fun Timeline(playback: PlaybackUiState, onSeek: (Long) -> Unit) {
     val position = if (seeking) seekPosition else if (hasDuration) playback.positionMs.toFloat() else 0f
     CompactSlider(
         value = position.coerceIn(0f, maximum),
-        onValueChange = { seeking = true; seekPosition = it },
+        onValueChange = {
+            seeking = true
+            val range = com.local.listentomusic.playback.PracticeLoop.state.value
+            val markers = if (playback.showAbRepeat && range.path == playback.currentPath) listOfNotNull(range.start, range.end) else emptyList()
+            seekPosition = snapPracticePosition(it.toLong(), playback.durationMs, markers).toFloat()
+        },
         onValueChangeFinished = { onSeek(seekPosition.toLong()); seeking = false },
         valueRange = 0f..maximum,
         enabled = hasDuration,
@@ -832,7 +842,7 @@ private fun Timeline(playback: PlaybackUiState, onSeek: (Long) -> Unit) {
     )
     PracticeMarkers(playback)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(formatDuration(if (seeking) position.toLong() else playback.positionMs), style = MaterialTheme.typography.labelMedium)
+        ScrubReadout(null, formatDuration(if (seeking) position.toLong() else playback.positionMs), seeking)
         Text(formatDuration(playback.durationMs), style = MaterialTheme.typography.labelMedium)
     }
 }
@@ -845,6 +855,7 @@ private fun WaveformTimeline(
     onSeek: (Long) -> Unit,
     language: AppLanguage,
     loading: Boolean,
+    artwork: Bitmap?,
 ) {
     var seeking by remember(playback.currentPath) { mutableStateOf(false) }
     var seekFraction by remember(playback.currentPath) { mutableFloatStateOf(0f) }
@@ -856,6 +867,7 @@ private fun WaveformTimeline(
     val fraction = if (seeking) seekFraction else animatedProgress
     val active = MaterialTheme.colorScheme.secondary
     val inactive = MaterialTheme.colorScheme.outlineVariant
+    val thumbScale = animateFloatAsState(if (seeking) 1.22f else 1f, androidx.compose.animation.core.tween(130), label = "wave-thumb")
     val displayPeaks = remember(waveform) {
         waveform?.takeIf { it.isNotEmpty() }?.let { raw ->
             val groups = minOf(60, raw.size)
@@ -870,7 +882,13 @@ private fun WaveformTimeline(
 
     Slider(
             value = fraction,
-            onValueChange = { seeking = true; seekFraction = it.coerceIn(0f, 1f) },
+            onValueChange = {
+                seeking = true
+                val range = com.local.listentomusic.playback.PracticeLoop.state.value
+                val markers = if (playback.showAbRepeat && range.path == playback.currentPath) listOfNotNull(range.start, range.end) else emptyList()
+                val position = snapPracticePosition((it * playback.durationMs).toLong(), playback.durationMs, markers)
+                seekFraction = if (hasDuration) position.toFloat() / playback.durationMs else 0f
+            },
             onValueChangeFinished = {
                 if (hasDuration) {
                     onSeek((playback.durationMs.toDouble() * seekFraction).toLong())
@@ -880,29 +898,12 @@ private fun WaveformTimeline(
             valueRange = 0f..1f,
             enabled = hasDuration,
             modifier = Modifier.fillMaxWidth().height(56.dp),
-            thumb = {},
+            thumb = {
+                Box(Modifier.width(6.dp).height(36.dp).graphicsLayer { scaleY = thumbScale.value }
+                    .clip(RoundedCornerShape(3.dp)).background(active))
+            },
         track = {
-            Canvas(Modifier.fillMaxWidth().height(44.dp)) {
-                val bars = displayPeaks?.size ?: 60
-                val spacing = size.width / bars
-                repeat(bars) { index ->
-                    val wave = displayPeaks?.getOrNull(index) ?: 0.025f
-                    val barHeight = size.height * (0.06f + wave * 0.90f)
-                    val x = spacing * (index + 0.5f)
-                    drawLine(
-                        color = if ((index + 1f) / bars <= fraction) active else inactive,
-                        start = Offset(x, (size.height - barHeight) / 2f),
-                        end = Offset(x, (size.height + barHeight) / 2f),
-                        strokeWidth = 2.25.dp.toPx(),
-                        cap = StrokeCap.Round,
-                    )
-                }
-                if (hasDuration) {
-                    val x = size.width * fraction
-                    drawLine(active.copy(alpha = 0.18f), Offset(x, 0f), Offset(x, size.height), 8.dp.toPx())
-                    drawLine(active, Offset(x, 0f), Offset(x, size.height), 1.dp.toPx())
-                }
-            }
+            AnimatedWaveformBars(displayPeaks, fraction, active, inactive, playback.isPlaying, Modifier.fillMaxWidth().height(44.dp))
         },
     )
     PracticeMarkers(playback)
@@ -912,7 +913,7 @@ private fun WaveformTimeline(
         style = MaterialTheme.typography.labelSmall, color = inactive,
     )
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(
+        ScrubReadout(artwork,
             formatDuration(
                 if (seeking && hasDuration) {
                     (playback.durationMs.toDouble() * seekFraction).toLong()
@@ -920,8 +921,7 @@ private fun WaveformTimeline(
                     playback.positionMs
                 },
             ),
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.secondary,
+            seeking,
         )
         Text(
             if (hasDuration) formatDuration(playback.durationMs) else uiText(language, "Loading duration…", "正在讀取長度…"),
@@ -943,13 +943,17 @@ private fun CompactSlider(
     inactiveColor: Color,
 ) {
     val range = valueRange.endInclusive - valueRange.start
+    val interactions = remember { MutableInteractionSource() }
+    val pressed by interactions.collectIsPressedAsState()
+    val dragged by interactions.collectIsDraggedAsState()
+    val thumbScale = animateFloatAsState(if (pressed || dragged) 1.22f else 1f, androidx.compose.animation.core.tween(130), label="video-seek-thumb")
     val fraction = if (range > 0f) {
         ((value - valueRange.start) / range).coerceIn(0f, 1f)
     } else 0f
     // Spring-animate the fill so dragging feels fluid rather than stepped.
     val animatedFraction by animateFloatAsState(
         targetValue = fraction,
-        animationSpec = spring(dampingRatio = 0.85f, stiffness = 340f),
+        animationSpec = androidx.compose.animation.core.tween(100),
         label = "sliderFill",
     )
     Slider(
@@ -958,10 +962,11 @@ private fun CompactSlider(
         onValueChangeFinished = onValueChangeFinished,
         valueRange = valueRange,
         enabled = enabled,
+        interactionSource = interactions,
         modifier = Modifier.fillMaxWidth().height(22.dp),
         thumb = { _ ->
             // Soft glow and radial-gradient core keep the thumb visible without visual bulk.
-            Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(20.dp).graphicsLayer { scaleX = thumbScale.value; scaleY = thumbScale.value }, contentAlignment = Alignment.Center) {
                 Box(Modifier.size(20.dp).clip(CircleShape).background(activeColor.copy(alpha = 0.22f)))
                 Box(
                     Modifier.size(13.dp).clip(CircleShape).background(
@@ -1045,15 +1050,9 @@ private fun PlayerBottomControls(
             Icon(Icons.Rounded.SkipNext, "Next", modifier = Modifier.size(36.dp))
         }
         Box {
-                    val speedIcon = when {
-                        playback.speed <= 0.5f -> Icons.Rounded.KeyboardArrowUp
-                        playback.speed <= 1.5f -> Icons.Rounded.KeyboardArrowUp
-                        playback.speed <= 2f -> Icons.AutoMirrored.Rounded.ArrowForward
-                        else -> Icons.Rounded.KeyboardArrowDown
-                    }
                     IconButton(onClick = { speedMenuOpen = true }, modifier = Modifier.size(48.dp)) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(speedIcon, uiText(playback.appLanguage, "Playback speed", "播放速度"), Modifier.size(20.dp), tint = accent)
+                            SpeedDialIcon(playback.speed, accent)
                             Text(speedLabel(playback.speed), style = MaterialTheme.typography.labelSmall, maxLines = 1)
                         }
                     }

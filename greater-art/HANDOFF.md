@@ -1,12 +1,72 @@
 # HANDOFF — Greater Art Android Media Player
 
 **Project:** `greater-art/` in the repository checkout  
-**Current version:** `1.9.16` (code 67), Nodes graph + mini-window/session/cache fixes
-**Latest APK:** `releases/GreaterArt-v1.9.16-debug.apk` (local verification checkpoint below)
+**Current version:** `1.9.18` (code 70), playback/graph polish and cache/queue follow-up
+**Latest APK:** `releases/GreaterArt-v1.9.18-debug.apk` (verification below)
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 ## Current State
+
+### September 13 — 1.9.18 (latest)
+
+- User authorized immediate local implementation. No commit, tag, push or PR created
+  by this session; preserve the pre-existing main commit/tag and all versioned APKs.
+- Read draft.md completely and adapted its five animation ideas. Do NOT apply its raw
+  code: it contains composables inside Canvas, invalid APIs, competing Slider gesture
+  handlers and fabricated BPM/keyframe data. Actual motion is one waveform reveal/phase
+  canvas, real cached-envelope cover scale, a lightweight cached-cover/timestamp readout,
+  growing native seek thumbs and finite directional seek ripples. There are no per-bar
+  composables or invented beats. Motion follows visibility/play state and Android animator
+  settings. A/B magnetism applies only within 120ms of a real marker; no arbitrary snapping.
+- Replaced arbitrary speed arrows with a compact gauge/animated needle. Repeat/previous/
+  play/next/speed locations remain unchanged. Peek artwork is the cached track cover,
+  NOT a timestamp-specific video frame; no per-drag decoding was added.
+- Nodes is now RIGHT of Library: swipe LEFT to enter, RIGHT over the graph header to
+  return. Home targets Library page 0. Quiet opaque vault-style graph, weighted node
+  size/contrast, distinct current-track double-ring/play glyph and a Playing recenter action.
+  Six Graph controls persist in DataStore and participate in backup/reset. Graph styling
+  is independent of filename similarity/physics, so control edits do not rebuild the graph.
+- Remaining one-song queue root causes: tapping a graph source outside a filtered list
+  fell back to listOf(file); service restoration can also initially contain just one item.
+  Out-of-list taps now include the rest of the library. On reconnect, a restored singleton
+  appends library items once, preserving playback position and explicit single-song playlists.
+  Both scanner-first and controller-first startup orders are handled. User queue edits are
+  not continually expanded. Pure policy regression tests cover out-of-list taps and ordering.
+- Waveform warmup previously required currentPath and took video slots before filtering
+  audio. It now warms up to eight distinct physical audio sources at startup and around
+  current playback, deduplicated before requests, with cancellation on changed priorities.
+  Native waveform jobs have a 90-second cancellation bound. This does not guarantee that
+  every format/device decodes a waveform; playback and seeking stay independent.
+- Thumbnail warmup previously raced async sorting and could warm an empty/old list. It
+  now waits for sorting and includes the fresh scan snapshot as fallback. Cache keys stat
+  physical files rather than transient UI metadata. Disk hits precede negative-cache checks.
+  Failed video extraction can use MediaStore's indexed thumbnail and embedded art; frame
+  fallback remains scaled on supported APIs. Coverless/unsupported readable audio has its
+  own diagnostic counter instead of being described as a memory-cache failure.
+- Mini-window visible content had a 4dp internal gutter, creating an apparent invisible
+  wall at screen edges. Removed it; horizontal positioning uses window bounds, left gravity
+  and top/bottom-only system-bar inset fitting on Android 11+. Vertical bars remain protected.
+  Red target moved LOWER: bottom margin 19→14dp, with a substantially more opaque red fill.
+  Existing 57dp collision circle / 25dp white X geometry and frame-batched dragging remain.
+- Existing 1.9.17 artifact is code 69. Its observed SHA-256 is
+  `24f768ffc07ef7846fb23a2a16840cf95e6cb27f3fbd09afe34d3455421a6f07`, not the pasted
+  handoff's `3f7be02...`. It was not replaced or deleted; do not infer a cause for the mismatch.
+- Verification: final offline `testDebugUnitTest lintDebug assembleDebug` succeeded:
+  73 tests, 0 failures/errors; lint 0 errors / 13 warnings. Lint initially caught an API
+  guard placement around Insets access, corrected without suppressing the check.
+  APK verified as package `com.local.listentomusic`, version 1.9.18 / code 70,
+  pinned certificate unchanged, no INTERNET permission. `git diff --check` passed.
+  New artifact: `releases/GreaterArt-v1.9.18-debug.apk` (26,365,017 bytes), SHA-256
+  `45465cdd9b2ee75b49f911f20af63058e6844c823203862b3698451fea4a65b8`.
+  No Android device was connected. Must still device-test edge alignment on both navigation
+  modes, graph gestures/large fonts, restored queues, motion-disabled behavior, waveform
+  codec coverage, thumbnail failures and video frame pacing. No measured FPS claim.
+
+Hermes next: treat this section as authoritative over historical notes. Do not restore
+draft snippets, singleton out-of-list queues, thumbnail warmup-before-sort, or the old
+pager direction. Keep package/signing unchanged. Test then use a new versioned APK;
+do not overwrite 1.9.18 or commit/push without fresh user approval.
 
 ### September 12 — 1.9.16: read this before historical notes
 

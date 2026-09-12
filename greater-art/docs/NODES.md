@@ -2,13 +2,24 @@
 
 ## Navigation and controls
 
-Library is page 1 (initial page); Nodes is page 0 in the same HorizontalPager.
-Swipe right from Library or tap Nodes. Swipe left across the Nodes header or tap
+Library is page 0 (initial page); Nodes is page 1 in the same HorizontalPager.
+Swipe left from Library or tap Nodes. Swipe right across the Nodes header or tap
 Library to return. Canvas gestures are reserved for pan, pinch zoom and node dragging;
 this prevents a drag from unexpectedly changing pages. Tap a node to play it and open
 Now Playing. Fit graph resets the viewport and temporary dragged positions. Find / play
 a node exposes filenames as searchable, accessible buttons. Home in Now Playing goes
 back to the normal Library page, even if playback began from Nodes.
+
+### 1.9.18 display controls
+
+Controls changes are saved locally when Apply is pressed (not on every slider tick).
+They adjust minimum link strength, node size, edge opacity, labels, isolated nodes and
+connection-weighted sizing; they are included in settings backup/reset. A node's visual
+importance is log-scaled summed incident edge strength, recalculated after filtering.
+The current track retains a double ring/play glyph even when isolated nodes are hidden.
+Playing recenters on that node. The graph has a quiet opaque themed surface; hidden
+wallpaper rendering is suspended when the pager settles here. These presentation controls
+do not rewrite cached edges or repeat the force-layout calculation.
 
 ## Filename similarity
 
