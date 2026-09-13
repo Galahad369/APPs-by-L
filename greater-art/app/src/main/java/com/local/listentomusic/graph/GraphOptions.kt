@@ -4,8 +4,10 @@ import kotlin.math.ln
 
 data class GraphOptions(val threshold: Float = 0.08f, val nodeSize: Float = 1f,
     val edgeOpacity: Float = 0.35f, val showLabels: Boolean = true,
-    val hideIsolated: Boolean = false, val sizeByConnections: Boolean = true) {
-    fun encode() = listOf(threshold, nodeSize, edgeOpacity, showLabels, hideIsolated, sizeByConnections).joinToString("|")
+    val hideIsolated: Boolean = false, val sizeByConnections: Boolean = true,
+    val linkDistance: Float = 1f, val repulsion: Float = 1f, val bounce: Float = 0.82f) {
+    fun encode() = listOf(threshold, nodeSize, edgeOpacity, showLabels, hideIsolated, sizeByConnections,
+        linkDistance, repulsion, bounce).joinToString("|")
     companion object {
         fun decode(raw: String?): GraphOptions {
             val p = raw.orEmpty().split('|')
@@ -13,7 +15,8 @@ data class GraphOptions(val threshold: Float = 0.08f, val nodeSize: Float = 1f,
                 ?.takeIf { it.isFinite() }?.coerceIn(low, high) ?: fallback
             return GraphOptions(number(0, .08f, 0f, 1f), number(1, 1f, .6f, 2f), number(2, .35f, .05f, 1f),
                 p.getOrNull(3)?.toBooleanStrictOrNull() ?: true, p.getOrNull(4)?.toBooleanStrictOrNull() ?: false,
-                p.getOrNull(5)?.toBooleanStrictOrNull() ?: true)
+                p.getOrNull(5)?.toBooleanStrictOrNull() ?: true,
+                number(6, 1f, .55f, 1.8f), number(7, 1f, .35f, 2f), number(8, .82f, .55f, .94f))
         }
     }
 }

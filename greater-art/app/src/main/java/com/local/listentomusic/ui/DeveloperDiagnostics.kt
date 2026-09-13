@@ -46,12 +46,13 @@ internal fun DeveloperDiagnostics(
     report: String,
     regions: List<String>,
     warning: Boolean,
+    inspector: UiInspectorState,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     var open by remember { mutableStateOf(false) }
     var showRegions by remember { mutableStateOf(false) }
-    val accent = if (warning) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
+    val accent = if (warning) Color(0xFFFF5C68) else Color(0xFF75EBD4)
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (showRegions) {
@@ -78,7 +79,8 @@ internal fun DeveloperDiagnostics(
 
         Surface(
             onClick = { open = true },
-            modifier = modifier.align(Alignment.TopEnd).statusBarsPadding().padding(8.dp),
+            modifier = modifier.align(Alignment.TopEnd).statusBarsPadding().padding(8.dp)
+                .inspectElement("DEVELOPER_BUTTON", "Opens local diagnostics and element inspector"),
             shape = RoundedCornerShape(7.dp),
             color = Color.Black.copy(alpha = 0.88f),
             border = BorderStroke(1.dp, accent.copy(alpha = 0.9f)),
@@ -101,7 +103,8 @@ internal fun DeveloperDiagnostics(
         ) {
             Surface(
                 modifier = Modifier.fillMaxSize(),
-                color = MaterialTheme.colorScheme.background,
+                color = Color(0xFF080C0D),
+                contentColor = Color.White,
             ) {
                 Column(
                     modifier = Modifier.statusBarsPadding().padding(20.dp),
@@ -129,10 +132,19 @@ internal fun DeveloperDiagnostics(
                         }
                         Switch(checked = showRegions, onCheckedChange = { showRegions = it })
                     }
+                    Button(
+                        onClick = { open = false; inspector.arm() },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("PICK ELEMENT ON SCREEN") }
+                    inspector.selected?.let { selected ->
+                        Text("LAST PICK · ${selected.label} · ${selected.bounds.width.toInt()}×${selected.bounds.height.toInt()} px",
+                            fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.labelSmall, color = accent)
+                    }
                     Surface(
                         modifier = Modifier.weight(1f).fillMaxWidth(),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
+                        color = Color(0xFF141A1C),
+                        contentColor = Color.White,
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.24f)),
                         shape = RoundedCornerShape(12.dp),
                     ) {
                         LazyColumn(Modifier.fillMaxSize().padding(14.dp)) {

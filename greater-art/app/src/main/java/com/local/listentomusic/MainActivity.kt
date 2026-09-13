@@ -264,7 +264,7 @@ private fun PermissionAwareApp(
 ) {
     val context = LocalContext.current
     val legacyPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
+        ActivityResultContracts.RequestMultiplePermissions()
     ) { viewModel.rescan() }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -295,7 +295,12 @@ private fun PermissionAwareApp(
                     context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
                 }
             } else {
-                legacyPermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+                legacyPermissionLauncher.launch(
+                    if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) arrayOf(
+                        Manifest.permission.READ_EXTERNAL_STORAGE,
+                        Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                    ) else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE),
+                )
             }
         },
     )

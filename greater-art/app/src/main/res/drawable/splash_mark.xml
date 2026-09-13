@@ -3,22 +3,22 @@
     android:height="288dp"
     android:viewportWidth="288"
     android:viewportHeight="288">
-    <!-- Properly inset waveform/stylus mark — centered, not cropped -->
+    <!-- Compact centered mark: stays inside the Android splash icon mask. -->
     <path
         android:fillColor="@android:color/transparent"
         android:strokeColor="#111614"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"
-        android:strokeWidth="12"
-        android:pathData="M62,170 L95,170 L115,125 L145,227 L177,80 L209,170 L262,170" />
+        android:strokeWidth="14"
+        android:pathData="M76,150 L105,150 L122,116 L145,192 L171,92 L190,150 L216,150" />
     <path
         android:fillColor="@android:color/transparent"
         android:strokeColor="#DDE6E2"
         android:strokeLineCap="round"
         android:strokeLineJoin="round"
-        android:strokeWidth="7"
-        android:pathData="M62,170 L95,170 L115,125 L145,227 L177,80 L209,170 L262,170" />
+        android:strokeWidth="8"
+        android:pathData="M76,150 L105,150 L122,116 L145,192 L171,92 L190,150 L216,150" />
     <path
         android:fillColor="#8BE9D3"
-        android:pathData="M242,170 A18,18 0,1 1,214 170 A18,18 0,1 1,242 170" />
+        android:pathData="M211,150 A11,11 0,1 1,189 150 A11,11 0,1 1,211 150" />
 </vector>

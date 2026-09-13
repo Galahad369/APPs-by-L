@@ -133,6 +133,14 @@ import kotlin.math.roundToInt
 
 internal val playbackSpeeds = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f)
 
+/** Side seek zones only. The middle 30% is deliberately inert on double tap. */
+internal fun doubleTapSeekDelta(x: Float, width: Float, seekOffsetMs: Long): Long? = when {
+    width <= 0f -> null
+    x < width * .35f -> -seekOffsetMs
+    x > width * .65f -> seekOffsetMs
+    else -> null
+}
+
 @Composable
 fun NowPlayingScreen(
     playback: PlaybackUiState,
@@ -176,6 +184,7 @@ fun NowPlayingScreen(
 
     BoxWithConstraints(
             modifier = Modifier.fillMaxSize().padding(contentPadding)
+                .inspectElement("NOW_PLAYING_SCREEN", "Current artwork or video, queue, timeline, and transport controls")
                 .background(Brush.verticalGradient(listOf(Color(0xFF080808), Color(0xFF0C0C0C), Color(0xFF0A0A0A)))),
         ) {
         val landscape = maxWidth > maxHeight
@@ -319,13 +328,15 @@ private fun VideoPlayerStage(
     }
 
     Box(
-        modifier = modifier.background(Color.Black).pointerInput(seekOffsetMs) {
+        modifier = modifier.inspectElement("VIDEO_STAGE", "Side double-tap seeks; center double-tap does nothing")
+            .background(Color.Black).pointerInput(seekOffsetMs) {
             detectTapGestures(
                 onTap = { controlsVisible = !controlsVisible },
                 onDoubleTap = { offset ->
-                    val delta = if (offset.x < size.width / 2) -seekOffsetMs else seekOffsetMs
-                    onSeekBy(delta)
-                    seekFeedback = delta to android.os.SystemClock.uptimeMillis()
+                    doubleTapSeekDelta(offset.x, size.width.toFloat(), seekOffsetMs)?.let { delta ->
+                        onSeekBy(delta)
+                        seekFeedback = delta to android.os.SystemClock.uptimeMillis()
+                    }
                 },
             )
         },
@@ -486,9 +497,10 @@ private fun AudioPlayer(
                 .pointerInput(seekOffsetMs) {
                     detectTapGestures(
                         onDoubleTap = { offset ->
-                            val delta = if (offset.x < size.width / 2) -seekOffsetMs else seekOffsetMs
-                            onSeekBy(delta)
-                            seekFeedback = delta to android.os.SystemClock.uptimeMillis()
+                            doubleTapSeekDelta(offset.x, size.width.toFloat(), seekOffsetMs)?.let { delta ->
+                                onSeekBy(delta)
+                                seekFeedback = delta to android.os.SystemClock.uptimeMillis()
+                            }
                         },
                     )
                 },
@@ -646,7 +658,7 @@ private fun NowPlayingQueue(
     LaunchedEffect(currentPath, currentIndex) {
         if (currentIndex >= 0 && !listState.isScrollInProgress) listState.scrollToItem(currentIndex)
     }
-    Column(modifier) {
+    Column(modifier.inspectElement("NOW_PLAYING_QUEUE", "Ordered playback queue and optional synchronized lyrics")) {
         if (lyrics != null) {
             SyncedLyricsPanel(
                 lyrics = lyrics,
@@ -963,7 +975,7 @@ private fun CompactSlider(
         valueRange = valueRange,
         enabled = enabled,
         interactionSource = interactions,
-        modifier = Modifier.fillMaxWidth().height(22.dp),
+        modifier = Modifier.fillMaxWidth().height(22.dp).inspectElement("PLAYBACK_TIMELINE", "Drag to seek playback"),
         thumb = { _ ->
             // Soft glow and radial-gradient core keep the thumb visible without visual bulk.
             Box(Modifier.size(20.dp).graphicsLayer { scaleX = thumbScale.value; scaleY = thumbScale.value }, contentAlignment = Alignment.Center) {
@@ -1013,11 +1025,12 @@ private fun PlayerBottomControls(
         else -> uiText(playback.appLanguage, "Off", "關閉")
     }
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
+            .inspectElement("TRANSPORT_CONTROLS", "Repeat/random, previous, play/pause, next, and speed"),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onRepeat, modifier = Modifier.size(48.dp)) {
+        IconButton(onClick = onRepeat, modifier = Modifier.size(48.dp).inspectElement("REPEAT_BUTTON", cycleLabel)) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(when {
                     playback.shuffleEnabled -> Icons.Rounded.Shuffle
@@ -1027,11 +1040,12 @@ private fun PlayerBottomControls(
                 Text(cycleLabel, style = MaterialTheme.typography.labelSmall, maxLines = 1)
             }
         }
-        IconButton(onClick = onPrevious, enabled = playback.hasPrevious || playback.positionMs > 4_000L) {
+        IconButton(onClick = onPrevious, enabled = playback.hasPrevious || playback.positionMs > 4_000L,
+            modifier = Modifier.inspectElement("PREVIOUS_BUTTON", "Previous media or restart current")) {
             Icon(Icons.Rounded.SkipPrevious, "Previous", modifier = Modifier.size(36.dp))
         }
         LiquidMetalSurface(
-                    modifier = Modifier.size(52.dp).clickable(
+                    modifier = Modifier.size(52.dp).inspectElement("PLAY_PAUSE_BUTTON", if (playback.isPlaying) "Pause" else "Play").clickable(
                         indication = null,
                         interactionSource = remember { MutableInteractionSource() },
                         onClick = onTogglePlay
@@ -1046,11 +1060,11 @@ private fun PlayerBottomControls(
                 tint = MaterialTheme.colorScheme.onSurface,
             )
         }
-        IconButton(onClick = onNext, enabled = playback.hasNext) {
+        IconButton(onClick = onNext, enabled = playback.hasNext, modifier = Modifier.inspectElement("NEXT_BUTTON", "Next media")) {
             Icon(Icons.Rounded.SkipNext, "Next", modifier = Modifier.size(36.dp))
         }
         Box {
-                    IconButton(onClick = { speedMenuOpen = true }, modifier = Modifier.size(48.dp)) {
+                    IconButton(onClick = { speedMenuOpen = true }, modifier = Modifier.size(48.dp).inspectElement("SPEED_BUTTON", speedLabel(playback.speed))) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             SpeedDialIcon(playback.speed, accent)
                             Text(speedLabel(playback.speed), style = MaterialTheme.typography.labelSmall, maxLines = 1)
@@ -1187,18 +1201,18 @@ private fun NowPlayingTopBar(
             .padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onPictureInPicture) {
+        IconButton(onClick = onPictureInPicture, modifier = Modifier.inspectElement("FLOATING_PLAYER_BUTTON", "Opens the selected floating-player mode")) {
             Icon(
                 Icons.Rounded.PictureInPictureAlt,
                 uiText(language, "Open floating player", "開啟浮動播放器"),
                 tint = foreground,
             )
         }
-        IconButton(onClick = onHome) {
+        IconButton(onClick = onHome, modifier = Modifier.inspectElement("HOME_BUTTON", "Returns to Library")) {
             Icon(Icons.Rounded.Home, uiText(language, "Home", "首頁"), tint = foreground)
         }
         Spacer(Modifier.weight(1f))
-        IconButton(onClick = onFullscreen) {
+        IconButton(onClick = onFullscreen, modifier = Modifier.inspectElement("FULLSCREEN_BUTTON", if (fullscreen) "Exit fullscreen" else "Enter fullscreen")) {
             Icon(
                 if (fullscreen) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
                 if (fullscreen) uiText(language, "Exit fullscreen", "離開全螢幕")
@@ -1206,7 +1220,7 @@ private fun NowPlayingTopBar(
                 tint = foreground,
             )
         }
-        IconButton(onClick = onClose) {
+        IconButton(onClick = onClose, modifier = Modifier.inspectElement("CLOSE_PLAYER_BUTTON", "Closes Now Playing without stopping playback")) {
             Icon(Icons.Rounded.Close, uiText(language, "Close player", "關閉播放器"), tint = foreground)
         }
     }

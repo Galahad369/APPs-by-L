@@ -138,10 +138,12 @@ fun SettingsScreen(
     )
 
     Scaffold(
+        modifier = Modifier.inspectElement("SETTINGS_SCREEN", "Local preferences; no account or network"),
         containerColor = Color.Transparent,
         contentColor = MaterialTheme.colorScheme.onBackground,
         topBar = {
             TopAppBar(
+                modifier = Modifier.inspectElement("SETTINGS_TOP_BAR", "Back button and local app version"),
                 title = {
                     Column {
                         Text(uiText(language, "Settings", "設定"), fontWeight = FontWeight.ExtraBold)
@@ -157,7 +159,7 @@ fun SettingsScreen(
             )
         },
     ) { padding ->
-        LazyColumn(Modifier.padding(padding), contentPadding = PaddingValues(bottom = 32.dp)) {
+        LazyColumn(Modifier.padding(padding).inspectElement("SETTINGS_LIST", "Scrollable preference controls"), contentPadding = PaddingValues(bottom = 32.dp)) {
             item {
                 SectionTitle(uiText(language, "Language & appearance", "語言與外觀"))
                 ChoiceSetting(
@@ -460,6 +462,7 @@ private fun NameDialog(language: AppLanguage, playlist: LocalPlaylist?, name: St
 @Composable
 private fun SwitchSetting(title: String, description: String, checked: Boolean, onChecked: (Boolean) -> Unit, enabled: Boolean = true) {
     ListItem(
+        modifier = Modifier.inspectElement("SETTING_SWITCH", title),
         headlineContent = { Text(title, fontWeight = FontWeight.SemiBold) },
         supportingContent = { Text(description) },
         trailingContent = { Switch(checked, onChecked, enabled = enabled) },
@@ -496,11 +499,12 @@ private fun BackgroundFileSetting(
 
 @Composable
 private fun <T> ChoiceSetting(title: String, description: String, values: List<T>, selected: T, label: (T) -> String, onSelect: (T) -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+    Column(Modifier.fillMaxWidth().inspectElement("SETTING_CHOICE", title).padding(horizontal = 16.dp, vertical = 10.dp)) {
         Text(title, fontWeight = FontWeight.SemiBold)
         Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            values.forEach { value -> FilterChip(value == selected, { onSelect(value) }, { Text(label(value)) }) }
+            values.forEach { value -> FilterChip(value == selected, { onSelect(value) }, { Text(label(value)) },
+                modifier = Modifier.inspectElement("SETTING_OPTION", "$title: ${label(value)}")) }
         }
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
@@ -508,7 +512,7 @@ private fun <T> ChoiceSetting(title: String, description: String, values: List<T
 
 @Composable
 private fun DimSliderSetting(title: String, description: String, value: Float, onValue: (Float) -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+    Column(Modifier.fillMaxWidth().inspectElement("SETTING_SLIDER", title).padding(horizontal = 16.dp, vertical = 10.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Column(Modifier.weight(1f)) {
                 Text(title, fontWeight = FontWeight.SemiBold)
@@ -534,7 +538,7 @@ private fun DimSliderSetting(title: String, description: String, value: Float, o
 
 @Composable
 private fun ActionCard(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, body: String, button: String, onClick: () -> Unit) {
-    Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+    Card(Modifier.fillMaxWidth().inspectElement("SETTING_ACTION", title).padding(horizontal = 16.dp, vertical = 6.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Icon(icon, null, tint = MaterialTheme.colorScheme.secondary)
             Column(Modifier.weight(1f)) {

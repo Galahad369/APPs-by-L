@@ -1,14 +1,115 @@
 # HANDOFF — Greater Art Android Media Player
 
 **Project:** `greater-art/` in the repository checkout  
-**Current version:** `1.9.18` (code 70), playback/graph polish and cache/queue follow-up
-**Latest APK:** `releases/GreaterArt-v1.9.18-debug.apk` (verification below)
+**Current version:** `1.10.1` (code 73), inspector/delete/seek/graph refinement
+**Latest APK:** `releases/GreaterArt-v1.10.1-debug.apk` (verification below)
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 ## Current State
 
-### September 13 — 1.9.18 (latest)
+### September 13 — 1.10.1 local refinement (latest)
+
+- Local-only work: no commit, tag, push, release upload, or remote mutation.
+- Developer mode previously tagged only large parent regions and reused the active theme
+  for its report sheet. This made button picks resolve to vague screen names and could
+  produce black text over a black surface. Inspector/report surfaces now use an invariant
+  high-contrast debug palette. Individual Library, mini-player, Now Playing, graph and
+  reusable Settings controls register their own dynamic names; the diagnostics list is
+  generated from the live registered regions instead of a hard-coded list.
+- Mini overlay subtracts another exact three physical pixels (six total from the 111×64dp
+  base after density conversion). Default small Library thumbnails still use the same
+  physical metrics.
+- Both the Android system splash vector and in-app cold-scan state use a centered inset
+  mark. The scan screen is compact liquid metal with a thin progress line, avoiding the
+  cropped adaptive-launcher foreground formerly rendered at 96dp.
+- Library row actions now offer permanent source-file deletion through three distinct
+  confirmations. Deletion canonicalizes the target, refuses anything outside Download,
+  refuses directories, removes all queue/cue entries backed by that physical file, rescans,
+  and reports Android refusal. Android 8–9 get narrowly scoped legacy write permission;
+  current Android continues using the already-declared all-files access. INTERNET remains absent.
+- Double-tap seek previously treated every X coordinate as left or right and combined
+  rings, chevrons, scaling and a label. It now uses only the outer 35% zones, leaves the
+  middle 30% inert, and renders one short YouTube-like chevron/seconds cue. A pure regression
+  test guards left/middle/right behavior.
+- Graph link targets now widen nonlinearly as similarity weakens. The node with the greatest
+  sum of connection strengths is translated to graph origin, and Fit preserves that origin
+  at screen center. Cache v3 invalidates older coordinates. The wand performs one finite,
+  hub-first staggered reveal with restrained pop/bounce; there is no permanent UI physics loop.
+- Device-only checks still required: OEM file deletion, overlay pixel size, gesture feel,
+  system splash masking, and graph animation pacing on a large real library.
+- Verification: offline `testDebugUnitTest lintDebug assembleDebug` succeeded with 78
+  tests, 0 failures/errors, and lint 0 errors / 13 warnings. APK metadata confirms package
+  `com.local.listentomusic`, version 1.10.1 / code 73, no INTERNET permission, and pinned
+  certificate SHA-256 `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`.
+  Artifact: `releases/GreaterArt-v1.10.1-debug.apk` (26,458,654 bytes), SHA-256
+  `9b214ea1ba7e9401b60420a65dea61d1e2b07ac9a093f0f873483805af08cf5c`.
+
+### September 13 — 1.10 local refinement
+
+- Local-only work: no commit, tag, push, release upload, or remote mutation.
+- The mini overlay now subtracts exactly three physical pixels from both dimensions
+  after density conversion. Default small Library thumbnails use those exact same
+  physical dimensions; medium and large Library rows remain genuinely larger.
+- Restored Newest/Oldest Library ordering. An explicit sort change synchronizes a
+  whole-library playback queue without losing the current item, position, or play state;
+  edited/partial queues and playlists remain authoritative. The filter field has a
+  one-tap clear action. Current-video wallpaper remains the default setting.
+- Developer mode now has a tap-to-inspect overlay. Tagged high-level regions report
+  name, purpose, root bounds, physical pixel size, dp size, and touch coordinates, with
+  one-tap local clipboard copy. Unknown areas are honestly labelled unregistered.
+- Replaced the oversized seek rings with bounded arcs and directional chevrons so the
+  finite double-tap effect cannot clip into broken-looking fragments.
+- Nodes keeps its finite/background architecture but now has cached v2 velocity-based
+  settling, persisted link-length/repulsion/elasticity controls, and connected-neighbour
+  spring response while dragging. There is still no endless physics loop competing with
+  playback or scrolling.
+- Added pure policy/size tests for queue synchronization and physical-pixel sizing.
+- Separate sibling project `pixel-measure-app/` is an offline portrait/landscape ruler.
+  It correctly distinguishes raw px from dp, measures A/B deltas and edge offsets, and
+  maps taps on a system-picked screenshot back to source-image pixels.
+- Verification: offline `testDebugUnitTest lintDebug assembleDebug` succeeded; 75 tests,
+  0 failures/errors, lint 0 errors / 13 warnings. APK metadata confirms package
+  `com.local.listentomusic`, version 1.10 / code 72, pinned signing certificate
+  `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`, and no INTERNET
+  permission. Artifact: `releases/GreaterArt-v1.10-debug.apk` (26,428,654 bytes), SHA-256
+  `131577e071ee48d083af672bb3344142a88708dac76f793dd5f024a43bc07898`.
+  Pixel Measure v1.0.1 also assembled with lint 0 errors; it requests no user permission.
+  No emulator/device was available, so touch feel, overlay edges, screenshot mapping, and
+  OEM window behavior still need a real-device smoke test.
+
+### September 13 — 1.9.19 recovery
+
+- A later external session added uncommitted changes to five Greater Art files after the
+  verified 1.9.18 build. Its final source was newer than its build artifact, so its reported
+  successful build did not verify the final worktree. The complete changed files were backed
+  up at `<user-home>/AppData/Local/Temp/GreaterArt-rogue-animation-backup-20260913`.
+- Restored those five files exactly to commit `ef73fef`, the previously tested 1.9.18 source.
+  This removed per-bar coroutine fan-out, duplicate Slider drag handling, fixed 120-BPM
+  pulses, duplicated waveform components and the accidental Small/Medium/Large thumbnail
+  collapse. Pixel Measure remains untouched in its separate untracked folder.
+- The intended draft motion remains in the restored source: one Canvas performs a short
+  staggered waveform reveal and restrained phase breath; cover movement follows real cached
+  waveform amplitude; the native Slider owns gestures and grows its thumb; cached artwork
+  and time lift while scrubbing; A/B attraction uses only actual markers; double-tap feedback
+  is finite and respects disabled Android animations. Speed uses the compact animated gauge.
+- Two local commits already existed before this recovery despite the earlier local-only
+  instruction. They remain unpushed (`main` was two commits ahead of `origin/main`); this
+  recovery does not rewrite Git history, commit, tag or push.
+- The named 1.9.18 release had also been replaced after its documented verification. Its
+  observed pre-recovery SHA-256 was
+  `b04a790ca87ee99c006235770d9a1dbbebe9158173f0e190920506934c4ce89f`, not the documented
+  `45465cdd...`. It remains untouched as evidence; 1.9.19 uses a new filename.
+- Verification: offline `testDebugUnitTest lintDebug assembleDebug` succeeded in 3m13s:
+  73 tests, 0 failures/errors; lint 0 errors / 13 warnings. APK metadata confirms package
+  `com.local.listentomusic`, version 1.9.19 / code 71, the pinned certificate above and no
+  INTERNET permission. `git diff --check` passed, and all five recovered source files match
+  `ef73fef`. Artifact: `releases/GreaterArt-v1.9.19-debug.apk` (25,830,608 bytes), SHA-256
+  `56bb06153ac6304b417b4eaf9d64a9ad90cf4dac78ee1a1722e207a41040cbe8`.
+  No Android device is connected, so gesture feel, frame pacing and overlay edge alignment
+  remain device-only checks.
+
+### September 13 — 1.9.18
 
 - User authorized immediate local implementation. No commit, tag, push or PR created
   by this session; preserve the pre-existing main commit/tag and all versioned APKs.

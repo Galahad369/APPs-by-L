@@ -147,6 +147,7 @@ fun GreaterArtApp(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer); viewModel.stopLibraryObservation() }
     }
     var jokeDismissed by rememberSaveable { mutableStateOf(false) }
+    val inspector = remember { UiInspectorState() }
 
     LaunchedEffect(openPlayerRequest) {
         if (openPlayerRequest > 0) {
@@ -183,7 +184,8 @@ fun GreaterArtApp(
                 }
             }
         }
-        Box(modifier = Modifier.fillMaxSize()) {
+        UiInspectorHost(enabled = settings.developerMode, state = inspector) {
+        Box(modifier = Modifier.fillMaxSize().inspectElement("APP_VIEWPORT", "Greater Art root viewport")) {
             // Stable ownership across navigation: prepare once, pause when covered,
             // and resume immediately when Library or Settings reveals the wallpaper.
             AppBackground(preferences = settings, currentPath = playback.currentPath, isVideo = playback.isVideo, controller = controller,
@@ -267,6 +269,7 @@ fun GreaterArtApp(
                         onAddToPlaylist = viewModel::addToPlaylist,
                         onRemoveFromPlaylist = viewModel::removeFromActivePlaylist,
                         onDeletePlaylist = viewModel::deletePlaylist,
+                        onDeleteFile = viewModel::deleteMediaFile,
                         onLoadThumbnail = viewModel::loadThumbnail,
                         onPreloadAhead = viewModel::preloadThumbnailsStartingAt,
                         onOpenSettings = { screen = Screen.SETTINGS },
@@ -383,10 +386,9 @@ fun GreaterArtApp(
                 val indexStatus by viewModel.indexStatus.collectAsStateWithLifecycle()
                 val viewport = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
                 val density = androidx.compose.ui.platform.LocalDensity.current
-                val regions = when (if (playerOpen) Screen.NOW_PLAYING else screen) {
-                    Screen.LIBRARY -> if (libraryPager.currentPage == 1) listOf("NODES", "GRAPH_CANVAS", "GRAPH_CONTROLS", "NODE_PICKER", "MINI_PLAYER") else listOf("LIBRARY_TOP_BAR", "SEARCH_AND_SORT", "MEDIA_LIST", "MINI_PLAYER")
-                    Screen.NOW_PLAYING -> listOf("MEDIA_STAGE", "TRACK_TITLE", "PLAYBACK_CONTROLS", "TIMELINE", "QUEUE", "LYRICS")
-                    Screen.SETTINGS -> listOf("SETTINGS_TOP_BAR", "APPEARANCE", "PLAYBACK", "SONG_LISTS", "CACHE", "PRIVACY")
+                val regions = inspector.regions.values.sortedBy { it.order }.map { region ->
+                    "${region.label} · ${region.bounds.width.toInt()}×${region.bounds.height.toInt()}px" +
+                        region.detail.takeIf(String::isNotBlank)?.let { " · $it" }.orEmpty()
                 }
                 val warning = playback.errorMessage != null ||
                     (playback.isVideo && playback.isPlaying && playback.positionMs > 1_000L && !playback.videoFrameRendered) ||
@@ -425,6 +427,7 @@ fun GreaterArtApp(
                     },
                     regions = regions,
                     warning = warning,
+                    inspector = inspector,
                     modifier = Modifier.align(Alignment.TopEnd),
                 )
             }
@@ -449,6 +452,7 @@ fun GreaterArtApp(
             editDisplay?.let { file -> DisplayOverrideDialog(file, settings.localOverrides[file.path], settings.appLanguage,
                 viewModel::loadThumbnail, { title, cover -> viewModel.setLocalOverride(file.path, title, cover) }, { editDisplay = null }) }
             if (createRule) RulePlaylistDialog(settings.appLanguage, viewModel::createRulePlaylist, { createRule = false })
+        }
         }
         }
     }

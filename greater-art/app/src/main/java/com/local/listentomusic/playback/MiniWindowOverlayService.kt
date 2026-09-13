@@ -34,6 +34,7 @@ import androidx.media3.ui.PlayerView
 import com.google.common.util.concurrent.ListenableFuture
 import com.local.listentomusic.MainActivity
 import com.local.listentomusic.R
+import com.local.listentomusic.model.MiniWindowMetrics
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -97,10 +98,6 @@ class MiniWindowOverlayService : Service() {
         private const val CHANNEL_ID = "greater_art_playback"
         const val EXTRA_STOP_APP = "stop_app"
         const val EXTRA_OPEN_PLAYER = "open_player"
-        private const val AUDIO_WIDTH = 111
-		private const val AUDIO_HEIGHT = 64
-        private const val VIDEO_WIDTH = 111
-        private const val VIDEO_HEIGHT = 64
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -116,7 +113,7 @@ class MiniWindowOverlayService : Service() {
                 buildView()
                 buildCross()
                 params = WindowManager.LayoutParams(
-                    dp(AUDIO_WIDTH), dp(AUDIO_HEIGHT),
+                    miniWidthPx(), miniHeightPx(),
                     WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                     PixelFormat.RGBA_8888,
@@ -152,8 +149,8 @@ class MiniWindowOverlayService : Service() {
                 closeBtn?.visibility = View.GONE
                 // Video mode is pure video: no box and no chrome.
                 root?.background = if (v) null else ContextCompat.getDrawable(this@MiniWindowOverlayService, R.drawable.mini_player_bg)
-                params?.width = dp(if (v) VIDEO_WIDTH else AUDIO_WIDTH)
-                params?.height = dp(if (v) VIDEO_HEIGHT else AUDIO_HEIGHT)
+                params?.width = miniWidthPx()
+                params?.height = miniHeightPx()
                 clampPosition()
                 updateRootLayout()
             }
@@ -502,6 +499,8 @@ class MiniWindowOverlayService : Service() {
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+    private fun miniWidthPx() = MiniWindowMetrics.widthPx(resources.displayMetrics.density)
+    private fun miniHeightPx() = MiniWindowMetrics.heightPx(resources.displayMetrics.density)
 
     override fun onDestroy() {
         scope.cancel()

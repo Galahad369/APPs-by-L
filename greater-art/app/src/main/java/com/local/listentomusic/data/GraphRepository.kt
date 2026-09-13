@@ -9,7 +9,8 @@ import kotlinx.coroutines.sync.withLock
 import java.io.*
 
 class GraphRepository(context: Context) {
-    private val cache = AtomicFile(File(context.cacheDir, "filename-graph-v1.bin"))
+    // v3 adds weighted-hub centering and a wider strong/weak link-distance range.
+    private val cache = AtomicFile(File(context.cacheDir, "filename-graph-v3.bin"))
     private val mutex = Mutex()
     private var memoryKey: String? = null
     private var memory: LibraryGraph? = null
