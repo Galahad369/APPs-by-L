@@ -2,7 +2,7 @@
 
 **Project:** `greater-art/` in the repository checkout  
 **Current version:** `1.10.1` (code 73), inspector/delete/seek/graph refinement
-**Latest APK:** `releases/GreaterArt-v1.10.1-debug.apk` (verification below)
+**Latest APK:** `releases/GreaterArt-v1.10.1-build2-debug.apk` (verification below)
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
@@ -42,8 +42,10 @@
   tests, 0 failures/errors, and lint 0 errors / 13 warnings. APK metadata confirms package
   `com.local.listentomusic`, version 1.10.1 / code 73, no INTERNET permission, and pinned
   certificate SHA-256 `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`.
-  Artifact: `releases/GreaterArt-v1.10.1-debug.apk` (26,458,654 bytes), SHA-256
-  `9b214ea1ba7e9401b60420a65dea61d1e2b07ac9a093f0f873483805af08cf5c`.
+  Final artifact: `releases/GreaterArt-v1.10.1-build2-debug.apk` (26,458,654 bytes),
+  SHA-256 `d4dbc90e191c0a96fc8a98b77cecbf68441b46a36bbea867a8acdd21cb076f0a`.
+  The earlier `GreaterArt-v1.10.1-debug.apk` is preserved but superseded: it predates
+  the corrected Android 8–9 read/write permission request and was not overwritten.
 
 ### September 13 — 1.10 local refinement
 

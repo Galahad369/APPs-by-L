@@ -1,4 +1,5 @@
 interface:
-  display_name: "Ponytail + Caveman Ultra"
-  short_description: "Direct communication with polished app craftsmanship"
-  default_prompt: "Use $ponytail-caveman-ultra for direct guidance and aggressively polished implementation."
+  display_name: Ponytail Ultra + Caveman Ultra
+  short_description: Complete builds and concise, precise communication
+  default_prompt: Use $ponytail-caveman-ultra with Ponytail mode ultra and Caveman
+    mode ultra to complete the requested work.
