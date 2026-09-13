@@ -27,6 +27,7 @@ import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SmartDisplay
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -45,6 +47,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -59,6 +62,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -73,15 +77,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalDensity
 import com.local.listentomusic.LibraryStatus
 import com.local.listentomusic.LibraryUiState
 import com.local.listentomusic.data.LibraryRowSize
 import com.local.listentomusic.data.UserPreferences
 import com.local.listentomusic.model.MediaFile
 import com.local.listentomusic.model.MediaKind
+import com.local.listentomusic.model.MiniWindowMetrics
 import com.local.listentomusic.model.SortMode
 import com.local.listentomusic.ui.components.LiquidMetalSurface
 import kotlin.math.abs
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -103,6 +110,7 @@ fun LibraryScreen(
     onAddToPlaylist: (String, String) -> Unit,
     onRemoveFromPlaylist: (String) -> Unit,
     onDeletePlaylist: (String) -> Unit,
+    onDeleteFile: suspend (MediaFile) -> String?,
     onLoadThumbnail: suspend (MediaFile) -> Bitmap?,
     onPreloadAhead: (Int, Int) -> Unit,
     onOpenSettings: () -> Unit,
@@ -122,16 +130,22 @@ fun LibraryScreen(
     var playlistName by remember { mutableStateOf("") }
     var seedKeyword by remember { mutableStateOf("") }
     var songListFile by remember { mutableStateOf<MediaFile?>(null) }
+    var deleteCandidate by remember { mutableStateOf<MediaFile?>(null) }
+    var deleteStep by remember { mutableStateOf(0) }
+    var deleteError by remember { mutableStateOf<String?>(null) }
+    var deleting by remember { mutableStateOf(false) }
+    val actionScope = rememberCoroutineScope()
     var selected by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(emptyList<String>()) }
     var selectionMenu by remember { mutableStateOf(false) }
     var selectionNameDialog by remember { mutableStateOf(false) }
     var selectionName by remember { mutableStateOf("") }
     Scaffold(
-        modifier = Modifier.padding(contentPadding),
+        modifier = Modifier.padding(contentPadding).inspectElement("LIBRARY_SCREEN", "Scrollable local media library"),
         containerColor = Color.Transparent,
         contentColor = MaterialTheme.colorScheme.onBackground,
         topBar = {
             TopAppBar(
+                modifier = Modifier.inspectElement("LIBRARY_TOP_BAR", "App title, settings, refresh, and sort"),
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         val markShape = RoundedCornerShape(9.dp)
@@ -160,14 +174,14 @@ fun LibraryScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onOpenSettings) {
+                    IconButton(onClick = onOpenSettings, modifier = Modifier.inspectElement("SETTINGS_BUTTON", "Opens Greater Art settings")) {
                         Icon(Icons.Rounded.Settings, uiText(language, "Settings", "設定"))
                     }
-                    IconButton(onClick = onRefresh) {
+                    IconButton(onClick = onRefresh, modifier = Modifier.inspectElement("REFRESH_LIBRARY_BUTTON", "Rescans Download for supported media")) {
                         Icon(Icons.Rounded.Refresh, uiText(language, "Scan again", "重新掃描"))
                     }
                     if (activePlaylist == null) Box {
-                        IconButton(onClick = { sortMenuOpen = true }) {
+                        IconButton(onClick = { sortMenuOpen = true }, modifier = Modifier.inspectElement("SORT_BUTTON", "Opens Library order choices")) {
                             Icon(Icons.AutoMirrored.Rounded.Sort, uiText(language, "Sort", "排序"))
                         }
                         DropdownMenu(sortMenuOpen, { sortMenuOpen = false }) {
@@ -176,6 +190,8 @@ fun LibraryScreen(
                                     SortMode.CUSTOM -> uiText(language, "Custom order", "自訂排序")
                                     SortMode.NAME_ASC -> uiText(language, "Name A–Z", "名稱 A–Z")
                                     SortMode.NAME_DESC -> uiText(language, "Name Z–A", "名稱 Z–A")
+                                    SortMode.DATE_DESC -> uiText(language, "Newest first", "最新優先")
+                                    SortMode.DATE_ASC -> uiText(language, "Oldest first", "最舊優先")
                                 }
                                 DropdownMenuItem(
                                     text = { Text(if (mode == state.sortMode) "✓  $label" else label) },
@@ -209,10 +225,18 @@ fun LibraryScreen(
             OutlinedTextField(
                 value = state.query,
                 onValueChange = onQueryChange,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)
+                    .inspectElement("LIBRARY_FILTER", "Local filename search and clear control"),
                 shape = RoundedCornerShape(10.dp),
                 singleLine = true,
                 leadingIcon = { Icon(Icons.Rounded.Search, null) },
+                trailingIcon = if (state.query.isNotEmpty()) {
+                    {
+                        IconButton(onClick = { onQueryChange("") }) {
+                            Icon(Icons.Rounded.Clear, uiText(language, "Clear filter", "清除篩選"))
+                        }
+                    }
+                } else null,
                 placeholder = { Text(uiText(language, "Filter library", "篩選音樂庫")) },
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = MaterialTheme.colorScheme.surface,
@@ -225,9 +249,9 @@ fun LibraryScreen(
                 Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextButton(onClick = onOpenNodes) { Text(uiText(language, "Nodes", "節點")) }
+                TextButton(onClick = onOpenNodes, modifier = Modifier.inspectElement("NODES_BUTTON", "Opens filename-similarity graph")) { Text(uiText(language, "Nodes", "節點")) }
                 Box(Modifier.weight(1f)) {
-                    Button(onClick = { playlistMenuOpen = true }) {
+                    Button(onClick = { playlistMenuOpen = true }, modifier = Modifier.inspectElement("PLAYLIST_BUTTON", "Selects or manages a playlist")) {
                         Icon(Icons.AutoMirrored.Rounded.QueueMusic, null)
                         Spacer(Modifier.width(8.dp))
                         Text(activePlaylist?.name ?: uiText(language, "All songs", "所有歌曲"), maxLines = 1)
@@ -281,11 +305,24 @@ fun LibraryScreen(
                     uiText(language, "Open settings", "開啟設定"),
                     onGrantStorageAccess,
                 )
-                LibraryStatus.SCANNING -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Image(androidx.compose.ui.res.painterResource(com.local.listentomusic.R.drawable.ic_launcher_foreground), null, Modifier.size(96.dp))
-                        Text(uiText(language, "Opening your library", "正在開啟音樂庫"), style = MaterialTheme.typography.titleMedium)
-                        CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                LibraryStatus.SCANNING -> Box(Modifier.fillMaxSize().inspectElement("LIBRARY_LOADING", "Initial local media scan"), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        LiquidMetalSurface(
+                            modifier = Modifier.size(92.dp),
+                            shape = RoundedCornerShape(26.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Image(
+                                androidx.compose.ui.res.painterResource(com.local.listentomusic.R.drawable.splash_mark),
+                                null,
+                                Modifier.size(72.dp),
+                                contentScale = ContentScale.Fit,
+                            )
+                        }
+                        Text(uiText(language, "Opening your library", "正在開啟音樂庫"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        LinearProgressIndicator(Modifier.width(112.dp).height(2.dp), color = MaterialTheme.colorScheme.secondary)
+                        Text(uiText(language, "Reading Download locally", "正在本機讀取 Download"),
+                            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 LibraryStatus.FOLDER_MISSING -> MessageState(
@@ -328,7 +365,7 @@ fun LibraryScreen(
                     }
                     LazyColumn(
                         state = listState,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().inspectElement("LIBRARY_LIST", "Virtualized ordered media rows"),
                         contentPadding = PaddingValues(bottom = 12.dp),
                     ) {
                         itemsIndexed(
@@ -408,10 +445,59 @@ fun LibraryScreen(
                         Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, null)
                         Text("  ${uiText(language, "Create playlist", "建立播放清單")}")
                     }
+                    TextButton(
+                        onClick = { songListFile = null; deleteCandidate = file; deleteStep = 1 },
+                        modifier = Modifier.inspectElement("DELETE_FILE_ACTION", "Starts three-step deletion confirmation for ${file.name}"),
+                    ) {
+                        Icon(Icons.Rounded.Delete, null, tint = MaterialTheme.colorScheme.error)
+                        Text("  ${uiText(language, "Delete original file", "刪除原始檔案")}", color = MaterialTheme.colorScheme.error)
+                    }
                 }
             },
             confirmButton = { TextButton(onClick = { songListFile = null }) { Text(uiText(language, "Done", "完成")) } },
         )
+    }
+    deleteCandidate?.let { file ->
+        val title = when (deleteStep) {
+            1 -> uiText(language, "Delete this file?", "要刪除此檔案嗎？")
+            2 -> uiText(language, "This removes the original", "這會刪除原始檔案")
+            else -> uiText(language, "Final confirmation", "最後確認")
+        }
+        val message = when (deleteStep) {
+            1 -> file.name
+            2 -> uiText(language,
+                "This is not playlist removal. The media file itself will be permanently removed from Download.",
+                "這不是從播放清單移除。Download 裡的媒體原始檔案將永久刪除。")
+            else -> "${file.name}\n\n${file.sourcePath}\n\n${uiText(language, "There is no undo inside Greater Art.", "Greater Art 內無法復原。")}"
+        }
+        AlertDialog(
+            modifier = Modifier.inspectElement("DELETE_CONFIRM_$deleteStep", "Deletion confirmation $deleteStep of 3 for ${file.name}"),
+            onDismissRequest = { if (!deleting) { deleteCandidate = null; deleteStep = 0 } },
+            title = { Text(title, color = if (deleteStep == 3) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface) },
+            text = { Text(message) },
+            dismissButton = { TextButton(enabled = !deleting, onClick = { deleteCandidate = null; deleteStep = 0 }) { Text(uiText(language, "Cancel", "取消")) } },
+            confirmButton = {
+                if (deleteStep < 3) TextButton(onClick = { deleteStep += 1 }) {
+                    Text(if (deleteStep == 1) uiText(language, "Continue", "繼續") else uiText(language, "I understand", "我明白"))
+                } else Button(
+                    enabled = !deleting,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error, contentColor = MaterialTheme.colorScheme.onError),
+                    onClick = {
+                        deleting = true
+                        actionScope.launch {
+                            val error = onDeleteFile(file)
+                            deleting = false; deleteCandidate = null; deleteStep = 0
+                            deleteError = error
+                        }
+                    },
+                    modifier = Modifier.inspectElement("DELETE_FILE_FINAL_BUTTON", "Permanently deletes ${file.name}"),
+                ) { Text(if (deleting) uiText(language, "Deleting…", "正在刪除…") else uiText(language, "DELETE FILE", "刪除檔案")) }
+            },
+        )
+    }
+    deleteError?.let { error ->
+        AlertDialog(onDismissRequest = { deleteError = null }, title = { Text(uiText(language, "File was not deleted", "檔案未刪除")) },
+            text = { Text(error) }, confirmButton = { TextButton(onClick = { deleteError = null }) { Text("OK") } })
     }
 }
 
@@ -501,6 +587,7 @@ private fun MediaFileRow(
     } else Modifier
     Row(
         Modifier.fillMaxWidth()
+            .inspectElement("LIBRARY_MEDIA_ROW", file.name)
             .background(if (isCurrent) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
             .clickable(onClick = onPlay).then(dragModifier)
             .padding(horizontal = 14.dp, vertical = rowSize.verticalPadding),
@@ -541,7 +628,7 @@ private fun MediaFileRow(
             }
         }
         if (dragEnabled) Icon(Icons.Rounded.DragHandle, "Reorder", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        IconButton(onClick = onMore, modifier = Modifier.size(36.dp)) { Icon(Icons.Rounded.MoreVert, moreDescription) }
+        IconButton(onClick = onMore, modifier = Modifier.size(36.dp).inspectElement("MEDIA_MORE_BUTTON", "Actions for ${file.name}")) { Icon(Icons.Rounded.MoreVert, moreDescription) }
     }
 }
 
@@ -552,8 +639,11 @@ private val thumbnailBrush @androidx.compose.runtime.Composable get() =
 @Composable
 private fun MediaThumbnail(file: MediaFile, bitmap: Bitmap?, rowSize: LibraryRowSize) {
     val shape = RoundedCornerShape(9.dp)
+    val density = LocalDensity.current
+    val width = if (rowSize == LibraryRowSize.SMALL) with(density) { MiniWindowMetrics.widthPx(this.density).toDp() } else rowSize.thumbnailWidth
+    val height = if (rowSize == LibraryRowSize.SMALL) with(density) { MiniWindowMetrics.heightPx(this.density).toDp() } else rowSize.thumbnailHeight
     Box(
-        Modifier.size(rowSize.thumbnailWidth, rowSize.thumbnailHeight).clip(shape).background(thumbnailBrush),
+        Modifier.size(width, height).clip(shape).background(thumbnailBrush),
         contentAlignment = Alignment.Center,
     ) {
         if (bitmap != null) {
@@ -601,8 +691,8 @@ private fun formatBytes(bytes: Long): String = when {
     else -> "$bytes B"
 }
 
-private val LibraryRowSize.thumbnailWidth get() = when (this) { LibraryRowSize.SMALL -> 84.dp; LibraryRowSize.MEDIUM -> 104.dp; LibraryRowSize.LARGE -> 136.dp }
-private val LibraryRowSize.thumbnailHeight get() = when (this) { LibraryRowSize.SMALL -> 56.dp; LibraryRowSize.MEDIUM -> 62.dp; LibraryRowSize.LARGE -> 84.dp }
+private val LibraryRowSize.thumbnailWidth get() = when (this) { LibraryRowSize.SMALL -> MiniWindowMetrics.WIDTH_DP.dp; LibraryRowSize.MEDIUM -> 120.dp; LibraryRowSize.LARGE -> 148.dp }
+private val LibraryRowSize.thumbnailHeight get() = when (this) { LibraryRowSize.SMALL -> MiniWindowMetrics.HEIGHT_DP.dp; LibraryRowSize.MEDIUM -> 70.dp; LibraryRowSize.LARGE -> 92.dp }
 private val LibraryRowSize.verticalPadding get() = when (this) { LibraryRowSize.SMALL -> 3.dp; LibraryRowSize.MEDIUM -> 6.dp; LibraryRowSize.LARGE -> 8.dp }
 private val LibraryRowSize.textSpacing get() = when (this) { LibraryRowSize.SMALL -> 10.dp; LibraryRowSize.MEDIUM -> 12.dp; LibraryRowSize.LARGE -> 14.dp }
 private val LibraryRowSize.accentHeight get() = when (this) { LibraryRowSize.SMALL -> 34.dp; LibraryRowSize.MEDIUM -> 46.dp; LibraryRowSize.LARGE -> 58.dp }

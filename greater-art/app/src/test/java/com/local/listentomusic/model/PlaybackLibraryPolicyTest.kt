@@ -25,4 +25,10 @@ class PlaybackLibraryPolicyTest {
         val a = audio("cue1").copy(sourcePath="album.flac")
         assertEquals(listOf("cue1"), waveformWarmupPaths(listOf(a,a.copy(path="cue2")), emptyList(), null))
     }
+    @Test fun queueOrderOnlyChangesWhenItStillContainsTheWholeLibrary() {
+        val a = audio("a"); val b = audio("b")
+        assertTrue(containsSameMedia(listOf("b", "a"), listOf(a, b)))
+        assertFalse(containsSameMedia(listOf("a"), listOf(a, b)))
+        assertFalse(containsSameMedia(listOf("a", "a"), listOf(a, b)))
+    }
 }

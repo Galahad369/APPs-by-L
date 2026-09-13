@@ -6,6 +6,23 @@ ads, analytics, accounts, telemetry, or network access.
 
 ## Features
 
+- v1.10.1 makes Developer mode readable regardless of theme and identifies individual
+  controls instead of only broad screen regions. It adds guarded three-confirmation
+  source-file deletion, reduces the mini overlay by another three physical pixels,
+  replaces the cold-loading artwork with a properly inset mark, limits double-tap seeking
+  to the outer side zones with one restrained cue, and makes Nodes place its strongest
+  weighted hub in the center with visibly shorter strong links. A finite wand animation
+  reveals the graph hub-first without leaving continuous physics running.
+- v1.10 makes the mini overlay exactly three physical pixels smaller and gives default
+  small Library thumbnails the same physical footprint. It restores Newest/Oldest sort,
+  adds one-tap filter clearing, preserves the selected Library order in whole-library
+  playback queues, bounds the double-tap seek animation, and expands Nodes with local
+  link-distance, repulsion, elasticity, and connected-node spring controls. Developer
+  mode can now identify tagged UI regions and copy exact px/dp geometry for bug reports.
+- v1.9.19 keeps the verified lightweight playback motion and removes a later experimental
+  animation rewrite that duplicated seeking, fabricated a fixed beat and broke row-size
+  choices. The five intended effects remain: staggered waveform reveal, subtle waveform
+  breathing, real-envelope cover motion, scrub feedback and finite double-tap seek ripples.
 - v1.9.18 refines **Nodes**, an optional filename-similarity graph. Library remains the
   default: swipe left (or tap Nodes) to enter. On Nodes, swipe right on the header or
   tap Library to return. The canvas itself supports pan, pinch zoom, drag and tap-to-play.
@@ -27,7 +44,8 @@ ads, analytics, accounts, telemetry, or network access.
   settled coordinates are cached locally; hidden graphs have no physics animation loop.
   See [graph implementation notes](docs/NODES.md) for the exact formula and large-library limits.
 - Mini-window return rebuilds Now Playing from the active media session without waiting
-  for a file scan. Audio and video overlays share the same tap/drag behavior and 111×64dp size.
+  for a file scan. Audio and video overlays share the same tap/drag behavior and use a
+  111×64dp base reduced by exactly three physical pixels on each axis.
   Waveforms use stable physical-file cache keys and a rolling eight-source audio warmup,
   including startup before anything is playing. Slow/stalled waveform decoding times out
   independently of playback. Coverless/unsupported audio is distinguished from thumbnail

@@ -10,3 +10,6 @@ internal fun waveformWarmupPaths(queue: List<MediaFile>, library: List<MediaFile
     return (files.drop(start) + files.take(start)).filter { it.kind == MediaKind.AUDIO }
         .distinctBy { it.sourcePath }.take(limit.coerceAtLeast(0)).map { it.path }
 }
+
+internal fun containsSameMedia(sessionIds: List<String>, ordered: List<MediaFile>): Boolean =
+    sessionIds.groupingBy { it }.eachCount() == ordered.map(MediaFile::path).groupingBy { it }.eachCount()

@@ -130,6 +130,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val metadataIndex = com.local.listentomusic.data.MetadataIndex(application)
     private var metadataJob: Job? = null
     private var sortingJob: Job? = null
+    private var syncQueueAfterSort = false
     private var undoAction: (suspend () -> Unit)? = null
     private var undoJob: Job? = null
     val undoMessage = MutableStateFlow<String?>(null)
@@ -328,7 +329,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setSortMode(mode: SortMode) {
+        if (mode == userPreferences.sortMode) return
         viewModelScope.launch {
+            syncQueueAfterSort = true
             if (mode == SortMode.CUSTOM && userPreferences.customOrder.isEmpty()) {
                 preferences.setCustomOrder(orderedFiles.map { it.path })
             } else {
@@ -350,6 +353,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         orderedFiles = moved
         _library.value = _library.value.copy(files = moved)
+        synchronizeExistingQueueOrder(moved)
         viewModelScope.launch { preferences.setCustomOrder(moved.map { it.path }) }
     }
 
@@ -924,6 +928,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             SortMode.NAME_ASC -> decorated.sortedWith(names)
             SortMode.NAME_DESC -> decorated.sortedWith(names.reversed())
+            SortMode.DATE_DESC -> decorated.sortedWith(compareByDescending<MediaFile> { it.modifiedMs }.then(names))
+            SortMode.DATE_ASC -> decorated.sortedWith(compareBy<MediaFile> { it.modifiedMs }.then(names))
         }
         val ordered = prefs.activePlaylistId
             ?.let { id -> prefs.playlists.firstOrNull { it.id == id } }
@@ -941,6 +947,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         ordered to shown
         }
         orderedFiles = ordered
+        if (syncQueueAfterSort) {
+            syncQueueAfterSort = false
+            synchronizeExistingQueueOrder(ordered)
+        }
         // A cold service restore contains only the remembered item. Append the library
         // once without restarting it. Explicit one-song playlists/queue edits stay intact.
         _controller.value?.let { player ->
@@ -969,6 +979,57 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _queue.value = com.local.listentomusic.model.reconcileSessionQueue(session.map { it.mediaId }, byId) { index ->
             com.local.listentomusic.model.mediaFileFromSession(session[index])
         }
+    }
+
+    /** Deletes one physical media file only. The caller owns the explicit confirmation UI. */
+    suspend fun deleteMediaFile(file: MediaFile): String? {
+        val candidate = withContext(Dispatchers.IO) { runCatching { File(file.sourcePath).canonicalFile }.getOrNull() }
+            ?: return "Android could not resolve this file. Nothing was deleted."
+        val failure = withContext(Dispatchers.IO) {
+            when {
+                !MediaScanner.isInsideTarget(candidate) -> "Safety check blocked deletion outside Download."
+                candidate.exists() && !candidate.isFile -> "The selected item is not a file. Nothing was deleted."
+                !candidate.exists() -> null
+                !candidate.delete() -> "Android refused to delete the file. Check file access and try again."
+                else -> null
+            }
+        }
+        if (failure != null) return failure
+
+        // Remove every cue/queue entry backed by the deleted physical file. Media3 then
+        // advances safely if it was the current item; an empty queue is explicitly stopped.
+        _controller.value?.let { player ->
+            val removed = (0 until player.mediaItemCount).filter { index ->
+                com.local.listentomusic.model.sourceMediaPath(player.getMediaItemAt(index).mediaId) == candidate.path
+            }
+            removed.asReversed().forEach(player::removeMediaItem)
+            if (player.mediaItemCount == 0) { player.stop(); player.clearMediaItems() }
+        }
+        scannedFiles = scannedFiles.filterNot { runCatching { File(it.sourcePath).canonicalPath == candidate.path }.getOrDefault(false) }
+        orderedFiles = orderedFiles.filterNot { runCatching { File(it.sourcePath).canonicalPath == candidate.path }.getOrDefault(false) }
+        _queue.value = _queue.value.filterNot { runCatching { File(it.sourcePath).canonicalPath == candidate.path }.getOrDefault(false) }
+        graph.value = null
+        applySortingAndFilter()
+        scanJob?.cancel()
+        scanJob = null
+        rescan()
+        return null
+    }
+
+    private fun synchronizeExistingQueueOrder(ordered: List<MediaFile>) {
+        val player = _controller.value ?: return
+        if (player.mediaItemCount == 0 || ordered.isEmpty()) return
+        val sessionIds = (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId }
+        if (!com.local.listentomusic.model.containsSameMedia(sessionIds, ordered)) return
+        val current = player.currentMediaItem?.mediaId ?: return
+        val index = ordered.indexOfFirst { it.path == current }
+        if (index < 0 || sessionIds == ordered.map(MediaFile::path)) return
+        val position = player.currentPosition.coerceAtLeast(0L)
+        val playWhenReady = player.playWhenReady
+        player.setMediaItems(ordered.map(MediaFile::toMediaItem), index, position)
+        player.prepare()
+        player.playWhenReady = playWhenReady
+        syncPlaybackQueue()
     }
 
     fun setGraphOptions(options: com.local.listentomusic.graph.GraphOptions) = viewModelScope.launch { preferences.setGraphOptions(options) }

@@ -11,6 +11,7 @@ import com.local.listentomusic.model.SortMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Test
 import androidx.media3.common.C
 import androidx.media3.common.Player
@@ -49,8 +50,20 @@ class FormattingTest {
         assertEquals(AppBackgroundMode.CURRENT_VIDEO, defaults.backgroundMode)
         assertEquals(0.55f, defaults.backgroundDim, 0.001f)
         assertEquals(
-            setOf(SortMode.CUSTOM, SortMode.NAME_ASC, SortMode.NAME_DESC),
+            setOf(SortMode.CUSTOM, SortMode.NAME_ASC, SortMode.NAME_DESC, SortMode.DATE_DESC, SortMode.DATE_ASC),
             SortMode.entries.toSet(),
         )
+    }
+
+    @Test fun miniWindowKeepsBothThreePixelReductions() {
+        assertEquals(105, com.local.listentomusic.model.MiniWindowMetrics.widthPx(1f))
+        assertEquals(216, com.local.listentomusic.model.MiniWindowMetrics.widthPx(2f))
+        assertEquals(122, com.local.listentomusic.model.MiniWindowMetrics.heightPx(2f))
+    }
+
+    @Test fun doubleTapSeekUsesOnlySideZones() {
+        assertEquals(-5_000L, com.local.listentomusic.ui.doubleTapSeekDelta(10f, 100f, 5_000L))
+        assertNull(com.local.listentomusic.ui.doubleTapSeekDelta(50f, 100f, 5_000L))
+        assertEquals(5_000L, com.local.listentomusic.ui.doubleTapSeekDelta(90f, 100f, 5_000L))
     }
 }

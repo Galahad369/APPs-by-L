@@ -51,4 +51,6 @@ enum class SortMode(val label: String) {
     CUSTOM("Custom order"),
     NAME_ASC("Name A-Z"),
     NAME_DESC("Name Z-A"),
+    DATE_DESC("Newest first"),
+    DATE_ASC("Oldest first"),
 }

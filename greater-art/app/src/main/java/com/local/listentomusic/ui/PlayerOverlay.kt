@@ -29,6 +29,7 @@ internal fun PlayerOverlay(state: MutableTransitionState<Boolean>, pictureInPict
         BoxWithConstraints(Modifier.fillMaxSize().animateEnterExit(enter = slideInVertically(tween(240)) { it }, exit = slideOutVertically(tween(180)) { it })) {
             val landscape = maxWidth > maxHeight
             Surface(Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(if (landscape) 1f else 0.97f)
+                .inspectElement("NOW_PLAYING_SHEET", "Dismissible Now Playing overlay")
                 .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } },
                 shape = RoundedCornerShape(topStart = if (landscape) 0.dp else 22.dp, topEnd = if (landscape) 0.dp else 22.dp),
                 color = MaterialTheme.colorScheme.background, tonalElevation = 2.dp) {

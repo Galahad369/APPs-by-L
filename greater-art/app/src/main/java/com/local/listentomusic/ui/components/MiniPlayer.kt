@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import com.local.listentomusic.PlaybackUiState
 import com.local.listentomusic.data.AppLanguage
 import com.local.listentomusic.ui.uiText
+import com.local.listentomusic.ui.inspectElement
 
 @Composable
 fun MiniPlayer(
@@ -61,6 +62,7 @@ fun MiniPlayer(
     // Translucent scrim with no hard card edge.
     Surface(
         modifier = Modifier.fillMaxWidth()
+            .inspectElement("LIBRARY_MINI_PLAYER", "Tap to open Now Playing")
             .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)),
         color = Color.Transparent,
         contentColor = MaterialTheme.colorScheme.onSurface,
@@ -108,10 +110,10 @@ fun MiniPlayer(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
                     )
-                    IconButton(onClick = onPrevious, enabled = playback.hasPrevious, modifier = Modifier.size(38.dp)) {
+                    IconButton(onClick = onPrevious, enabled = playback.hasPrevious, modifier = Modifier.size(38.dp).inspectElement("MINI_PREVIOUS_BUTTON", "Previous media")) {
                         Icon(Icons.Rounded.SkipPrevious, uiText(language, "Previous", "上一首"), modifier = Modifier.size(21.dp))
                     }
-                    IconButton(onClick = onTogglePlay, modifier = Modifier.size(42.dp)) {
+                    IconButton(onClick = onTogglePlay, modifier = Modifier.size(42.dp).inspectElement("MINI_PLAY_PAUSE_BUTTON", if (playback.isPlaying) "Pause" else "Play")) {
                         Icon(
                             if (playback.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                             uiText(language, if (playback.isPlaying) "Pause" else "Play", if (playback.isPlaying) "暫停" else "播放"),
@@ -119,7 +121,7 @@ fun MiniPlayer(
                             tint = MaterialTheme.colorScheme.secondary,
                         )
                     }
-                    IconButton(onClick = onNext, enabled = playback.hasNext, modifier = Modifier.size(38.dp)) {
+                    IconButton(onClick = onNext, enabled = playback.hasNext, modifier = Modifier.size(38.dp).inspectElement("MINI_NEXT_BUTTON", "Next media")) {
                         Icon(Icons.Rounded.SkipNext, uiText(language, "Next", "下一首"), modifier = Modifier.size(21.dp))
                     }
                 }
