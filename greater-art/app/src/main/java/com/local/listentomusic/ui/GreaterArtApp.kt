@@ -48,8 +48,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.net.toUri
 import com.local.listentomusic.MainViewModel
 import com.local.listentomusic.ui.components.MiniPlayer
-import com.local.listentomusic.ui.components.AppBackground
 import com.local.listentomusic.data.AppBackgroundMode
+import com.local.listentomusic.data.BackgroundScaleMode
+import com.local.listentomusic.data.FloatingWindowMode
 import com.local.listentomusic.model.LocalLyrics
 import com.local.listentomusic.ui.theme.GreaterArtTheme
 
@@ -63,6 +64,7 @@ fun GreaterArtApp(
     isPictureInPicture: Boolean,
     onPlayerScreenChanged: (Boolean) -> Unit,
     onVideoBoundsChanged: (Rect) -> Unit,
+    onMiniWindowSourceBoundsChanged: (Rect) -> Unit,
     onEnterPictureInPicture: () -> Unit,
     onGrantStorageAccess: () -> Unit,
 ) {
@@ -189,8 +191,7 @@ fun GreaterArtApp(
             // Stable ownership across navigation: prepare once, pause when covered,
             // and resume immediately when Library or Settings reveals the wallpaper.
             AppBackground(preferences = settings, currentPath = playback.currentPath, isVideo = playback.isVideo, controller = controller,
-                visible = !(sheetState.currentState || sheetState.targetState) &&
-                    !(screen == Screen.LIBRARY && libraryPager.settledPage == 1 && !libraryPager.isScrollInProgress))
+                visible = !(sheetState.currentState || sheetState.targetState))
             Surface(
                 modifier = Modifier.fillMaxSize(),
                 // A light palette needs an opaque-enough base over black/custom media.
@@ -233,7 +234,11 @@ fun GreaterArtApp(
                             MiniPlayer(
                                 playback = playback,
                                 artwork = artwork,
+                                controller = controller,
+                                videoPreviewActive = playback.isVideo &&
+                                    !(sheetState.currentState || sheetState.targetState),
                                 language = settings.appLanguage,
+                                onPreviewBoundsChanged = onMiniWindowSourceBoundsChanged,
                                 onOpen = { playerOpen = true },
                                 onTogglePlay = viewModel::togglePlayPause,
                                 onPrevious = viewModel::previous,
@@ -307,19 +312,20 @@ fun GreaterArtApp(
                     onImportM3u = { m3uImporter.launch(arrayOf("audio/x-mpegurl", "application/vnd.apple.mpegurl", "text/plain")) },
                     onExportM3u = { m3uExporter.launch("Greater-Art-playlist.m3u8") },
                     onBackgroundMode = { mode ->
-                        when {
-                            mode == AppBackgroundMode.CUSTOM_IMAGE &&
-                                (settings.customBackgroundImageUri == null ||
-                                    settings.backgroundMode == AppBackgroundMode.CUSTOM_IMAGE) ->
-                                imageBackgroundPicker.launch(arrayOf("image/*"))
-                            mode == AppBackgroundMode.CUSTOM_VIDEO &&
-                                (settings.customBackgroundVideoUri == null ||
-                                    settings.backgroundMode == AppBackgroundMode.CUSTOM_VIDEO) ->
-                                videoBackgroundPicker.launch(arrayOf("video/mp4"))
-                            else -> viewModel.setBackgroundMode(mode)
-                        }
-                    },
-                    onChooseBackgroundImage = {
+                                            when {
+                                                mode == AppBackgroundMode.CUSTOM_IMAGE &&
+                                                    (settings.customBackgroundImageUri == null ||
+                                                        settings.backgroundMode == AppBackgroundMode.CUSTOM_IMAGE) ->
+                                                    imageBackgroundPicker.launch(arrayOf("image/*"))
+                                                mode == AppBackgroundMode.CUSTOM_VIDEO &&
+                                                    (settings.customBackgroundVideoUri == null ||
+                                                        settings.backgroundMode == AppBackgroundMode.CUSTOM_VIDEO) ->
+                                                    videoBackgroundPicker.launch(arrayOf("video/mp4"))
+                                                else -> viewModel.setBackgroundMode(mode)
+                                            }
+                                        },
+                                        onBackgroundScaleMode = viewModel::setBackgroundScaleMode,
+                                        onChooseBackgroundImage = {
                         imageBackgroundPicker.launch(arrayOf("image/*"))
                     },
                     onChooseBackgroundVideo = {

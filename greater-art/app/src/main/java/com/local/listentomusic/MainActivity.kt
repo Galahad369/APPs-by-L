@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
     private var openPlayerRequest by mutableIntStateOf(0)
     private var playerScreenVisible = false
     private var videoSourceRect = Rect()
+    private var miniWindowSourceRect = Rect()
     private var returnScan: kotlinx.coroutines.Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -88,6 +89,7 @@ class MainActivity : ComponentActivity() {
                         updatePictureInPictureParams()
                     }
                 },
+                onMiniWindowSourceBoundsChanged = { miniWindowSourceRect = Rect(it) },
                 onEnterPictureInPicture = ::enterVideoPictureInPicture,
             )
         }
@@ -196,10 +198,12 @@ class MainActivity : ComponentActivity() {
         }
         return runCatching {
             com.local.listentomusic.ui.components.VideoSurfaceOwner.setActivityForeground(false)
-            ContextCompat.startForegroundService(
-                this,
-                Intent(this, MiniWindowOverlayService::class.java),
-            )
+            ContextCompat.startForegroundService(this, Intent(this, MiniWindowOverlayService::class.java).apply {
+                if (!miniWindowSourceRect.isEmpty) {
+                    putExtra(MiniWindowOverlayService.EXTRA_START_X, miniWindowSourceRect.left)
+                    putExtra(MiniWindowOverlayService.EXTRA_START_Y, miniWindowSourceRect.top)
+                }
+            })
             true
         }.getOrElse { false }
     }
@@ -260,6 +264,7 @@ private fun PermissionAwareApp(
     isPictureInPicture: Boolean,
     onPlayerScreenChanged: (Boolean) -> Unit,
     onVideoBoundsChanged: (Rect) -> Unit,
+    onMiniWindowSourceBoundsChanged: (Rect) -> Unit,
     onEnterPictureInPicture: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -284,6 +289,7 @@ private fun PermissionAwareApp(
         isPictureInPicture = isPictureInPicture,
         onPlayerScreenChanged = onPlayerScreenChanged,
         onVideoBoundsChanged = onVideoBoundsChanged,
+        onMiniWindowSourceBoundsChanged = onMiniWindowSourceBoundsChanged,
         onEnterPictureInPicture = onEnterPictureInPicture,
         onGrantStorageAccess = {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {

@@ -27,6 +27,7 @@ import com.local.listentomusic.data.LibraryRowSize
 import com.local.listentomusic.data.ThemeMode
 import com.local.listentomusic.data.AppLanguage
 import com.local.listentomusic.data.AppBackgroundMode
+import com.local.listentomusic.data.BackgroundScaleMode
 import com.local.listentomusic.data.FloatingWindowMode
 import com.local.listentomusic.model.MediaFile
 import com.local.listentomusic.model.LocalLyrics
@@ -485,8 +486,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         updatePreference { preferences.setFloatingWindowMode(value) }
     fun setAppLanguage(value: AppLanguage) = updatePreference { preferences.setAppLanguage(value) }
     fun setBackgroundMode(value: AppBackgroundMode) =
-        updatePreference { preferences.setBackgroundMode(value) }
-    fun setCustomBackgroundImage(uri: String?) = updatePreference {
+            updatePreference { preferences.setBackgroundMode(value) }
+        fun setBackgroundScaleMode(value: BackgroundScaleMode) =
+            updatePreference { preferences.setBackgroundScaleMode(value) }
+        fun setCustomBackgroundImage(uri: String?) = updatePreference {
         preferences.setCustomBackgroundImageUri(uri)
         if (uri != null) preferences.setBackgroundMode(AppBackgroundMode.CUSTOM_IMAGE)
     }

@@ -6,6 +6,22 @@ ads, analytics, accounts, telemetry, or network access.
 
 ## Features
 
+- v1.10.3 removes the last ratio-generated edge gap from the floating video surface
+  without restoring hidden padding: the fixed window stays `103×56dp` and the video crops
+  edge-to-edge. Nodes now shows the selected app background. Current-video wallpaper uses
+  a separate muted low-resolution decoder with aspect-ratio-preserving `FIT`, so it neither
+  stretches nor steals Media3's primary surface from the Library live-video preview. The
+  Library position seeds the external mini-window only once; later launches restore the
+  user's last dragged position.
+- v1.10.2 restores the older mini-window's effective `103×56dp` footprint and removes
+  the double-applied bottom system inset so it can reach the physical bottom edge. The
+  Library bottom player uses the same preview dimensions, displays live video when safe,
+  and supplies the floating window's spawn position. Now Playing follows the pull-down
+  handle with a real dismiss animation; its timeline/transport area sits lower and tighter.
+  Library uses the app mark and gives the primary All songs control clearer hierarchy over
+  the outlined Nodes action. Nodes adds restrained organic drift and much stronger visual
+  weighting for highly connected files. Double-tap seek is back to one basic YouTube-style
+  icon/readout, with the middle zone still inert.
 - v1.10.1 makes Developer mode readable regardless of theme and identifies individual
   controls instead of only broad screen regions. It adds guarded three-confirmation
   source-file deletion, reduces the mini overlay by another three physical pixels,
@@ -36,12 +52,12 @@ ads, analytics, accounts, telemetry, or network access.
   not invented BPM; paused/hidden playback stops decorative motion. Scrubbing shows
   a lifted timestamp/cached cover without decoding on every drag. Only actual A/B
   markers attract the seek position, never fabricated keyframe/10% markers.
-- Double-tap seek feedback has directional chevrons/rings and accumulates repeated
+- Double-tap seek feedback uses a basic side icon/readout and accumulates repeated
   seeks. Playback speed uses a compact gauge with an animated needle.
 - Graph connections use raw filenames only: Unicode words/CJK runs, shared characters,
   bigrams/trigrams and a small prefix boost. No tags, listening history or manual links.
   Similarity and finite force-layout computation run off the UI thread. Edges and
-  settled coordinates are cached locally; hidden graphs have no physics animation loop.
+  settled coordinates are cached locally; only the visible graph draws gentle drift.
   See [graph implementation notes](docs/NODES.md) for the exact formula and large-library limits.
 - Mini-window return rebuilds Now Playing from the active media session without waiting
   for a file scan. Audio and video overlays share the same tap/drag behavior and use a

@@ -4,6 +4,11 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -48,7 +53,8 @@ fun NodesScreen(graph: LibraryGraph?, loading: Boolean, error: String?, currentP
     contentPadding: PaddingValues, onLibrary: () -> Unit, onRetry: () -> Unit, onPlay: (String) -> Unit,
     options: GraphOptions, onOptions: (GraphOptions) -> Unit) {
     Column(Modifier.fillMaxSize().inspectElement("NODES_SCREEN", "Filename-similarity graph page")
-        .background(MaterialTheme.colorScheme.background).padding(contentPadding).consumeWindowInsets(contentPadding).statusBarsPadding()) {
+        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.72f))
+        .padding(contentPadding).consumeWindowInsets(contentPadding).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("Nodes", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(vertical = 12.dp))
             TextButton(onClick = onLibrary) { Text("← Library") }
@@ -77,6 +83,13 @@ private fun GraphCanvas(graph: LibraryGraph, currentPath: String?, onPlay: (Stri
     }
     var controls by remember { mutableStateOf(false) }
     val reveal = remember(graph) { Animatable(1f) }
+    val organicMotion = rememberInfiniteTransition(label = "graph-organic-motion")
+    val jigglePhase by organicMotion.animateFloat(
+        initialValue = 0f,
+        targetValue = (PI * 2f).toFloat(),
+        animationSpec = infiniteRepeatable(tween(7_500, easing = LinearEasing), RepeatMode.Restart),
+        label = "graph-jiggle-phase",
+    )
     val animationScope = rememberCoroutineScope()
     val revealRank = remember(presentation.importance) {
         IntArray(graph.nodes.size).also { rank ->
@@ -193,7 +206,13 @@ private fun GraphCanvas(graph: LibraryGraph, currentPath: String?, onPlay: (Stri
                 return ((reveal.value - delay) / .28f).coerceIn(0f, 1f)
             }
             val positions = points.mapIndexed { i, p ->
-                val settled = ((moved[i] ?: Offset(p.x, p.y)) + (flex[i] ?: Offset.Zero) * flexAmount) * scale + pan + center
+                val importance = presentation.importance.getOrElse(i) { 0f }
+                // Small deterministic drift gives the settled force graph Obsidian-like
+                // life without restarting the expensive physics solver on every frame.
+                val amplitude = (1.1f + (1f - importance) * 1.7f).dp.toPx()
+                val phase = jigglePhase + i * 1.618f
+                val jiggle = Offset(sin(phase) * amplitude, cos(phase * .83f) * amplitude)
+                val settled = ((moved[i] ?: Offset(p.x, p.y)) + (flex[i] ?: Offset.Zero) * flexAmount) * scale + pan + center + jiggle
                 center + (settled - center) * nodePhase(i)
             }
             fun visible(p: Offset) = p.x in -40f..size.width + 40 && p.y in -40f..size.height + 40
@@ -215,7 +234,8 @@ private fun GraphCanvas(graph: LibraryGraph, currentPath: String?, onPlay: (Stri
                     val phase = nodePhase(i)
                     if (phase <= 0f) return@forEachIndexed
                     val pop = phase + .18f * sin(phase * PI).toFloat()
-                    val radius = ((3.5f + importance * 5.5f) * options.nodeSize).dp.toPx() * pop
+                    // Weighted hubs must read at a glance, not as a one-pixel difference.
+                    val radius = ((3.2f + importance.pow(.68f) * 10.8f) * options.nodeSize).dp.toPx() * pop
                     if (active) drawCircle(color.copy(alpha = .14f), radius + 8.dp.toPx(), p)
                     drawCircle(if (active) color else ink.copy(alpha = .48f + importance * .4f), radius, p)
                     if (playing) {

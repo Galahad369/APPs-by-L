@@ -1,14 +1,88 @@
 # HANDOFF — Greater Art Android Media Player
 
 **Project:** `greater-art/` in the repository checkout  
-**Current version:** `1.10.1` (code 73), inspector/delete/seek/graph refinement
-**Latest APK:** `releases/GreaterArt-v1.10.1-build2-debug.apk` (verification below)
+**Current version:** `1.10.3` (code 75), edge-fill/background/surface-ownership fix
+**Latest APK:** `releases/GreaterArt-v1.10.3-build2-debug.apk` (verification below)
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 ## Current State
 
-### September 13 — 1.10.1 local refinement (latest)
+### September 15 — 1.10.3 local refinement (latest)
+
+- Local-only work: no commit, tag, push, release upload, or remote mutation.
+- The remaining approximately one-pixel mini-window gap was not hidden padding. The fixed
+  103×56dp window and a near-but-not-identical source aspect ratio caused `RESIZE_MODE_FIT`
+  to letterbox by a rounded pixel. The external mini-window now uses `ZOOM`, filling the
+  exact existing window edge-to-edge with a minute crop. Root padding remains exactly zero;
+  the old effective size remains 103×56dp.
+- Nodes previously forced an opaque background and the app root explicitly disabled its
+  wallpaper on graph page 1. The root now keeps the chosen background active and Nodes uses
+  a readable 72%-opaque theme veil, so DEFAULT, image, custom-video and current-video modes
+  remain visible without sacrificing graph contrast.
+- Library's live video initially failed because CURRENT_VIDEO wallpaper and the mini-player
+  both called `VideoSurfaceOwner.attach` on the same MediaController. Media3 has one primary
+  video output here, so whichever recomposed last stole the surface. CURRENT_VIDEO wallpaper
+  now uses the already-bounded secondary background ExoPlayer: muted, audio track disabled,
+  maximum 640×360 decode, lifecycle-paused and periodically resynchronized. Its presentation
+  uses `FIT` to preserve the complete source aspect ratio rather than stretching/cropping.
+  The Library preview alone owns the primary surface while Now Playing is closed.
+- The Library preview bounds are only a first-run spawn hint. MiniWindowOverlayService now
+  persists the user's last clamped X/Y locally after the first spawn, every completed drag
+  and configuration changes. Later service starts restore those coordinates and ignore the
+  Library hint, avoiding an unwanted reset to the bottom bar.
+- Verification: offline `testDebugUnitTest lintDebug assembleDebug` succeeded with 78 tests,
+  0 failures/errors and lint 0 errors / 13 warnings. APK metadata confirms package
+  `com.local.listentomusic`, version 1.10.3 / code 75, no INTERNET permission and the pinned
+  signing certificate. Final artifact: `releases/GreaterArt-v1.10.3-build2-debug.apk`
+  (25,955,028 bytes), SHA-256
+  `6171588da51568e7cd33928630531e53848d6abdf7b1ddba86c3b3ffa0555faa`.
+  The earlier `GreaterArt-v1.10.3-debug.apk` is preserved but superseded; build2 contains
+  the final saved-position implementation and its lint-clean KTX preference write.
+  No Android device was connected. Device-check the first spawn, saved-position restoration,
+  Samsung bottom edge, Library video handoff and CURRENT_VIDEO aspect presentation.
+
+### September 15 — 1.10.2 local refinement
+
+- Local-only work: no commit, tag, push, release upload, or remote mutation.
+- The reported size regression was real: the older 111×64dp overlay had a 4dp gutter,
+  giving it an effective visible footprint of 103×56dp. Removing the gutter while keeping
+  almost the full outer size made the replacement visibly larger/taller. The shared metric
+  is now the old effective 103×56dp directly, with no invisible content padding; the default
+  small Library thumbnail and in-app video preview use that same contract.
+- The bottom drag wall came from applying system-bar fitting in WindowManager and then
+  subtracting top+bottom insets again in the app clamp. Navigation-bar fitting and the
+  second subtraction are removed. Status-bar protection remains; users may intentionally
+  drag the overlay over the bottom navigation region as the older version allowed.
+- The in-app bottom player now renders the active video through the shared Media3 surface
+  owner only while Now Playing is closed. Its preview bounds seed the external overlay's
+  start position, so leaving the Activity begins at the matching bottom-player location.
+  Cleanup uses the existing identity-safe surface detach to avoid blanking the incoming view.
+- Now Playing's previous drag detector only dismissed after release, so the sheet appeared
+  immovable. The top handle now moves the complete sheet with the finger, uses distance or
+  downward velocity to dismiss, and springs back when cancelled. Queue and timeline gestures
+  remain untouched because dragging is limited to the handle. Audio/video bottom controls
+  have reduced dead padding and sit closer to the system navigation edge.
+- Library renders the actual launcher foreground instead of a generic note. Nodes is an
+  outlined secondary action with a graph glyph, while All songs remains the filled, wider
+  primary control. Nodes keeps cached background layout, adds tiny deterministic visible-only
+  drift, and expands weighted hub radii substantially so strong multi-link files dominate.
+- Double-tap feedback is reduced to the familiar fixed rewind/fast-forward glyph and seconds
+  label with a short fade. No rings, moving chevrons, scaling, or duplicate animation remains;
+  the central 30% still performs no seek.
+- Verification: offline `testDebugUnitTest lintDebug assembleDebug` succeeded with 78 tests,
+  0 failures/errors and lint 0 errors / 13 warnings. APK metadata confirms package
+  `com.local.listentomusic`, version 1.10.2 / code 74, no INTERNET permission and pinned
+  certificate SHA-256 `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`.
+  Final artifact: `releases/GreaterArt-v1.10.2-build2-debug.apk` (25,944,100 bytes),
+  SHA-256 `eb495ff89b2525fe379616cc77827607812715e6165add8f8f49895a05f343bf`.
+  The earlier `GreaterArt-v1.10.2-debug.apk` is preserved but superseded: its live-video
+  preview could still accept Android-view clicks instead of consistently passing them to
+  the mini-player row. Build2 makes that PlayerView non-clickable/non-focusable.
+  No device was connected. Real-device checks still required: Samsung bottom-edge overlap,
+  pull-down gesture/velocity, surface handoff without a black video frame, and dense-graph FPS.
+
+### September 13 — 1.10.1 local refinement
 
 - Local-only work: no commit, tag, push, release upload, or remote mutation.
 - Developer mode previously tagged only large parent regions and reused the active theme

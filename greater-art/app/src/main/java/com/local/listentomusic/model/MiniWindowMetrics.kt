@@ -4,10 +4,11 @@ import kotlin.math.max
 
 /** Shared physical size contract for the overlay and the default Library thumbnail. */
 object MiniWindowMetrics {
-    const val WIDTH_DP = 111
-    const val HEIGHT_DP = 64
-    // v1.10 already removed 3 physical px; v1.10.1 removes 3 more as requested.
-    const val SHRINK_PX = 6
+    // The older window was 111×64dp with a 4dp content gutter on every side.
+    // Keep its actual visible 103×56dp footprint without bringing the invisible gutter back.
+    const val WIDTH_DP = 103
+    const val HEIGHT_DP = 56
+    const val SHRINK_PX = 0
 
     fun widthPx(density: Float): Int = max(1, (WIDTH_DP * density).toInt() - SHRINK_PX)
     fun heightPx(density: Float): Int = max(1, (HEIGHT_DP * density).toInt() - SHRINK_PX)

@@ -38,7 +38,8 @@ data class UserPreferences(
     val customBackgroundImageUri: String? = null,
     val customBackgroundVideoUri: String? = null,
     val backgroundDim: Float = 0.55f,
-    val playlists: List<LocalPlaylist> = emptyList(),
+        val backgroundScaleMode: BackgroundScaleMode = BackgroundScaleMode.CROP,
+        val playlists: List<LocalPlaylist> = emptyList(),
     val activePlaylistId: String? = null,
     val seekOffsetMs: Long = 5_000L,
     val appFont: AppFont = AppFont.SYSTEM,
@@ -62,6 +63,11 @@ enum class AppLanguage(val label: String) {
     GERMAN("Deutsch"), FRENCH("Français"), CANTONESE("廣東話"),
 }
 enum class AppBackgroundMode { DEFAULT, CUSTOM_IMAGE, CUSTOM_VIDEO, CURRENT_VIDEO }
+enum class BackgroundScaleMode(val label: String) {
+    FIT("Fit"),
+    STRETCH("Stretch"),
+    CROP("Crop"),
+}
 enum class AppFont(val label: String) {
     SYSTEM("System"), SANS_SERIF("Sans serif"), SERIF("Serif"), MONOSPACE("Monospace"),
     CURSIVE("Cursive"), INTER("Inter"), NUNITO("Nunito"), OSWALD("Oswald"),
@@ -99,7 +105,8 @@ class AppPreferences(private val context: Context) {
         val customBackgroundImageUri = stringPreferencesKey("custom_background_image_uri")
         val customBackgroundVideoUri = stringPreferencesKey("custom_background_video_uri")
         val backgroundDim = floatPreferencesKey("background_dim")
-        val playlists = stringPreferencesKey("playlists")
+                val backgroundScaleMode = stringPreferencesKey("background_scale_mode")
+                val playlists = stringPreferencesKey("playlists")
         val activePlaylistId = stringPreferencesKey("active_playlist_id")
         val seekOffsetMs = longPreferencesKey("seek_offset_ms")
         val appFont = stringPreferencesKey("app_font")
@@ -158,7 +165,11 @@ class AppPreferences(private val context: Context) {
             customBackgroundImageUri = prefs[Keys.customBackgroundImageUri],
             customBackgroundVideoUri = prefs[Keys.customBackgroundVideoUri],
             backgroundDim = (prefs[Keys.backgroundDim] ?: 0.55f).coerceIn(0.25f, 0.85f),
-            playlists = decodePlaylists(prefs[Keys.playlists].orEmpty()),
+                        backgroundScaleMode = enumValueOrDefault(
+                            prefs[Keys.backgroundScaleMode],
+                            BackgroundScaleMode.CROP,
+                        ),
+                        playlists = decodePlaylists(prefs[Keys.playlists].orEmpty()),
             activePlaylistId = prefs[Keys.activePlaylistId],
             seekOffsetMs = prefs[Keys.seekOffsetMs] ?: 5_000L,
             appFont = effectiveFont,
@@ -268,8 +279,10 @@ class AppPreferences(private val context: Context) {
         else prefs[Keys.customBackgroundVideoUri] = value
     }
     suspend fun setBackgroundDim(value: Float) =
-        edit { it[Keys.backgroundDim] = value.coerceIn(0.25f, 0.85f) }
-    suspend fun setSeekOffsetMs(value: Long) = edit { it[Keys.seekOffsetMs] = value }
+            edit { it[Keys.backgroundDim] = value.coerceIn(0.25f, 0.85f) }
+        suspend fun setBackgroundScaleMode(value: BackgroundScaleMode) =
+            edit { it[Keys.backgroundScaleMode] = value.name }
+        suspend fun setSeekOffsetMs(value: Long) = edit { it[Keys.seekOffsetMs] = value }
     suspend fun setAppFont(value: AppFont) = edit {
         it[Keys.appFont] = value.name
         // One source of truth: this old key is migration-only.
@@ -382,10 +395,11 @@ class AppPreferences(private val context: Context) {
             it.remove(Keys.floatingWindowDefaultV2)
             it.remove(Keys.appLanguage)
             it.remove(Keys.backgroundMode)
-            it.remove(Keys.customBackgroundImageUri)
-            it.remove(Keys.customBackgroundVideoUri)
-            it.remove(Keys.backgroundDim)
-            it.remove(Keys.seekOffsetMs)
+                        it.remove(Keys.customBackgroundImageUri)
+                        it.remove(Keys.customBackgroundVideoUri)
+                        it.remove(Keys.backgroundDim)
+                        it.remove(Keys.backgroundScaleMode)
+                        it.remove(Keys.seekOffsetMs)
             it.remove(Keys.appFont)
             it.remove(Keys.developerMode)
             it.remove(Keys.editableQueue)
