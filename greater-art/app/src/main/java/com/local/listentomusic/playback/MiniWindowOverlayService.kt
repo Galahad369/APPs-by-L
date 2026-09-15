@@ -25,6 +25,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import androidx.media3.common.Player
 import androidx.media3.common.MediaMetadata
 import androidx.media3.session.MediaController
@@ -98,6 +99,11 @@ class MiniWindowOverlayService : Service() {
         private const val CHANNEL_ID = "greater_art_playback"
         const val EXTRA_STOP_APP = "stop_app"
         const val EXTRA_OPEN_PLAYER = "open_player"
+        const val EXTRA_START_X = "start_x"
+        const val EXTRA_START_Y = "start_y"
+        private const val POSITION_PREFS = "mini_window_position"
+        private const val POSITION_X = "x"
+        private const val POSITION_Y = "y"
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -120,12 +126,16 @@ class MiniWindowOverlayService : Service() {
                 ).apply {
             gravity = Gravity.TOP or Gravity.LEFT
             if (Build.VERSION.SDK_INT >= 30) {
-                setFitInsetsTypes(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
-                setFitInsetsSides(WindowInsets.Side.TOP or WindowInsets.Side.BOTTOM)
+                // Protect the status bar, but deliberately allow the user to drag over
+                // the navigation-bar area just like the older mini window.
+                setFitInsetsTypes(WindowInsets.Type.statusBars())
+                setFitInsetsSides(WindowInsets.Side.TOP)
             }
-            x = dp(12)
-            y = dp(300)
+            val saved = getSharedPreferences(POSITION_PREFS, MODE_PRIVATE)
+            x = saved.getInt(POSITION_X, dp(12))
+            y = saved.getInt(POSITION_Y, dp(300))
         }
+        clampPosition()
         try {
             root?.let { wm?.addView(it, params!!) }
         } catch (t: Throwable) {
@@ -163,7 +173,18 @@ class MiniWindowOverlayService : Service() {
         }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_NOT_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val layout = params
+        val saved = getSharedPreferences(POSITION_PREFS, MODE_PRIVATE)
+        if (layout != null && !saved.contains(POSITION_X) && intent?.hasExtra(EXTRA_START_X) == true) {
+            layout.x = intent.getIntExtra(EXTRA_START_X, layout.x)
+            layout.y = intent.getIntExtra(EXTRA_START_Y, layout.y)
+            clampPosition()
+            updateRootLayout()
+            savePosition()
+        }
+        return START_NOT_STICKY
+    }
 
     private fun buildNotification() =
         NotificationCompat.Builder(this, CHANNEL_ID)
@@ -264,7 +285,9 @@ class MiniWindowOverlayService : Service() {
         videoView = PlayerView(this).apply {
             layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             useController = false
-            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+            // Fill the exact 103×56dp window. FIT can create a one-pixel letterbox
+            // when the source ratio and rounded overlay dimensions differ slightly.
+            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
             setKeepContentOnPlayerReset(true)
             visibility = View.GONE
         }
@@ -390,6 +413,7 @@ class MiniWindowOverlayService : Service() {
                     root?.removeCallbacks(dragFrame)
                     framePending = false
                     updateRootLayout()
+                    savePosition()
                     // Read actual on-screen coordinates after the final layout, not
                     // the previous move event's position.
                     val generation = gestureGeneration
@@ -437,11 +461,9 @@ class MiniWindowOverlayService : Service() {
         val bounds = if (Build.VERSION.SDK_INT >= 30) wm?.currentWindowMetrics?.bounds else null
         val metrics = resources.displayMetrics
         layout.x = layout.x.coerceIn(0, ((bounds?.width() ?: metrics.widthPixels) - layout.width).coerceAtLeast(0))
-        val verticalInsets = if (Build.VERSION.SDK_INT >= 30) {
-            val insets = wm?.currentWindowMetrics?.windowInsets?.getInsetsIgnoringVisibility(WindowInsets.Type.systemBars())
-            (insets?.top ?: 0) + (insets?.bottom ?: 0)
-        } else 0
-        val height = (bounds?.height() ?: metrics.heightPixels) - verticalInsets
+        // LayoutParams already applies the requested top inset. Subtracting system bars
+        // here a second time created the visible bottom "wall" on Samsung devices.
+        val height = bounds?.height() ?: metrics.heightPixels
         layout.y = layout.y.coerceIn(0, (height - layout.height).coerceAtLeast(0))
     }
 
@@ -471,17 +493,6 @@ class MiniWindowOverlayService : Service() {
         return dx * dx + dy * dy <= radius * radius
     }
 
-    private fun navigationBarInsetBottom(): Int {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            return wm?.currentWindowMetrics?.windowInsets
-                ?.getInsetsIgnoringVisibility(WindowInsets.Type.navigationBars())
-                ?.bottom ?: 0
-        }
-        // Pre-R overlay coordinates are already constrained to the usable display
-        // frame. Adding a reflected system dimension double-counts some OEM bars.
-        return 0
-    }
-
     private fun updateRootLayout() {
         val view = root ?: return
         val layout = params ?: return
@@ -496,6 +507,15 @@ class MiniWindowOverlayService : Service() {
         }
         clampPosition()
         updateRootLayout()
+        savePosition()
+    }
+
+    private fun savePosition() {
+        val layout = params ?: return
+        getSharedPreferences(POSITION_PREFS, MODE_PRIVATE).edit {
+            putInt(POSITION_X, layout.x)
+            putInt(POSITION_Y, layout.y)
+        }
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()

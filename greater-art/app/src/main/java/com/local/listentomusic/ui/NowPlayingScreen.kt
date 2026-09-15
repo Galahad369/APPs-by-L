@@ -525,7 +525,8 @@ private fun AudioPlayer(
             SeekFeedback(seekFeedback.first, seekFeedback.second, Modifier.align(if (seekFeedback.first < 0) Alignment.CenterStart else Alignment.CenterEnd))
         }
         Column(
-            modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 20.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth().weight(1f)
+                .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 0.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
@@ -594,7 +595,7 @@ private fun SecondaryControls(
     Column(
         modifier = modifier.background(MaterialTheme.colorScheme.background)
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(horizontal = 20.dp, vertical = 18.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 0.dp),
         horizontalAlignment = Alignment.Start,
     ) {
         Text(
@@ -1025,7 +1026,7 @@ private fun PlayerBottomControls(
         else -> uiText(playback.appLanguage, "Off", "關閉")
     }
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
+        modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
             .inspectElement("TRANSPORT_CONTROLS", "Repeat/random, previous, play/pause, next, and speed"),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,

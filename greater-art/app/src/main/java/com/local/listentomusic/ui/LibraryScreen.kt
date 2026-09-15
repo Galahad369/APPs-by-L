@@ -36,6 +36,7 @@ import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Hub
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -50,6 +51,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -78,6 +80,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import com.local.listentomusic.LibraryStatus
 import com.local.listentomusic.LibraryUiState
 import com.local.listentomusic.data.LibraryRowSize
@@ -155,11 +158,11 @@ fun LibraryScreen(
                             shape = markShape,
                             contentAlignment = Alignment.Center,
                         ) {
-                            Icon(
-                                Icons.Rounded.MusicNote,
-                                null,
-                                Modifier.size(22.dp),
-                                MaterialTheme.colorScheme.onSurface,
+                            Image(
+                                painter = painterResource(com.local.listentomusic.R.drawable.ic_launcher_foreground),
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize().padding(3.dp),
+                                contentScale = ContentScale.Fit,
                             )
                         }
                         Spacer(Modifier.width(11.dp))
@@ -249,9 +252,18 @@ fun LibraryScreen(
                 Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextButton(onClick = onOpenNodes, modifier = Modifier.inspectElement("NODES_BUTTON", "Opens filename-similarity graph")) { Text(uiText(language, "Nodes", "節點")) }
+                OutlinedButton(
+                    onClick = onOpenNodes,
+                    modifier = Modifier.inspectElement("NODES_BUTTON", "Opens filename-similarity graph"),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
+                ) {
+                    Icon(Icons.Rounded.Hub, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(uiText(language, "Nodes", "關聯圖"), style = MaterialTheme.typography.labelLarge)
+                }
                 Box(Modifier.weight(1f)) {
-                    Button(onClick = { playlistMenuOpen = true }, modifier = Modifier.inspectElement("PLAYLIST_BUTTON", "Selects or manages a playlist")) {
+                    Button(onClick = { playlistMenuOpen = true }, modifier = Modifier.fillMaxWidth()
+                        .inspectElement("PLAYLIST_BUTTON", "Selects or manages a playlist")) {
                         Icon(Icons.AutoMirrored.Rounded.QueueMusic, null)
                         Spacer(Modifier.width(8.dp))
                         Text(activePlaylist?.name ?: uiText(language, "All songs", "所有歌曲"), maxLines = 1)

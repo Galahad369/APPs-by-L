@@ -57,6 +57,7 @@ import com.local.listentomusic.PlaybackUiState
 import com.local.listentomusic.data.AppLanguage
 import com.local.listentomusic.data.AppFont
 import com.local.listentomusic.data.AppBackgroundMode
+import com.local.listentomusic.data.BackgroundScaleMode
 import com.local.listentomusic.data.FloatingWindowMode
 import com.local.listentomusic.data.LibraryRowSize
 import com.local.listentomusic.data.LocalPlaylist
@@ -95,7 +96,8 @@ fun SettingsScreen(
     onImportM3u: () -> Unit,
     onExportM3u: () -> Unit,
     onBackgroundMode: (AppBackgroundMode) -> Unit,
-    onChooseBackgroundImage: () -> Unit,
+        onBackgroundScaleMode: (BackgroundScaleMode) -> Unit,
+        onChooseBackgroundImage: () -> Unit,
     onChooseBackgroundVideo: () -> Unit,
     onClearBackgroundImage: () -> Unit,
     onClearBackgroundVideo: () -> Unit,
@@ -206,8 +208,16 @@ fun SettingsScreen(
                         }
                     },
                     onBackgroundMode,
-                )
-                when (preferences.backgroundMode) {
+                                    )
+                                    ChoiceSetting(
+                                        uiText(language, "Background fit", "背景適配"),
+                                        uiText(language, "How custom images and videos fill the screen. Crop is the default.", "自訂圖片與影片如何填滿螢幕。預設為裁切。"),
+                                        BackgroundScaleMode.entries,
+                                        preferences.backgroundScaleMode,
+                                        { it.label },
+                                        onBackgroundScaleMode,
+                                    )
+                                    when (preferences.backgroundMode) {
                     AppBackgroundMode.CUSTOM_IMAGE -> BackgroundFileSetting(
                         title = uiText(language, "Custom image", "自訂圖片"),
                         selected = preferences.customBackgroundImageUri != null,

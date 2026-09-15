@@ -1,6 +1,7 @@
 package com.local.listentomusic.ui.components
 
 import android.graphics.Bitmap
+import android.graphics.Rect
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -32,30 +33,50 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.local.listentomusic.PlaybackUiState
 import com.local.listentomusic.data.AppLanguage
+import com.local.listentomusic.model.MiniWindowMetrics
 import com.local.listentomusic.ui.uiText
 import com.local.listentomusic.ui.inspectElement
+import androidx.media3.common.Player
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
+import kotlin.math.roundToInt
 
 @Composable
 fun MiniPlayer(
     playback: PlaybackUiState,
     artwork: Bitmap?,
+    controller: Player?,
+    videoPreviewActive: Boolean,
     language: AppLanguage,
+    onPreviewBoundsChanged: (Rect) -> Unit,
     onOpen: () -> Unit,
     onTogglePlay: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
 ) {
+    val density = LocalDensity.current
+    val previewWidth = with(density) { MiniWindowMetrics.widthPx(this.density).toDp() }
+    val previewHeight = with(density) { MiniWindowMetrics.heightPx(this.density).toDp() }
     val progress = if (playback.durationMs > 0L) {
         (playback.positionMs.toFloat() / playback.durationMs).coerceIn(0f, 1f)
     } else 0f
@@ -69,23 +90,31 @@ fun MiniPlayer(
     ) {
         LiquidMetalSurface(
             modifier = Modifier.fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 6.dp)
-                .heightIn(max = 62.dp)
+                .padding(horizontal = 10.dp, vertical = 4.dp)
                 .clip(RoundedCornerShape(20.dp)),
             shape = RoundedCornerShape(20.dp),
         ) {
             Column(modifier = Modifier.clickable(onClick = onOpen)) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    modifier = Modifier.fillMaxWidth().height(previewHeight),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(
-                        modifier = Modifier.padding(start = 8.dp).size(42.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        modifier = Modifier.size(previewWidth, previewHeight)
+                            .onGloballyPositioned { coordinates ->
+                                val bounds = coordinates.boundsInWindow()
+                                onPreviewBoundsChanged(Rect(
+                                    bounds.left.roundToInt(), bounds.top.roundToInt(),
+                                    bounds.right.roundToInt(), bounds.bottom.roundToInt(),
+                                ))
+                            }
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color.Black),
                         contentAlignment = Alignment.Center,
                     ) {
-                        if (artwork != null) {
+                        if (playback.isVideo && videoPreviewActive && controller != null) {
+                            InlineVideoPreview(controller)
+                        } else if (artwork != null) {
                             Image(
                                 bitmap = artwork.asImageBitmap(),
                                 contentDescription = null,
@@ -110,10 +139,10 @@ fun MiniPlayer(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
                     )
-                    IconButton(onClick = onPrevious, enabled = playback.hasPrevious, modifier = Modifier.size(38.dp).inspectElement("MINI_PREVIOUS_BUTTON", "Previous media")) {
+                    IconButton(onClick = onPrevious, enabled = playback.hasPrevious, modifier = Modifier.size(34.dp).inspectElement("MINI_PREVIOUS_BUTTON", "Previous media")) {
                         Icon(Icons.Rounded.SkipPrevious, uiText(language, "Previous", "上一首"), modifier = Modifier.size(21.dp))
                     }
-                    IconButton(onClick = onTogglePlay, modifier = Modifier.size(42.dp).inspectElement("MINI_PLAY_PAUSE_BUTTON", if (playback.isPlaying) "Pause" else "Play")) {
+                    IconButton(onClick = onTogglePlay, modifier = Modifier.size(38.dp).inspectElement("MINI_PLAY_PAUSE_BUTTON", if (playback.isPlaying) "Pause" else "Play")) {
                         Icon(
                             if (playback.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                             uiText(language, if (playback.isPlaying) "Pause" else "Play", if (playback.isPlaying) "暫停" else "播放"),
@@ -121,7 +150,7 @@ fun MiniPlayer(
                             tint = MaterialTheme.colorScheme.secondary,
                         )
                     }
-                    IconButton(onClick = onNext, enabled = playback.hasNext, modifier = Modifier.size(38.dp).inspectElement("MINI_NEXT_BUTTON", "Next media")) {
+                    IconButton(onClick = onNext, enabled = playback.hasNext, modifier = Modifier.size(34.dp).inspectElement("MINI_NEXT_BUTTON", "Next media")) {
                         Icon(Icons.Rounded.SkipNext, uiText(language, "Next", "下一首"), modifier = Modifier.size(21.dp))
                     }
                 }
@@ -133,5 +162,26 @@ fun MiniPlayer(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun InlineVideoPreview(player: Player) {
+    var view by remember { mutableStateOf<PlayerView?>(null) }
+    AndroidView(
+        factory = { context ->
+            PlayerView(context).apply {
+                useController = false
+                isClickable = false
+                isFocusable = false
+                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                setKeepContentOnPlayerReset(true)
+            }.also { view = it }
+        },
+        update = { VideoSurfaceOwner.attach(player, it) },
+        modifier = Modifier.fillMaxSize(),
+    )
+    DisposableEffect(player, view) {
+        onDispose { view?.let(VideoSurfaceOwner::detach) }
     }
 }

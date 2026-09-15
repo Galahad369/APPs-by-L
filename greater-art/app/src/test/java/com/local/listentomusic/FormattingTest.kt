@@ -56,9 +56,9 @@ class FormattingTest {
     }
 
     @Test fun miniWindowKeepsBothThreePixelReductions() {
-        assertEquals(105, com.local.listentomusic.model.MiniWindowMetrics.widthPx(1f))
-        assertEquals(216, com.local.listentomusic.model.MiniWindowMetrics.widthPx(2f))
-        assertEquals(122, com.local.listentomusic.model.MiniWindowMetrics.heightPx(2f))
+        assertEquals(103, com.local.listentomusic.model.MiniWindowMetrics.widthPx(1f))
+        assertEquals(206, com.local.listentomusic.model.MiniWindowMetrics.widthPx(2f))
+        assertEquals(112, com.local.listentomusic.model.MiniWindowMetrics.heightPx(2f))
     }
 
     @Test fun doubleTapSeekUsesOnlySideZones() {

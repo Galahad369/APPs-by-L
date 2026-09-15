@@ -39,6 +39,7 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.local.listentomusic.PlaybackUiState
 import com.local.listentomusic.data.AppBackgroundMode
+import com.local.listentomusic.data.BackgroundScaleMode
 import com.local.listentomusic.data.UserPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -65,44 +66,28 @@ fun AppBackground(
         if (visible && (mode == AppBackgroundMode.DEFAULT || mode == AppBackgroundMode.CURRENT_VIDEO && currentVideoUri == null)) DefaultMetalBackground()
         else Box(Modifier.fillMaxSize().background(androidx.compose.material3.MaterialTheme.colorScheme.background))
         when (mode) {
-            AppBackgroundMode.DEFAULT -> Unit
-            AppBackgroundMode.CUSTOM_IMAGE -> preferences.customBackgroundImageUri
-                ?.let(Uri::parse)
-                ?.let { BackgroundImage(it) }
-            AppBackgroundMode.CUSTOM_VIDEO -> preferences.customBackgroundVideoUri
-                ?.let(Uri::parse)
-                ?.let { BackgroundVideo(source = it, shouldPlay = visible) }
-            AppBackgroundMode.CURRENT_VIDEO -> if (visible && currentVideoUri != null) CurrentVideoWallpaper(controller)
-        }
+                    AppBackgroundMode.DEFAULT -> Unit
+                    AppBackgroundMode.CUSTOM_IMAGE -> preferences.customBackgroundImageUri
+                        ?.let(Uri::parse)
+                        ?.let { BackgroundImage(it, preferences.backgroundScaleMode) }
+                    AppBackgroundMode.CUSTOM_VIDEO -> preferences.customBackgroundVideoUri
+                        ?.let(Uri::parse)
+                        ?.let { BackgroundVideo(source = it, shouldPlay = visible, scaleMode = preferences.backgroundScaleMode) }
+                    // Use the existing bounded, muted background decoder. Sharing the main
+                    // controller here stole its single video surface from Library's live preview.
+                    AppBackgroundMode.CURRENT_VIDEO -> if (currentVideoUri != null) BackgroundVideo(
+                        source = currentVideoUri,
+                        shouldPlay = visible,
+                        syncPositionMs = controller?.currentPosition,
+                        speed = controller?.playbackParameters?.speed ?: 1f,
+                        scaleMode = preferences.backgroundScaleMode,
+                    )
+                }
         val isLight = androidx.compose.material3.MaterialTheme.colorScheme.background.luminance() > 0.5f
         val dim = if (mode == AppBackgroundMode.DEFAULT) 0.08f else preferences.backgroundDim
         val veil = if (mode == AppBackgroundMode.DEFAULT && isLight) Color.White else Color.Black
         Box(Modifier.matchParentSize().background(veil.copy(alpha = dim)))
     }
-}
-
-@Composable
-private fun CurrentVideoWallpaper(controller: MediaController?) {
-    val lifecycleOwner = LocalLifecycleOwner.current
-    var active by remember(lifecycleOwner) { mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) active = true
-            if (event == Lifecycle.Event.ON_PAUSE) active = false
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-    // The service already prepares and buffers the current video. Reuse that decoder;
-    // wallpaper never changes volume, pause state or seek position.
-    AndroidView(factory = { context ->
-        (android.view.LayoutInflater.from(context).inflate(com.local.listentomusic.R.layout.background_video, android.widget.FrameLayout(context), false) as PlayerView).apply {
-            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-            setKeepContentOnPlayerReset(true)
-            if (active) VideoSurfaceOwner.attach(controller, this)
-        }
-    }, update = { if (active) VideoSurfaceOwner.attach(controller, it) else VideoSurfaceOwner.detach(it) },
-        onRelease = VideoSurfaceOwner::detach, modifier = Modifier.fillMaxSize())
 }
 
 @Composable
@@ -146,7 +131,7 @@ private fun DefaultMetalBackground() {
 }
 
 @Composable
-private fun BackgroundImage(source: Uri) {
+private fun BackgroundImage(source: Uri, scaleMode: BackgroundScaleMode) {
     val context = LocalContext.current
     val bitmap by produceState<Bitmap?>(initialValue = null, key1 = source) {
         // Do not leave the previous image visible if replacement decoding fails.
@@ -159,7 +144,11 @@ private fun BackgroundImage(source: Uri) {
         Image(
             bitmap = it.asImageBitmap(),
             contentDescription = null,
-            contentScale = ContentScale.Crop,
+            contentScale = when (scaleMode) {
+                BackgroundScaleMode.FIT -> ContentScale.Fit
+                BackgroundScaleMode.STRETCH -> ContentScale.FillBounds
+                BackgroundScaleMode.CROP -> ContentScale.Crop
+            },
             modifier = Modifier.fillMaxSize(),
         )
     }
@@ -171,6 +160,7 @@ private fun BackgroundVideo(
     shouldPlay: Boolean,
     syncPositionMs: Long? = null,
     speed: Float = 1f,
+    scaleMode: BackgroundScaleMode = BackgroundScaleMode.CROP,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -217,17 +207,28 @@ private fun BackgroundVideo(
     }
 
     AndroidView(
-        factory = { viewContext ->
-            (android.view.LayoutInflater.from(viewContext).inflate(com.local.listentomusic.R.layout.background_video, android.widget.FrameLayout(viewContext), false) as PlayerView).apply {
-                useController = false
-                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                setKeepContentOnPlayerReset(true)
-                player = backgroundPlayer
-            }
-        },
-        update = { it.player = backgroundPlayer },
-        modifier = Modifier.fillMaxSize(),
-    )
+            factory = { viewContext ->
+                (android.view.LayoutInflater.from(viewContext).inflate(com.local.listentomusic.R.layout.background_video, android.widget.FrameLayout(viewContext), false) as PlayerView).apply {
+                    useController = false
+                    this.resizeMode = when (scaleMode) {
+                        BackgroundScaleMode.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        BackgroundScaleMode.STRETCH -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+                        BackgroundScaleMode.CROP -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    }
+                    setKeepContentOnPlayerReset(true)
+                    player = backgroundPlayer
+                }
+            },
+            update = {
+                it.resizeMode = when (scaleMode) {
+                    BackgroundScaleMode.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    BackgroundScaleMode.STRETCH -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+                    BackgroundScaleMode.CROP -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                }
+                it.player = backgroundPlayer
+            },
+            modifier = Modifier.fillMaxSize(),
+        )
 }
 
 private fun decodeSampledBitmap(
