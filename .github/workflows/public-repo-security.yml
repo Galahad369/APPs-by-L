@@ -48,7 +48,7 @@ jobs:
 
   codeql:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 55
     permissions:
       actions: read
       contents: read
@@ -78,10 +78,14 @@ jobs:
           queries: security-extended
 
       - name: Make wrappers executable
-        run: chmod +x greater-art/gradlew useless-calculator/gradlew
+        run: chmod +x greater-art/gradlew offline-toolbox/gradlew useless-calculator/gradlew
 
       - name: Build Greater Art for CodeQL
         working-directory: greater-art
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Build LocalKit for CodeQL
+        working-directory: offline-toolbox
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Build Useless Calculator for CodeQL
