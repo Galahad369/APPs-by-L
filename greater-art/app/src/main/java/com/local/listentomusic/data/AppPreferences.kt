@@ -66,7 +66,7 @@ enum class AppBackgroundMode { DEFAULT, CUSTOM_IMAGE, CUSTOM_VIDEO, CURRENT_VIDE
 enum class BackgroundScaleMode(val label: String) {
     FIT("Fit"),
     STRETCH("Stretch"),
-    CROP("Crop"),
+    CROP("Cut to screen size"),
 }
 enum class AppFont(val label: String) {
     SYSTEM("System"), SANS_SERIF("Sans serif"), SERIF("Serif"), MONOSPACE("Monospace"),

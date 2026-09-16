@@ -6,6 +6,8 @@ ads, analytics, accounts, telemetry, or network access.
 
 ## Features
 
+- v1.10.4 adds Fit, Stretch, and Cut to screen size background scaling choices. The
+  latter remains the default.
 - v1.10.3 removes the last ratio-generated edge gap from the floating video surface
   without restoring hidden padding: the fixed window stays `103×56dp` and the video crops
   edge-to-edge. Nodes now shows the selected app background. Current-video wallpaper uses
