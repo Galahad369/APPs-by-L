@@ -37,18 +37,25 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.GreaterArt">
 
+        <!-- Exported only so Android launchers can enter the app. It accepts no commands. -->
         <activity
-            android:name=".MainActivity"
-            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
+            android:name=".LauncherActivity"
             android:exported="true"
-            android:resizeableActivity="true"
-            android:supportsPictureInPicture="true"
             android:theme="@style/Theme.GreaterArt">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Internal command target used by the app's non-exported overlay service. -->
+        <activity
+            android:name=".MainActivity"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
+            android:exported="false"
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="true"
+            android:theme="@style/Theme.GreaterArt" />
 
         <service
             android:name=".playback.PlaybackService"

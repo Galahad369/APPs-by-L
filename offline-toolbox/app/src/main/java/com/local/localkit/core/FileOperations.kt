@@ -16,6 +16,13 @@ data class LocalFileInfo(val uri: Uri, val name: String, val size: Long, val mim
 data class FolderReport(val files: List<LocalFileInfo>, val folders: Int, val totalBytes: Long)
 
 object FileOperations {
+    private const val MAX_SCAN_DEPTH = 128
+    private const val MAX_ZIP_ENTRIES = 10_000
+    private const val MAX_ZIP_PATH_LENGTH = 4_096
+    private const val MAX_ZIP_PATH_SEGMENTS = 128
+    private const val MAX_ZIP_ENTRY_BYTES = 256L * 1024 * 1024
+    private const val MAX_ZIP_TOTAL_BYTES = 1024L * 1024 * 1024
+
     fun describe(resolver: ContentResolver, uri: Uri): LocalFileInfo {
         var name = uri.lastPathSegment ?: "file"
         var size = -1L
@@ -32,16 +39,19 @@ object FileOperations {
         val root = DocumentFile.fromTreeUri(context, treeUri) ?: return FolderReport(emptyList(), 0, 0)
         val files = mutableListOf<LocalFileInfo>()
         var folders = 0
-        fun walk(node: DocumentFile, path: String) {
-            if (files.size >= maxFiles) return
+        fun walk(node: DocumentFile, path: String, depth: Int) {
+            if (files.size >= maxFiles || folders >= maxFiles || depth > MAX_SCAN_DEPTH) return
             if (node.isDirectory) {
                 folders++
-                node.listFiles().forEach { child -> walk(child, if (path.isBlank()) child.name.orEmpty() else "$path/${child.name.orEmpty()}") }
+                node.listFiles().forEach { child ->
+                    if (files.size >= maxFiles || folders >= maxFiles) return@forEach
+                    walk(child, if (path.isBlank()) child.name.orEmpty() else "$path/${child.name.orEmpty()}", depth + 1)
+                }
             } else if (node.isFile) {
                 files += LocalFileInfo(node.uri, node.name ?: "file", node.length(), node.type, path)
             }
         }
-        walk(root, "")
+        walk(root, "", 0)
         return FolderReport(files, (folders - 1).coerceAtLeast(0), files.sumOf { it.size.coerceAtLeast(0) })
     }
 
@@ -90,25 +100,57 @@ object FileOperations {
         val resolver = context.contentResolver
         val root = DocumentFile.fromTreeUri(context, destinationTree) ?: error("Unable to open destination")
         var extracted = 0
+        var entriesSeen = 0
+        var totalBytes = 0L
         resolver.openInputStream(zipUri)?.let { raw ->
             ZipInputStream(BufferedInputStream(raw)).use { zip ->
                 while (true) {
                     val entry = zip.nextEntry ?: break
+                    entriesSeen++
+                    require(entriesSeen <= MAX_ZIP_ENTRIES) { "Archive contains too many entries" }
                     val safe = validateZipPath(entry.name)
                     if (safe.isBlank()) { zip.closeEntry(); continue }
                     val parts = safe.split('/').filter { it.isNotBlank() }
+                    require(parts.size <= MAX_ZIP_PATH_SEGMENTS) { "Archive path is nested too deeply" }
                     var parent = root
                     parts.dropLast(1).forEach { segment ->
-                        parent = parent.findFile(segment)?.takeIf { it.isDirectory } ?: parent.createDirectory(segment) ?: error("Cannot create folder")
+                        val existing = parent.findFile(segment)
+                        parent = when {
+                            existing == null -> parent.createDirectory(segment) ?: error("Cannot create folder")
+                            existing.isDirectory -> existing
+                            else -> error("Archive path collides with an existing file: $safe")
+                        }
                     }
                     if (entry.isDirectory) {
-                        parts.lastOrNull()?.let { if (parent.findFile(it) == null) parent.createDirectory(it) }
+                        parts.lastOrNull()?.let { name ->
+                            val existing = parent.findFile(name)
+                            require(existing == null || existing.isDirectory) { "Archive path collides with an existing file: $safe" }
+                            if (existing == null) parent.createDirectory(name) ?: error("Cannot create folder")
+                        }
                     } else {
                         val name = parts.last()
-                        parent.findFile(name)?.delete()
+                        require(parent.findFile(name) == null) { "Destination already contains $safe" }
                         val file = parent.createFile("application/octet-stream", name) ?: error("Cannot create $name")
-                        resolver.openOutputStream(file.uri, "w")?.use { output -> zip.copyTo(output) } ?: error("Cannot write $name")
-                        extracted++
+                        try {
+                            resolver.openOutputStream(file.uri, "w")?.use { output ->
+                                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                                var entryBytes = 0L
+                                while (true) {
+                                    val count = zip.read(buffer)
+                                    if (count < 0) break
+                                    if (count == 0) continue
+                                    entryBytes += count
+                                    totalBytes += count
+                                    require(entryBytes <= MAX_ZIP_ENTRY_BYTES) { "Archive entry is too large" }
+                                    require(totalBytes <= MAX_ZIP_TOTAL_BYTES) { "Archive expands beyond the safety limit" }
+                                    output.write(buffer, 0, count)
+                                }
+                            } ?: error("Cannot write $name")
+                            extracted++
+                        } catch (error: Exception) {
+                            file.delete()
+                            throw error
+                        }
                     }
                     zip.closeEntry()
                 }
@@ -130,11 +172,14 @@ object FileOperations {
     private fun sanitizeEntryName(value: String): String = value.replace('\\', '_').replace('/', '_').ifBlank { "file" }
 
     internal fun validateZipPath(value: String): String {
+        require(value.length <= MAX_ZIP_PATH_LENGTH) { "ZIP path is too long" }
         val normalized = value.replace('\\', '/')
         require(!normalized.startsWith('/')) { "Absolute ZIP paths are blocked" }
         require(!Regex("^[A-Za-z]:").containsMatchIn(normalized)) { "Drive paths are blocked" }
-        require(normalized.split('/').none { it == ".." }) { "Parent traversal is blocked" }
-        return normalized.split('/').filter { it.isNotBlank() && it != "." }.joinToString("/")
+        val rawParts = normalized.split('/')
+        require(rawParts.none { it == ".." }) { "Parent traversal is blocked" }
+        val parts = rawParts.filter { it.isNotBlank() && it != "." }
+        require(parts.size <= MAX_ZIP_PATH_SEGMENTS) { "ZIP path is nested too deeply" }
+        return parts.joinToString("/")
     }
 }
-

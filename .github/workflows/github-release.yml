@@ -17,32 +17,65 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     steps:
-      - name: Check out tagged source
+      - name: Check out exact tagged source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ env.RELEASE_TAG }}
           persist-credentials: false
+          fetch-depth: 0
 
-      - name: Resolve versioned APK
+      - name: Verify tag resolves to checked-out commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
+
+      - name: Set up Java 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
+
+      - name: Build and verify tagged source
+        working-directory: greater-art
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew testDebugUnitTest lintDebug assembleDebug --no-daemon
+
+      - name: Prepare versioned artifact and checksum
         id: asset
         shell: bash
         run: |
-          apk="greater-art/releases/GreaterArt-${RELEASE_TAG}-debug.apk"
-          if [ ! -f "$apk" ]; then
-            apk="greater-art/GreaterArt-${RELEASE_TAG}-debug.apk"
-          fi
-          test -f "$apk"
+          set -euo pipefail
+          src="greater-art/app/build/outputs/apk/debug/app-debug.apk"
+          apk="GreaterArt-${RELEASE_TAG}-debug.apk"
+          checksum="${apk}.sha256"
+          test -f "$src"
+          cp "$src" "$apk"
+          sha256sum "$apk" > "$checksum"
           echo "apk=$apk" >> "$GITHUB_OUTPUT"
+          echo "checksum=$checksum" >> "$GITHUB_OUTPUT"
 
-      - name: Create release and upload APK
+      - name: Create release from verified tag build
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh release create "$RELEASE_TAG"
-          "${{ steps.asset.outputs.apk }}"
-          --verify-tag
-          --title "Greater Art ${RELEASE_TAG}"
-          --generate-notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" \
+            "${{ steps.asset.outputs.apk }}" \
+            "${{ steps.asset.outputs.checksum }}" \
+            --verify-tag \
+            --title "Greater Art ${RELEASE_TAG}" \
+            --notes "Built in GitHub Actions from the exact tagged source. This project currently distributes a debug-signed APK; SHA-256 is attached for integrity verification."

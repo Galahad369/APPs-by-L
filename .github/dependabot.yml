@@ -11,6 +11,16 @@ updates:
           - "*"
 
   - package-ecosystem: gradle
+    directory: /offline-toolbox
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      localkit-gradle-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: gradle
     directory: /useless-calculator
     schedule:
       interval: weekly

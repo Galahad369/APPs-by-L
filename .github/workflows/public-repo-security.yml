@@ -31,28 +31,16 @@ jobs:
         shell: pwsh
         run: ./scripts/audit-public-repo.ps1
 
-  dependency-review:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Check out source without persisted credentials
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Reject vulnerable dependency changes
-        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
-        with:
-          fail-on-severity: moderate
+  # Dependency Review is intentionally omitted until GitHub's Dependency Graph
+  # is enabled for this repository. Dependabot remains configured for all three
+  # Android projects and Actions, and CodeQL continues to run below.
 
   codeql:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 55
     permissions:
       actions: read
       contents: read
-      packages: read
       security-events: write
     steps:
       - name: Check out source without persisted credentials
@@ -78,10 +66,14 @@ jobs:
           queries: security-extended
 
       - name: Make wrappers executable
-        run: chmod +x greater-art/gradlew useless-calculator/gradlew
+        run: chmod +x greater-art/gradlew offline-toolbox/gradlew useless-calculator/gradlew
 
       - name: Build Greater Art for CodeQL
         working-directory: greater-art
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Build LocalKit for CodeQL
+        working-directory: offline-toolbox
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Build Useless Calculator for CodeQL
