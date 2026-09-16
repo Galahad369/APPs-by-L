@@ -47,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.net.toUri
 import com.local.listentomusic.MainViewModel
+import com.local.listentomusic.ui.components.AppBackground
 import com.local.listentomusic.ui.components.MiniPlayer
 import com.local.listentomusic.data.AppBackgroundMode
 import com.local.listentomusic.data.BackgroundScaleMode

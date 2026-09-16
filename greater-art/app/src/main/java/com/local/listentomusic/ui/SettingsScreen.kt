@@ -211,7 +211,7 @@ fun SettingsScreen(
                                     )
                                     ChoiceSetting(
                                         uiText(language, "Background fit", "背景適配"),
-                                        uiText(language, "How custom images and videos fill the screen. Crop is the default.", "自訂圖片與影片如何填滿螢幕。預設為裁切。"),
+                                        uiText(language, "Choose how custom images and videos fill the screen. Cut to screen size is the default.", "選擇自訂圖片與影片如何填滿螢幕。預設為裁切至螢幕大小。"),
                                         BackgroundScaleMode.entries,
                                         preferences.backgroundScaleMode,
                                         { it.label },
