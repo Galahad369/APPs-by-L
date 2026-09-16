@@ -16,6 +16,10 @@ data class LocalFileInfo(val uri: Uri, val name: String, val size: Long, val mim
 data class FolderReport(val files: List<LocalFileInfo>, val folders: Int, val totalBytes: Long)
 
 object FileOperations {
+    private const val MAX_ZIP_ENTRIES = 10_000
+    private const val MAX_ZIP_ENTRY_BYTES = 256L * 1024 * 1024
+    private const val MAX_ZIP_TOTAL_BYTES = 1024L * 1024 * 1024
+
     fun describe(resolver: ContentResolver, uri: Uri): LocalFileInfo {
         var name = uri.lastPathSegment ?: "file"
         var size = -1L
@@ -90,10 +94,12 @@ object FileOperations {
         val resolver = context.contentResolver
         val root = DocumentFile.fromTreeUri(context, destinationTree) ?: error("Unable to open destination")
         var extracted = 0
+        var totalBytes = 0L
         resolver.openInputStream(zipUri)?.let { raw ->
             ZipInputStream(BufferedInputStream(raw)).use { zip ->
                 while (true) {
                     val entry = zip.nextEntry ?: break
+                    require(extracted < MAX_ZIP_ENTRIES) { "Archive contains too many files" }
                     val safe = validateZipPath(entry.name)
                     if (safe.isBlank()) { zip.closeEntry(); continue }
                     val parts = safe.split('/').filter { it.isNotBlank() }
@@ -107,8 +113,26 @@ object FileOperations {
                         val name = parts.last()
                         parent.findFile(name)?.delete()
                         val file = parent.createFile("application/octet-stream", name) ?: error("Cannot create $name")
-                        resolver.openOutputStream(file.uri, "w")?.use { output -> zip.copyTo(output) } ?: error("Cannot write $name")
-                        extracted++
+                        try {
+                            resolver.openOutputStream(file.uri, "w")?.use { output ->
+                                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                                var entryBytes = 0L
+                                while (true) {
+                                    val count = zip.read(buffer)
+                                    if (count < 0) break
+                                    if (count == 0) continue
+                                    entryBytes += count
+                                    totalBytes += count
+                                    require(entryBytes <= MAX_ZIP_ENTRY_BYTES) { "Archive entry is too large" }
+                                    require(totalBytes <= MAX_ZIP_TOTAL_BYTES) { "Archive expands beyond the safety limit" }
+                                    output.write(buffer, 0, count)
+                                }
+                            } ?: error("Cannot write $name")
+                            extracted++
+                        } catch (error: Exception) {
+                            file.delete()
+                            throw error
+                        }
                     }
                     zip.closeEntry()
                 }
@@ -137,4 +161,3 @@ object FileOperations {
         return normalized.split('/').filter { it.isNotBlank() && it != "." }.joinToString("/")
     }
 }
-
