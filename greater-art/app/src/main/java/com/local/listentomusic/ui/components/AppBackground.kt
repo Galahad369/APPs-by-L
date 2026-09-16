@@ -3,6 +3,8 @@ package com.local.listentomusic.ui.components
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.util.Log
+import androidx.annotation.OptIn
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -33,9 +35,12 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.local.listentomusic.data.AppBackgroundMode
@@ -58,6 +63,8 @@ internal fun shouldMirrorPrimaryPlayback(
     lifecycleActive: Boolean,
     primaryIsPlaying: Boolean,
 ): Boolean = lifecycleActive && primaryIsPlaying
+
+internal fun shouldPreferSoftwareBackgroundDecoder(primaryIsVideo: Boolean): Boolean = primaryIsVideo
 
 @Composable
 fun AppBackground(
@@ -117,6 +124,7 @@ fun AppBackground(
         primaryIsVideo = isVideo,
         primaryFrameReady = primaryFrameReady,
     )
+    val preferSoftwareBackgroundDecoder = shouldPreferSoftwareBackgroundDecoder(isVideo)
 
     Box(modifier.fillMaxSize().graphicsLayer()) {
         // Avoid an animated full-screen metal pass underneath opaque media wallpaper.
@@ -135,17 +143,20 @@ fun AppBackground(
                             source = it,
                             shouldPlay = true,
                             scaleMode = preferences.backgroundScaleMode,
+                            preferSoftwareDecoder = preferSoftwareBackgroundDecoder,
                         )
                     }
             }
             // Keep a separate muted decoder so the wallpaper never steals the primary
-            // Media3 surface, but slave that decoder to the real controller state.
+            // Media3 surface. When the foreground item is also video, prefer a software
+            // decoder for this secondary player so Library/Now Playing keeps hardware first.
             AppBackgroundMode.CURRENT_VIDEO -> if (currentVideoUri != null && attachVideoBackground) {
                 BackgroundVideo(
                     source = currentVideoUri,
                     shouldPlay = true,
                     syncController = controller,
                     scaleMode = preferences.backgroundScaleMode,
+                    preferSoftwareDecoder = true,
                 )
             }
         }
@@ -220,25 +231,56 @@ private fun BackgroundImage(source: Uri, scaleMode: BackgroundScaleMode) {
     }
 }
 
+@OptIn(UnstableApi::class)
 @Composable
 private fun BackgroundVideo(
     source: Uri,
     shouldPlay: Boolean,
     scaleMode: BackgroundScaleMode = BackgroundScaleMode.CROP,
     syncController: MediaController? = null,
+    preferSoftwareDecoder: Boolean = false,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var lifecycleActive by remember(lifecycleOwner) {
         mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
     }
-    val backgroundPlayer = remember(source) {
+    val backgroundPlayer = remember(source, preferSoftwareDecoder) {
         val renderersFactory = DefaultRenderersFactory(context.applicationContext)
             .setEnableDecoderFallback(true)
+            .apply {
+                if (preferSoftwareDecoder) {
+                    setMediaCodecSelector(MediaCodecSelector.PREFER_SOFTWARE)
+                }
+            }
         ExoPlayer.Builder(context.applicationContext, renderersFactory)
             .setLoadControl(androidx.media3.exoplayer.DefaultLoadControl.Builder()
                 .setBufferDurationsMs(1_000, 5_000, 100, 200).setTargetBufferBytes(4 * 1024 * 1024)
                 .setPrioritizeTimeOverSizeThresholds(false).build()).build().apply {
+            addAnalyticsListener(object : AnalyticsListener {
+                override fun onVideoDecoderInitialized(
+                    eventTime: AnalyticsListener.EventTime,
+                    decoderName: String,
+                    initializedTimestampMs: Long,
+                    initializationDurationMs: Long,
+                ) {
+                    Log.i(
+                        BACKGROUND_VIDEO_TAG,
+                        "decoder=$decoderName preferSoftware=$preferSoftwareDecoder source=${source.lastPathSegment}",
+                    )
+                }
+
+                override fun onVideoCodecError(
+                    eventTime: AnalyticsListener.EventTime,
+                    videoCodecError: Exception,
+                ) {
+                    Log.w(
+                        BACKGROUND_VIDEO_TAG,
+                        "codecError preferSoftware=$preferSoftwareDecoder source=${source.lastPathSegment}",
+                        videoCodecError,
+                    )
+                }
+            })
             volume = 0f
             repeatMode = Player.REPEAT_MODE_ONE
             trackSelectionParameters = trackSelectionParameters.buildUpon()
@@ -336,6 +378,7 @@ private fun decodeSampledBitmap(
     resolver.openInputStream(source)?.use { BitmapFactory.decodeStream(it, null, options) }
 }.getOrNull()
 
+private const val BACKGROUND_VIDEO_TAG = "GreaterArtBackground"
 private const val PRIMARY_VIDEO_HEAD_START_MS = 300L
 private const val BACKGROUND_SYNC_INTERVAL_MS = 250L
 private const val PLAYING_SYNC_TOLERANCE_MS = 350L
