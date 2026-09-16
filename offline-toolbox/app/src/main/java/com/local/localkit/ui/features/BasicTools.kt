@@ -1,8 +1,12 @@
 package com.local.localkit.ui.features
 
+import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.ContextWrapper
+import android.os.Build
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -137,16 +141,23 @@ fun TextWorkbenchScreen() {
 @Composable
 fun PasswordGeneratorScreen() {
     val context = LocalContext.current
+    val activity = remember(context) { context.findActivity() }
     var length by rememberSaveable { mutableFloatStateOf(20f) }
     var symbols by rememberSaveable { mutableStateOf(true) }
     var passphrase by rememberSaveable { mutableStateOf(false) }
-    var result by rememberSaveable { mutableStateOf(SecretGenerator.password(20, true)) }
+    // Generated secrets deliberately stay out of SavedStateRegistry / instance-state bundles.
+    var result by remember { mutableStateOf(SecretGenerator.password(20, true)) }
+
+    DisposableEffect(activity) {
+        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        onDispose { activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
+    }
 
     fun regenerate() { result = if (passphrase) SecretGenerator.passphrase((length / 4).toInt().coerceIn(3, 8)) else SecretGenerator.password(length.toInt(), symbols) }
 
-    ToolPage("Generate, copy, forget", "Generated secrets are never saved in history or preferences.") {
+    ToolPage("Generate, copy, forget", "Generated secrets are never saved in history, preferences, or instance state.") {
         ResultCard(result, monospace = true)
-        Button(onClick = { copy(context, result) }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Outlined.ContentCopy, null); Spacer(Modifier.width(8.dp)); Text("Copy") }
+        Button(onClick = { copy(context, result, sensitive = true) }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Outlined.ContentCopy, null); Spacer(Modifier.width(8.dp)); Text("Copy") }
         Text(if (passphrase) "Words: ${(length / 4).toInt().coerceIn(3, 8)} + random tail" else "Length: ${length.toInt()}")
         Slider(value = length, onValueChange = { length = it }, valueRange = 12f..64f, steps = 51)
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -202,19 +213,34 @@ private fun FlowButtonRow(items: List<Pair<String, () -> Unit>>) {
     }
 }
 
-private fun copy(context: Context, value: String) {
+private fun copy(context: Context, value: String, sensitive: Boolean = false) {
     val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     val clip = ClipData.newPlainText("LocalKit", value)
-    clip.description.extras = (clip.description.extras ?: android.os.PersistableBundle()).apply {
-        putBoolean("android.content.extra.IS_SENSITIVE", true)
+    if (sensitive) {
+        clip.description.extras = (clip.description.extras ?: android.os.PersistableBundle()).apply {
+            putBoolean("android.content.extra.IS_SENSITIVE", true)
+        }
     }
     manager.setPrimaryClip(clip)
-    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-        val current = manager.primaryClip?.getItemAt(0)?.text?.toString()
-        if (current == value) manager.clearPrimaryClip()
-    }, 60_000L)
-    Toast.makeText(context, "Copied; clipboard clears in 60 seconds", Toast.LENGTH_SHORT).show()
+    if (sensitive) {
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            val current = manager.primaryClip?.getItemAt(0)?.text?.toString()
+            if (current == value) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) manager.clearPrimaryClip()
+                else manager.setPrimaryClip(ClipData.newPlainText("", ""))
+            }
+        }, 60_000L)
+        Toast.makeText(context, "Copied; clipboard clears in 60 seconds", Toast.LENGTH_SHORT).show()
+    } else {
+        Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+    }
 }
 
 private fun readClipboard(context: Context): String = (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
     .primaryClip?.getItemAt(0)?.coerceToText(context)?.toString().orEmpty()
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
