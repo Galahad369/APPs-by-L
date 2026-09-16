@@ -6,6 +6,18 @@
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
+## Version Management
+
+- **Single source of truth:** `app/build.gradle.kts` (`versionCode`, `versionName`).
+- **HANDOFF.md must reflect the same values** — update both together on every version bump.
+- **Scheme:** `major.minor.patch` + monotonically increasing `versionCode`.
+  - Patch: bug fixes, tiny tweaks → `patch++`, `versionCode++`.
+  - Minor: user-visible feature → `minor++`, `patch=0`, `versionCode++`.
+  - Major: breaking change / redesign → `major++`, `minor=patch=0`, `versionCode++`.
+- **APK filename:** `GreaterArt-v<versionName>-build<buildN>-debug.apk` in `releases/`.
+- **Never overwrite a released APK.** Increment build number for re-spins.
+- **No remote mutation** from local refinement sessions (no tag, push, or release upload).
+
 ## Current State
 
 ### September 15 — 1.10.3 local refinement (latest)
