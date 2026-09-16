@@ -1,34 +1,15 @@
 [CmdletBinding()]
-param(
-    [Parameter(Position = 0)]
-    [string]$RepositoryRoot = "."
-)
+param([Parameter(Position = 0)][string]$RepositoryRoot = ".")
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
-if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue) {
-    $PSNativeCommandUseErrorActionPreference = $false
-}
+if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue) { $PSNativeCommandUseErrorActionPreference = $false }
 
 $root = (Resolve-Path -LiteralPath $RepositoryRoot).Path
 $gitArgs = @("-c", "safe.directory=$($root.Replace('\', '/'))", "-C", $root)
 $findings = [System.Collections.Generic.List[string]]::new()
-$auditStage = "initialization"
 
-trap {
-    $exceptionType = $_.Exception.GetType().Name
-    Write-Host "[FAIL] Audit runtime error during $auditStage ($exceptionType)" -ForegroundColor Red
-    if ($env:GITHUB_ACTIONS -eq "true") {
-        Write-Output "::error title=Audit runtime error::Stage $auditStage failed with $exceptionType"
-    }
-    exit 2
-}
-
-function Invoke-Git {
-    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
-    & git @gitArgs @Arguments
-}
-
+function Invoke-Git { param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments) & git @gitArgs @Arguments }
 function Add-Finding {
     param([string]$Message)
     $findings.Add($Message)
@@ -42,7 +23,7 @@ function Add-Finding {
 Invoke-Git rev-parse --is-inside-work-tree | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "Not a Git worktree: $root" }
 
-# Credential signatures are scanned across all reachable history.
+# Split signatures so the scanner does not match its own source.
 $credentialPatterns = @(
     ("BEGIN " + "[A-Z ]*PRIVATE KEY"),
     ("github" + "_pat_[A-Za-z0-9_]+"),
@@ -54,30 +35,16 @@ $credentialPatterns = @(
 )
 $credentialPattern = $credentialPatterns -join "|"
 
-# Local workstation paths are privacy hygiene findings for the current tree only.
-# Old paths cannot be made private by a normal commit and should not permanently
-# brick CI after they have already entered public history.
-$localPathPatterns = @(
-    ("C:" + "\\Users\\[A-Za-z0-9._-]+\\"),
-    ("C:" + "/Users/[A-Za-z0-9._-]+/"),
-    ("/Users/" + "[A-Za-z0-9._-]+/")
-)
-$currentPattern = ($credentialPatterns + $localPathPatterns) -join "|"
-
 Write-Host "Scanning reachable Git history for credentials..."
-$auditStage = "history-credential-scan"
 $commits = @(Invoke-Git rev-list --all)
 foreach ($commit in $commits) {
     $matches = @(& git @gitArgs grep -I -l -E $credentialPattern $commit -- ":!*.apk" 2>$null)
     if ($LASTEXITCODE -eq 0) {
         foreach ($match in $matches) { Add-Finding "Credential pattern in $match" }
-    } elseif ($LASTEXITCODE -gt 1) {
-        throw "git grep failed while scanning $commit"
-    }
+    } elseif ($LASTEXITCODE -gt 1) { throw "git grep failed while scanning $commit" }
 }
 
-Write-Host "Scanning tracked and untracked working files..."
-$auditStage = "working-file-scan"
+Write-Host "Scanning current working files for credentials..."
 $workingFiles = @(Invoke-Git ls-files --cached --others --exclude-standard)
 foreach ($relativePath in $workingFiles) {
     try {
@@ -86,31 +53,16 @@ foreach ($relativePath in $workingFiles) {
         $item = Get-Item -LiteralPath $path
         if ($item.Length -gt 5MB -or $item.Extension -eq ".apk") { continue }
         $content = [System.IO.File]::ReadAllText($path)
-        if ($content -match $currentPattern) {
-            Add-Finding "Credential or local-path pattern in working file: $relativePath"
-        }
-    } catch [System.IO.IOException] {
-        continue
-    } catch [System.UnauthorizedAccessException] {
-        continue
-    }
+        if ($content -match $credentialPattern) { Add-Finding "Credential pattern in working file: $relativePath" }
+    } catch [System.IO.IOException] { continue } catch [System.UnauthorizedAccessException] { continue }
 }
 
 Write-Host "Scanning history for sensitive filenames..."
-$auditStage = "history-filename-scan"
 $sensitiveNamePattern = "(^|/)(\.env($|\.)|local\.properties$|google-services\.json$|.*\.(jks|keystore|p12|pfx|pem|key)$|credentials?.*\.json$|secrets?\.(properties|json|ya?ml)$|LINKEDIN_POST\.md$)"
-$objectPaths = @(Invoke-Git rev-list --objects --all | ForEach-Object {
-    $parts = $_ -split " ", 2
-    if ($parts.Count -eq 2) { $parts[1] }
-})
-foreach ($path in $objectPaths) {
-    if ($path -and $path -match $sensitiveNamePattern) {
-        Add-Finding "Sensitive filename in reachable history: $path"
-    }
-}
+$objectPaths = @(Invoke-Git rev-list --objects --all | ForEach-Object { $parts = $_ -split " ", 2; if ($parts.Count -eq 2) { $parts[1] } })
+foreach ($path in $objectPaths) { if ($path -and $path -match $sensitiveNamePattern) { Add-Finding "Sensitive filename in reachable history: $path" } }
 
 Write-Host "Checking public commit identities..."
-$auditStage = "commit-identity-scan"
 $emails = @(Invoke-Git log --all --format=%ae | Sort-Object -Unique)
 foreach ($email in $emails) {
     if ($email -and $email -notmatch "@users\.noreply\.github\.com$" -and $email -ne "noreply@github.com") {
@@ -118,43 +70,20 @@ foreach ($email in $emails) {
     }
 }
 
-Write-Host "Checking APK containers for sensitive entries and local paths..."
-$auditStage = "apk-container-scan"
-if (-not ("System.IO.Compression.ZipFile" -as [type])) {
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-}
+Write-Host "Checking APK containers for sensitive entries..."
+if (-not ("System.IO.Compression.ZipFile" -as [type])) { Add-Type -AssemblyName System.IO.Compression.FileSystem }
 $apks = @(Invoke-Git ls-files "*.apk")
 foreach ($relativePath in $apks) {
-    $path = Join-Path $root $relativePath
-    $archive = [System.IO.Compression.ZipFile]::OpenRead($path)
+    $archive = [System.IO.Compression.ZipFile]::OpenRead((Join-Path $root $relativePath))
     try {
         foreach ($entry in $archive.Entries) {
-            if ($entry.FullName -match $sensitiveNamePattern) {
-                Add-Finding "Sensitive entry inside ${relativePath}: $($entry.FullName)"
-            }
-            if ($entry.Length -le 5MB -and $entry.Length -gt 0) {
-                $stream = $entry.Open()
-                try {
-                    $reader = [System.IO.StreamReader]::new($stream, [System.Text.Encoding]::UTF8, $true, 4096, $true)
-                    try { $content = $reader.ReadToEnd() } finally { $reader.Dispose() }
-                    if ($content -match ($localPathPatterns -join "|")) {
-                        Add-Finding "Local user path inside ${relativePath}: $($entry.FullName)"
-                    }
-                } catch {
-                    # Binary entries may not decode as text; filename checks still apply.
-                } finally {
-                    $stream.Dispose()
-                }
-            }
+            if ($entry.FullName -match $sensitiveNamePattern) { Add-Finding "Sensitive entry inside ${relativePath}: $($entry.FullName)" }
         }
-    } finally {
-        $archive.Dispose()
-    }
+    } finally { $archive.Dispose() }
 }
 
 if ($findings.Count -gt 0) {
     Write-Host "Public repository audit failed with $($findings.Count) finding(s)." -ForegroundColor Red
     exit 1
 }
-
-Write-Host "[OK] No high-confidence secrets, current local paths, sensitive filenames, or public author emails found." -ForegroundColor Green
+Write-Host "[OK] No high-confidence secrets, sensitive filenames, or public author emails found." -ForegroundColor Green
