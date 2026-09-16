@@ -23,7 +23,6 @@ import androidx.compose.ui.unit.dp
 import com.local.localkit.core.*
 import java.text.DecimalFormat
 import java.time.LocalDate
-import java.time.format.DateTimeParseException
 import java.time.temporal.ChronoUnit
 
 private val numberFormat = DecimalFormat("0.############")
@@ -148,7 +147,7 @@ fun PasswordGeneratorScreen() {
     ToolPage("Generate, copy, forget", "Generated secrets are never saved in history or preferences.") {
         ResultCard(result, monospace = true)
         Button(onClick = { copy(context, result) }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Outlined.ContentCopy, null); Spacer(Modifier.width(8.dp)); Text("Copy") }
-        Text(if (passphrase) "Words: ${(length / 4).toInt().coerceIn(3, 8)}" else "Length: ${length.toInt()}")
+        Text(if (passphrase) "Words: ${(length / 4).toInt().coerceIn(3, 8)} + random tail" else "Length: ${length.toInt()}")
         Slider(value = length, onValueChange = { length = it }, valueRange = 12f..64f, steps = 51)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(passphrase, { passphrase = it; regenerate() }); Text("Passphrase")
@@ -204,8 +203,17 @@ private fun FlowButtonRow(items: List<Pair<String, () -> Unit>>) {
 }
 
 private fun copy(context: Context, value: String) {
-    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("LocalKit", value))
-    Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+    val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    val clip = ClipData.newPlainText("LocalKit", value)
+    clip.description.extras = (clip.description.extras ?: android.os.PersistableBundle()).apply {
+        putBoolean("android.content.extra.IS_SENSITIVE", true)
+    }
+    manager.setPrimaryClip(clip)
+    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+        val current = manager.primaryClip?.getItemAt(0)?.text?.toString()
+        if (current == value) manager.clearPrimaryClip()
+    }, 60_000L)
+    Toast.makeText(context, "Copied; clipboard clears in 60 seconds", Toast.LENGTH_SHORT).show()
 }
 
 private fun readClipboard(context: Context): String = (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
