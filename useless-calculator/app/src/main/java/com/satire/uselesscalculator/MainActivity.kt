@@ -1,15 +1,10 @@
 package com.satire.uselesscalculator
 
-import android.Manifest
 import android.content.Context
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -46,7 +41,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -62,7 +56,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
 import kotlin.random.Random
 
 internal const val MONTHLY_PRICE = "$29.99"
@@ -70,7 +63,6 @@ internal const val MONTHLY_PRICE = "$29.99"
 private enum class OnboardingStage { TERMS, PERMISSIONS, WALLET_PARODY, CALCULATOR }
 
 private data class PermissionDemand(
-    val permission: String,
     val title: String,
     val excuse: String,
 )
@@ -78,9 +70,7 @@ private data class PermissionDemand(
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
-            UselessCalculatorApp(onQuit = ::finishAndRemoveTask)
-        }
+        setContent { UselessCalculatorApp(onQuit = ::finishAndRemoveTask) }
     }
 }
 
@@ -110,7 +100,7 @@ private fun UselessCalculatorApp(onQuit: () -> Unit) {
     ) {
         Surface(Modifier.fillMaxSize()) {
             if (permanentlyBanned) {
-                PermanentlyBannedScreen(onQuit = onQuit)
+                PermanentlyBannedScreen(onQuit)
             } else when (stage) {
                 OnboardingStage.TERMS -> TermsScreen(
                     onAccept = { stage = OnboardingStage.PERMISSIONS },
@@ -223,9 +213,7 @@ private fun TermsScreen(
             Text("Zuckerberg-tier legal endurance test · no skipping", fontWeight = FontWeight.Bold)
         }
         LinearProgressIndicator(
-            progress = {
-                if (scroll.maxValue == 0) 0f else scroll.value.toFloat() / scroll.maxValue
-            },
+            progress = { if (scroll.maxValue == 0) 0f else scroll.value.toFloat() / scroll.maxValue },
             modifier = Modifier.fillMaxWidth(),
         )
         Column(
@@ -250,26 +238,14 @@ private fun TermsScreen(
                 HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
             }
             Text("FINAL BINDING CHECKBOX CEREMONY", fontWeight = FontWeight.Black, color = Color(0xFFFFD60A))
-            MandatoryCheck(
-                "I solemnly claim I read every ridiculous clause.",
-                readEverything,
-            ) { readEverything = it }
-            MandatoryCheck(
-                "I waive my right to ask why a calculator needs any permission.",
-                waiveCommonSense,
-            ) { waiveCommonSense = it }
-            MandatoryCheck(
-                "I understand arithmetic may be a premium feature.",
-                acceptPremiumMath,
-            ) { acceptPremiumMath = it }
+            MandatoryCheck("I solemnly claim I read every ridiculous clause.", readEverything) { readEverything = it }
+            MandatoryCheck("I waive my right to ask why a calculator needs any permission.", waiveCommonSense) { waiveCommonSense = it }
+            MandatoryCheck("I understand arithmetic may be a premium feature.", acceptPremiumMath) { acceptPremiumMath = it }
             Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF3B0B14))) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("MANDATORY PIZZA ORTHODOXY", fontWeight = FontWeight.Black, color = Color(0xFFFFD60A))
                     Text("Choose carefully. One answer creates a permanent local ban.")
-                    Button(
-                        onClick = { pizzaOrthodoxy = true },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
+                    Button(onClick = { pizzaOrthodoxy = true }, modifier = Modifier.fillMaxWidth()) {
                         Text(
                             if (pizzaOrthodoxy) "✓ I DO NOT DISAGREE: THE WORST TURD IS A PIZZA"
                             else "I DO NOT DISAGREE: THE WORST TURD IS A PIZZA",
@@ -282,24 +258,16 @@ private fun TermsScreen(
                     }
                 }
             }
-            val canAccept = reachedBottom && readEverything && waiveCommonSense &&
-                acceptPremiumMath && pizzaOrthodoxy
+            val canAccept = reachedBottom && readEverything && waiveCommonSense && acceptPremiumMath && pizzaOrthodoxy
             if (yellowMeansDecline) {
-                Button(
-                    onClick = onDecline,
-                    modifier = Modifier.fillMaxWidth().height(58.dp),
-                ) {
+                Button(onClick = onDecline, modifier = Modifier.fillMaxWidth().height(58.dp)) {
                     Text("DECLINE EVERYTHING AND QUIT", fontWeight = FontWeight.Black)
                 }
                 OutlinedButton(onClick = onAccept, enabled = canAccept, modifier = Modifier.fillMaxWidth()) {
                     Text("Accept using the suspicious grey button")
                 }
             } else {
-                Button(
-                    onClick = onAccept,
-                    enabled = canAccept,
-                    modifier = Modifier.fillMaxWidth().height(58.dp),
-                ) {
+                Button(onClick = onAccept, enabled = canAccept, modifier = Modifier.fillMaxWidth().height(58.dp)) {
                     Text("ACCEPT EVERYTHING FOREVER", fontWeight = FontWeight.Black)
                 }
                 OutlinedButton(onClick = onDecline, modifier = Modifier.fillMaxWidth()) {
@@ -330,30 +298,22 @@ private fun MandatoryCheck(text: String, checked: Boolean, onChecked: (Boolean) 
 
 @Composable
 private fun PermissionGauntlet(onComplete: () -> Unit, onDenied: () -> Unit) {
-    val context = LocalContext.current
     val demands = remember { permissionDemands() }
     var index by rememberSaveable { mutableIntStateOf(0) }
     val yellowMeansDeny = rememberSaveable(index) { Random.nextBoolean() }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) index++ else onDenied()
+
+    if (index >= demands.size) {
+        onComplete()
+        return
     }
 
-    LaunchedEffect(index) {
-        if (index >= demands.size) {
-            onComplete()
-        } else if (ContextCompat.checkSelfPermission(context, demands[index].permission) == PackageManager.PERMISSION_GRANTED) {
-            index++
-        }
-    }
-
-    if (index >= demands.size) return
     val demand = demands[index]
     Column(
         modifier = Modifier.fillMaxSize().padding(22.dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text("PERMISSION ${index + 1} OF ${demands.size}", color = Color(0xFFFFD60A), fontWeight = FontWeight.Black)
+            Text("FAKE PERMISSION ${index + 1} OF ${demands.size}", color = Color(0xFFFFD60A), fontWeight = FontWeight.Black)
             LinearProgressIndicator(
                 progress = { (index + 1f) / demands.size },
                 modifier = Modifier.fillMaxWidth().height(10.dp),
@@ -365,7 +325,7 @@ private fun PermissionGauntlet(onComplete: () -> Unit, onDenied: () -> Unit) {
             Text(demand.excuse, fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF3B0B14))) {
                 Text(
-                    "This permission is not used. The request is the joke. Denying it immediately quits and resets this onboarding circus.",
+                    "SIMULATED ONLY. This APK declares no dangerous permissions. Pressing Allow grants nothing and exposes no device data.",
                     modifier = Modifier.padding(16.dp),
                     fontWeight = FontWeight.Bold,
                 )
@@ -373,24 +333,15 @@ private fun PermissionGauntlet(onComplete: () -> Unit, onDenied: () -> Unit) {
         }
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (yellowMeansDeny) {
-                Button(
-                    onClick = onDenied,
-                    modifier = Modifier.fillMaxWidth().height(60.dp),
-                ) {
+                Button(onClick = onDenied, modifier = Modifier.fillMaxWidth().height(60.dp)) {
                     Text("DENY, DECLINE, AND LOSE EVERYTHING", fontWeight = FontWeight.Black)
                 }
-                OutlinedButton(
-                    onClick = { launcher.launch(demand.permission) },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Allow using the boring grey button")
+                OutlinedButton(onClick = { index++ }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Pretend to allow using the boring grey button")
                 }
             } else {
-                Button(
-                    onClick = { launcher.launch(demand.permission) },
-                    modifier = Modifier.fillMaxWidth().height(60.dp),
-                ) {
-                    Text("REQUEST ${demand.title.uppercase()}", fontWeight = FontWeight.Black)
+                Button(onClick = { index++ }, modifier = Modifier.fillMaxWidth().height(60.dp)) {
+                    Text("PRETEND TO ALLOW ${demand.title.uppercase()}", fontWeight = FontWeight.Black)
                 }
                 OutlinedButton(onClick = onDenied, modifier = Modifier.fillMaxWidth()) {
                     Text("Deny and lose all progress")
@@ -499,9 +450,7 @@ private fun CalculatorScreen() {
             onClick = { showPaywall = true },
             modifier = Modifier.fillMaxWidth().height(68.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD60A)),
-        ) {
-            Text("=", fontSize = 34.sp, fontWeight = FontWeight.Black)
-        }
+        ) { Text("=", fontSize = 34.sp, fontWeight = FontWeight.Black) }
     }
 
     if (showPaywall) {
@@ -517,10 +466,9 @@ private fun CalculatorScreen() {
                 }
             },
             confirmButton = {
-                Button(onClick = {
-                    showPaywall = false
-                    paymentFailed = true
-                }) { Text("SUBSCRIBE FOR $MONTHLY_PRICE") }
+                Button(onClick = { showPaywall = false; paymentFailed = true }) {
+                    Text("SUBSCRIBE FOR $MONTHLY_PRICE")
+                }
             },
             dismissButton = {
                 OutlinedButton(onClick = { showPaywall = false }) { Text("Remain answerless") }
@@ -534,10 +482,7 @@ private fun CalculatorScreen() {
             title = { Text("Payment failed successfully") },
             text = { Text("Billing is unavailable because this satire app refuses to collect money. The answer remains classified.") },
             confirmButton = {
-                Button(onClick = {
-                    paymentFailed = false
-                    showPaywall = true
-                }) { Text("Return to paywall") }
+                Button(onClick = { paymentFailed = false; showPaywall = true }) { Text("Return to paywall") }
             },
         )
     }
@@ -548,32 +493,23 @@ internal fun appendCalculatorInput(current: String, token: String): String {
     return (current + token).takeLast(32)
 }
 
-private fun permissionDemands(): List<PermissionDemand> = buildList {
-    add(PermissionDemand(Manifest.permission.CAMERA, "Camera access", "Required to photograph numbers you could type yourself."))
-    add(PermissionDemand(Manifest.permission.RECORD_AUDIO, "Microphone access", "Required to hear you sigh when the calculator still refuses to calculate."))
-    add(PermissionDemand(Manifest.permission.READ_CONTACTS, "Contact access", "Required to identify friends who might lend you a real calculator."))
-    add(PermissionDemand(Manifest.permission.READ_CALENDAR, "Calendar access", "Required to schedule your future subscription regret."))
-    add(PermissionDemand(Manifest.permission.ACCESS_FINE_LOCATION, "Precise location", "Required to determine whether arithmetic is legal in your postcode."))
-    add(PermissionDemand(Manifest.permission.READ_PHONE_STATE, "Phone access", "Required to confirm this rectangular object is allegedly a phone."))
-    add(PermissionDemand(Manifest.permission.READ_CALL_LOG, "Call-log access", "Required to count how often you called someone better at mathematics."))
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        add(PermissionDemand(Manifest.permission.ACTIVITY_RECOGNITION, "Activity access", "Required to detect the exact moment you walk away."))
-    }
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        add(PermissionDemand(Manifest.permission.READ_MEDIA_IMAGES, "Photo access", "Required to search for screenshots of useful calculators."))
-        add(PermissionDemand(Manifest.permission.READ_MEDIA_VIDEO, "Video access", "Required to study tutorials about pressing equals."))
-        add(PermissionDemand(Manifest.permission.READ_MEDIA_AUDIO, "Music access", "Required to play nothing while you wait for an answer."))
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            add(PermissionDemand(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED, "Selected-photo access", "Required to respect your careful selection by reading absolutely none of it."))
-        }
-    } else {
-        add(PermissionDemand(Manifest.permission.READ_EXTERNAL_STORAGE, "File access", "Required to inspect files that have absolutely nothing to do with arithmetic."))
-    }
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        add(PermissionDemand(Manifest.permission.BLUETOOTH_SCAN, "Nearby-device scan", "Required to locate a calculator that actually works."))
-        add(PermissionDemand(Manifest.permission.BLUETOOTH_CONNECT, "Nearby-device connection", "Required to refuse to connect to that calculator."))
-    }
-}
+private fun permissionDemands(): List<PermissionDemand> = listOf(
+    PermissionDemand("Camera access", "Required to photograph numbers you could type yourself."),
+    PermissionDemand("Microphone access", "Required to hear you sigh when the calculator still refuses to calculate."),
+    PermissionDemand("Contact access", "Required to identify friends who might lend you a real calculator."),
+    PermissionDemand("Calendar access", "Required to schedule your future subscription regret."),
+    PermissionDemand("Precise location", "Required to determine whether arithmetic is legal in your postcode."),
+    PermissionDemand("Phone access", "Required to confirm this rectangular object is allegedly a phone."),
+    PermissionDemand("Call-log access", "Required to count how often you called someone better at mathematics."),
+    PermissionDemand("Activity access", "Required to detect the exact moment you walk away."),
+    PermissionDemand("Photo access", "Required to search for screenshots of useful calculators."),
+    PermissionDemand("Video access", "Required to study tutorials about pressing equals."),
+    PermissionDemand("Music access", "Required to play nothing while you wait for an answer."),
+    PermissionDemand("Selected-photo access", "Required to respect your careful selection by reading absolutely none of it."),
+    PermissionDemand("File access", "Required to inspect files that have absolutely nothing to do with arithmetic."),
+    PermissionDemand("Nearby-device scan", "Required to locate a calculator that actually works."),
+    PermissionDemand("Nearby-device connection", "Required to refuse to connect to that calculator."),
+)
 
 internal val termsClauses: List<String> = buildList {
     add("These Terms are parody, confer no meaningful rights, and are deliberately longer than the software deserves.")
