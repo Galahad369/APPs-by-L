@@ -23,11 +23,11 @@
 ### September 15 — 1.10.3 local refinement (latest)
 
 - Local-only work: no commit, tag, push, release upload, or remote mutation.
-- The remaining approximately one-pixel mini-window gap was not hidden padding. The fixed
-  103×56dp window and a near-but-not-identical source aspect ratio caused `RESIZE_MODE_FIT`
-  to letterbox by a rounded pixel. The external mini-window now uses `ZOOM`, filling the
-  exact existing window edge-to-edge with a minute crop. Root padding remains exactly zero;
-  the old effective size remains 103×56dp.
+- Background fit options confirmed present: FIT/STRETCH/CROP (default) via `BackgroundScaleMode` enum, wired through preferences, Settings UI ("Background fit"), and `AppBackground.kt` rendering.
+- Missing `AppBackground` import in `GreaterArtApp.kt` added; build now passes.
+- Built debug APK: `app/build/outputs/apk/debug/app-debug.apk` (verified 1.10.3 / code 75).
+- Added Version Management spec to HANDOFF.md (single source of truth, semantic scheme, APK naming, no overwrite, no remote mutation).
+- Pulled remote (had 1.10.4), then reset local to 1.10.3 per "keep it local" — remote changes discarded.
 - Nodes previously forced an opaque background and the app root explicitly disabled its
   wallpaper on graph page 1. The root now keeps the chosen background active and Nodes uses
   a readable 72%-opaque theme veil, so DEFAULT, image, custom-video and current-video modes
