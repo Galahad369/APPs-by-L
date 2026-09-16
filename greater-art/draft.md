@@ -594,8 +594,8 @@ private fun ThumbnailPeel(x: Float, time: String) {
 ```bash
 cd greater-art
 $env:JAVA_HOME='C:/Program Files/Android/openjdk/jdk-21.0.8'
-$env:ANDROID_HOME='C:/Users/galah/AppData/Local/Android/Sdk'
-$env:GRADLE_USER_HOME='C:/Users/galah/.gradle'
+$env:ANDROID_HOME='<user-home>/AppData/Local/Android/Sdk'
+$env:GRADLE_USER_HOME='<user-home>/.gradle'
 ./gradlew testDebugUnitTest lintDebug assembleDebug --offline --no-daemon
 
 # Test animation recomposition

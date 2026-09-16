@@ -28,4 +28,11 @@ class AppBackgroundSyncTest {
         assertFalse(shouldMirrorPrimaryPlayback(lifecycleActive = true, primaryIsPlaying = false))
         assertFalse(shouldMirrorPrimaryPlayback(lifecycleActive = false, primaryIsPlaying = true))
     }
+
+
+    @Test
+    fun backgroundDecoderYieldsHardwarePriorityToPrimaryVideo() {
+        assertTrue(shouldPreferSoftwareBackgroundDecoder(primaryIsVideo = true))
+        assertFalse(shouldPreferSoftwareBackgroundDecoder(primaryIsVideo = false))
+    }
 }

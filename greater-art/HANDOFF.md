@@ -182,7 +182,7 @@
 - A later external session added uncommitted changes to five Greater Art files after the
   verified 1.9.18 build. Its final source was newer than its build artifact, so its reported
   successful build did not verify the final worktree. The complete changed files were backed
-  up at `C:/Users/galah/AppData/Local/Temp/GreaterArt-rogue-animation-backup-20260913`.
+  up at `<user-home>/AppData/Local/Temp/GreaterArt-rogue-animation-backup-20260913`.
 - Restored those five files exactly to commit `ef73fef`, the previously tested 1.9.18 source.
   This removed per-bar coroutine fan-out, duplicate Slider drag handling, fixed 120-BPM
   pulses, duplicated waveform components and the accidental Small/Medium/Large thumbnail
