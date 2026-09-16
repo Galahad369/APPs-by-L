@@ -1,8 +1,8 @@
 # HANDOFF — Greater Art Android Media Player
 
 **Project:** `greater-art/` in the repository checkout  
-**Current version:** `1.10.3` (code 75), edge-fill/background/surface-ownership fix
-**Latest APK:** `releases/GreaterArt-v1.10.3-build2-debug.apk` (verification below)
+**Current version:** `1.10.4` (code 76), configurable background scaling
+**Latest APK:** `releases/GreaterArt-v1.10.4-debug.apk` (verification below)
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
@@ -19,6 +19,17 @@
 - **No remote mutation** from local refinement sessions (no tag, push, or release upload).
 
 ## Current State
+
+### September 16 — 1.10.4 background scaling
+
+- Added background scaling choices for custom images and videos: `Fit` preserves the
+  complete source, `Stretch` fills the screen without preserving aspect ratio, and
+  `Cut to screen size` preserves aspect ratio while cropping overflow. The cut mode
+  remains the default and existing `CROP` preference values remain compatible.
+- Verification: `testDebugUnitTest lintDebug assembleDebug` succeeded. APK metadata
+  confirms version 1.10.4 / code 76. Final artifact:
+  `releases/GreaterArt-v1.10.4-debug.apk` (25,896,160 bytes), SHA-256
+  `8dc67d85bf9d3d9ead422927969bedc858d23b58dca4f5ce113cf4d72eb98998`.
 
 ### September 15 — 1.10.3 local refinement (latest)
 
