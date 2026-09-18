@@ -285,7 +285,12 @@ fun SettingsScreen(
                 SwitchSetting(uiText(language, "Show file details", "顯示檔案詳情"), uiText(language, "Display format and file size below the title.", "在標題下顯示格式與檔案大小。"), preferences.showFileDetails, onShowFileDetails)
 
                 SectionTitle(uiText(language, "Playback", "播放"))
-                SwitchSetting("ReplayGain", uiText(language, "Use track gain tags with peak protection. Untagged files play unchanged; boosting needs a peak tag and device support.", "使用曲目增益標籤及峰值保護。沒有標籤時保持原音量，增強音量需要峰值標籤和裝置支援。"), preferences.replayGainEnabled, onReplayGainEnabled)
+                SwitchSetting(
+                    uiText(language, "ReplayGain", "ReplayGain"),
+                    uiText(language, "Use track gain tags with peak protection. Untagged files play unchanged; boosting needs a peak tag and device support.", "使用曲目增益標籤及峰值保護。沒有標籤時保持原音量，增強音量需要峰值標籤和裝置支援。"),
+                    preferences.replayGainEnabled,
+                    onReplayGainEnabled,
+                )
                 TextButton(onClick = onEqualizer, modifier = Modifier.padding(horizontal = 16.dp)) { Text(uiText(language, "Open system equalizer", "開啟系統等化器")) }
                 SwitchSetting(uiText(language, "Show sleep timer", "顯示睡眠計時器"), uiText(language, "Optional player control. Hidden by default.", "選用播放控制，預設隱藏。"), preferences.showSleepControl, onShowSleepControl)
                 SwitchSetting(uiText(language, "A–B practice controls", "A–B 練習控制"), uiText(language, "Mark a section to repeat. Turning this off clears the markers.", "標記要重複的段落，關閉時會清除標記。"), preferences.showAbRepeat, onShowAbRepeat)
@@ -418,11 +423,11 @@ fun SettingsScreen(
                 )
                 Spacer(Modifier.height(12.dp))
                 SwitchSetting(
-                    "Toggle Ads On",
-                    "Optional parody: loud colours, wobbling buttons and a five-second skip. Buttons open a Rickroll in your browser.",
-                    preferences.jokeAdsEnabled,
-                    onJokeAdsEnabled,
-                )
+                                    uiText(language, "Toggle Ads On", "開啟廣告"),
+                                    uiText(language, "Optional parody: loud colours, wobbling buttons and a five-second skip. Buttons open a Rickroll in your browser.", "可選惡搞：高飽和配色、晃動按鈕與五秒跳過。按鈕會在瀏覽器開啟 Rickroll。"),
+                                    preferences.jokeAdsEnabled,
+                                    onJokeAdsEnabled,
+                                )
                 OutlinedButton(
                     onClick = { resetConfirmOpen = true },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
