@@ -1,8 +1,8 @@
 # HANDOFF — Greater Art Android Media Player
 
-**Project:** `greater-art/` in the repository checkout  
-**Current version:** `1.11.4` (code 78), local preview/language/Now Playing fixes
-**Latest APK:** `releases/GreaterArt-1.11.4.apk` (verification below)
+**Project:** `greater-art/` in the repository checkout
+**Current version:** `1.11.5` (code 79), localization fixes for "Toggle Ads On" and "ReplayGain"
+**Latest APK:** `releases/GreaterArt-1.11.5.apk` (verification below)
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
@@ -19,6 +19,14 @@
 - **No remote mutation** from local refinement sessions (no tag, push, or release upload).
 
 ## Current State
+
+### September 18 — 1.11.5 localization fix
+
+- Localization fixes for "Toggle Ads On" and "ReplayGain" settings: wrapped hardcoded English strings with `uiText()` and added translations for Japanese, German, French, and Cantonese in `UiText.kt`.
+- Verification: `testDebugUnitTest lintDebug assembleDebug --offline` succeeded. APK manifest confirms version 1.11.5/code 79.
+- **Delivered APK:** `releases/GreaterArt-1.11.5.apk`, 26,566,483 bytes.
+  SHA-256: `c810733fc67c1ed1eb0ec031a8e88d87eeafceae63749eda75be4fb409186bd2`.
+  Created only after final verification with overwrite disabled. No older APK changed.
 
 ### September 18 — 1.11.4 local fixes and review
 
