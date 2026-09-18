@@ -18,15 +18,25 @@ android {
         vectorDrawables.useSupportLibrary = true
     }
 
-    val pinnedSideloadKeystore = File(System.getProperty("user.home"), ".android/debug.keystore")
+    val releaseKeystorePath = providers.environmentVariable("ANDROID_RELEASE_KEYSTORE").orNull
+    val releaseStorePassword = providers.environmentVariable("ANDROID_RELEASE_STORE_PASSWORD").orNull
+    val releaseKeyAlias = providers.environmentVariable("ANDROID_RELEASE_KEY_ALIAS").orNull
+    val releaseKeyPassword = providers.environmentVariable("ANDROID_RELEASE_KEY_PASSWORD").orNull
+    val releaseSigningConfigured = listOf(
+        releaseKeystorePath,
+        releaseStorePassword,
+        releaseKeyAlias,
+        releaseKeyPassword,
+    ).all { !it.isNullOrBlank() }
 
     signingConfigs {
-        // Pin the existing sideload keystore so updates retain the same signature.
-        create("release") {
-            storeFile = pinnedSideloadKeystore
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
+        if (releaseSigningConfigured) {
+            create("release") {
+                storeFile = file(releaseKeystorePath!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
         }
     }
 
@@ -37,13 +47,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs["release"]
-        }
-        getByName("debug") {
-            // Developer machines use the pinned sideload identity. Clean CI runners do not
-            // contain that private file, so their disposable debug build uses AGP's normal
-            // debug identity. CI artifacts are verification-only and are never releases.
-            if (pinnedSideloadKeystore.isFile) {
+            if (releaseSigningConfigured) {
                 signingConfig = signingConfigs["release"]
             }
         }

@@ -31,9 +31,22 @@ jobs:
         shell: pwsh
         run: ./scripts/audit-public-repo.ps1
 
-  # Dependency Review is intentionally omitted until GitHub's Dependency Graph
-  # is enabled for this repository. Dependabot remains configured for all three
-  # Android projects and Actions, and CodeQL continues to run below.
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: moderate
 
   codeql:
     runs-on: ubuntu-latest
