@@ -100,6 +100,7 @@ class PlaybackService : MediaLibraryService() {
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
 
+        player.installVideoDiagnostics("PRIMARY")
         player.skipSilenceEnabled = false
         ParallelPlayback.addCommand = ::addLayer
         ParallelPlayback.stopCommand = {

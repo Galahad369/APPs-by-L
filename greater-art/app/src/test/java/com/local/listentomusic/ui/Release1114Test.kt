@@ -1,0 +1,48 @@
+package com.local.listentomusic.ui
+
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import com.local.listentomusic.data.*
+import com.local.listentomusic.ui.components.artworkGradientColors
+import org.junit.Assert.*
+import org.junit.Test
+
+class Release1114Test {
+    @Test fun defaultsComeFirstWithoutLosingOptions() {
+        assertEquals(ThemeMode.DARK, defaultFirst(ThemeMode.entries, ThemeMode.DARK).first())
+        assertEquals(FloatingWindowMode.MINI_WINDOW, defaultFirst(FloatingWindowMode.entries, FloatingWindowMode.MINI_WINDOW).first())
+        assertEquals(AppBackgroundMode.CURRENT_VIDEO, defaultFirst(AppBackgroundMode.entries, AppBackgroundMode.CURRENT_VIDEO).first())
+        assertEquals(BackgroundScaleMode.CROP, defaultFirst(BackgroundScaleMode.entries, BackgroundScaleMode.CROP).first())
+        assertEquals(playbackSpeeds.toSet(), defaultFirst(playbackSpeeds, 1f).toSet())
+        assertEquals(1f, defaultFirst(playbackSpeeds, 1f).first())
+    }
+
+    @Test fun graphAndSafetyCopyExistForEveryLanguage() {
+        for (language in AppLanguage.entries) for (key in additionalTranslations.keys) {
+            val actual = uiText(language, key, "MISSING")
+            assertTrue("$language $key", actual.isNotBlank())
+            assertNotEquals("MISSING", actual)
+        }
+        assertEquals("関係", uiText(AppLanguage.TRADITIONAL_CHINESE, "Unregistered", "関係"))
+        assertEquals("関連グラフ", uiText(AppLanguage.JAPANESE, "Nodes", "關聯圖"))
+        assertEquals("關聯圖", uiText(AppLanguage.CANTONESE, "Nodes", "Nodes"))
+        assertEquals("Verbindungen", uiText(AppLanguage.GERMAN, "Nodes", "Nodes"))
+        assertEquals("Connexions", uiText(AppLanguage.FRENCH, "Nodes", "Nodes"))
+    }
+
+    @Test fun artworkColorsKeepTextReadableEvenForExtremeArt() {
+        for (pixel in listOf(0xFFFFFFFF.toInt(), 0xFF000000.toInt(), 0xFFFF0000.toInt(), 0xFF00FF00.toInt(), 0xFF0000FF.toInt())) {
+            val dark = artworkGradientColors(intArrayOf(pixel), false)
+            val light = artworkGradientColors(intArrayOf(pixel), true)
+            dark.forEach { assertTrue("white on $it", 1.05f / (it.luminance() + .05f) >= 4.5f) }
+            light.forEach { assertTrue("black on $it", (it.luminance() + .05f) / .05f >= 4.5f) }
+        }
+    }
+
+    @Test fun missingOrTransparentArtUsesNeutralThemeFallback() {
+        assertEquals(artworkGradientColors(intArrayOf(), false), artworkGradientColors(intArrayOf(0x000000FF), false))
+        assertTrue(artworkGradientColors(intArrayOf(), true).first().luminance() > .8f)
+        val red = artworkGradientColors(intArrayOf(0xFFFF0000.toInt()), false).first()
+        assertTrue(red.red > red.blue)
+    }
+}

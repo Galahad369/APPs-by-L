@@ -182,10 +182,13 @@ fun NowPlayingScreen(
         return
     }
 
+    val backdrop = com.local.listentomusic.ui.components.artworkBackdrop(
+        artwork, MaterialTheme.colorScheme.background.luminance() > .5f,
+    )
     BoxWithConstraints(
             modifier = Modifier.fillMaxSize().padding(contentPadding)
                 .inspectElement("NOW_PLAYING_SCREEN", "Current artwork or video, queue, timeline, and transport controls")
-                .background(Brush.verticalGradient(listOf(Color(0xFF080808), Color(0xFF0C0C0C), Color(0xFF0A0A0A)))),
+                .background(backdrop),
         ) {
         val landscape = maxWidth > maxHeight
         val portraitVideoHeight = minOf(maxWidth / playback.videoAspectRatio.coerceIn(0.75f, 2.25f), maxHeight * 0.40f)
@@ -200,7 +203,7 @@ fun NowPlayingScreen(
                 // Portrait playback: gutters use the theme so light mode does not
                 // turn the whole page into a black slab. The video stage itself
                 // keeps its black backdrop below for letterboxing the frame.
-                MaterialTheme.colorScheme.background to WindowInsets.statusBars
+                Color.Transparent to WindowInsets.statusBars
             }
             val videoPageModifier = Modifier.fillMaxSize().background(pageBg)
                 .windowInsetsPadding(pageInsets)
@@ -593,20 +596,20 @@ private fun SecondaryControls(
 ) {
     val onSurface = MaterialTheme.colorScheme.onSurface
     Column(
-        modifier = modifier.background(MaterialTheme.colorScheme.background)
+        modifier = modifier
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 0.dp),
+            .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 0.dp),
         horizontalAlignment = Alignment.Start,
     ) {
         Text(
             com.local.listentomusic.model.mediaTitle(playback.title, playback.currentPath),
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             color = onSurface,
         )
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(6.dp))
         SecondaryControlRow(
                                             queue = queue,
                                             onLoadThumbnail = onLoadThumbnail,
@@ -615,7 +618,7 @@ private fun SecondaryControls(
                                             sleepTimer = sleepTimer,
                                         )
         PlaybackError(playback.errorMessage)
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(6.dp))
         NowPlayingQueue(
             queue = queue,
             lyrics = lyrics,
@@ -1043,7 +1046,7 @@ private fun PlayerBottomControls(
         }
         IconButton(onClick = onPrevious, enabled = playback.hasPrevious || playback.positionMs > 4_000L,
             modifier = Modifier.inspectElement("PREVIOUS_BUTTON", "Previous media or restart current")) {
-            Icon(Icons.Rounded.SkipPrevious, "Previous", modifier = Modifier.size(36.dp))
+            Icon(Icons.Rounded.SkipPrevious, uiText(playback.appLanguage, "Previous", "上一首"), modifier = Modifier.size(36.dp))
         }
         LiquidMetalSurface(
                     modifier = Modifier.size(52.dp).inspectElement("PLAY_PAUSE_BUTTON", if (playback.isPlaying) "Pause" else "Play").clickable(
@@ -1056,13 +1059,13 @@ private fun PlayerBottomControls(
         ) {
             Icon(
                 if (playback.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                if (playback.isPlaying) "Pause" else "Play",
+                if (playback.isPlaying) uiText(playback.appLanguage, "Pause", "暫停") else uiText(playback.appLanguage, "Play", "播放"),
                 modifier = Modifier.size(40.dp),
                 tint = MaterialTheme.colorScheme.onSurface,
             )
         }
         IconButton(onClick = onNext, enabled = playback.hasNext, modifier = Modifier.inspectElement("NEXT_BUTTON", "Next media")) {
-            Icon(Icons.Rounded.SkipNext, "Next", modifier = Modifier.size(36.dp))
+            Icon(Icons.Rounded.SkipNext, uiText(playback.appLanguage, "Next", "下一首"), modifier = Modifier.size(36.dp))
         }
         Box {
                     IconButton(onClick = { speedMenuOpen = true }, modifier = Modifier.size(48.dp).inspectElement("SPEED_BUTTON", speedLabel(playback.speed))) {
@@ -1196,7 +1199,7 @@ private fun NowPlayingTopBar(
 ) {
     val foreground = if (overlay) Color.White else MaterialTheme.colorScheme.onSurface
     val background = if (overlay) Color.Black.copy(alpha = 0.34f)
-        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)
+        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f)
     Row(
         modifier = modifier.fillMaxWidth().height(54.dp).background(background)
             .padding(horizontal = 6.dp),
@@ -1263,6 +1266,7 @@ internal fun VideoSurface(
         AndroidView(
         factory = { context ->
             PlayerView(context).apply {
+                tag = "NOW_PLAYING"
                 layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT,

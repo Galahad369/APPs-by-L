@@ -175,7 +175,7 @@ fun SettingsScreen(
                 ChoiceSetting(
                     uiText(language, "Theme", "主題"),
                     uiText(language, "Follow Android or keep one appearance.", "跟隨 Android，或固定使用淺色／深色外觀。"),
-                    ThemeMode.entries,
+                    defaultFirst(ThemeMode.entries, ThemeMode.DARK),
                     preferences.themeMode,
                     {
                         when (it) {
@@ -189,19 +189,26 @@ fun SettingsScreen(
                 ChoiceSetting(
                     uiText(language, "Text style", "文字字型"),
                     uiText(language, "Silian Rail is the final reversible font choice.", "Silian Rail 是最後一個可隨時切換的字型選項。"),
-                    AppFont.entries,
+                    AppFont.entries.filterNot { it == AppFont.SILIAN_RAIL } + AppFont.SILIAN_RAIL,
                     preferences.appFont,
-                    { it.label },
+                    { uiText(language, it.label, when (it) {
+                        AppFont.SYSTEM -> "系統"
+                        AppFont.SANS_SERIF -> "無襯線"
+                        AppFont.SERIF -> "襯線"
+                        AppFont.MONOSPACE -> "等寬"
+                        AppFont.CURSIVE -> "手寫"
+                        else -> it.label
+                    }) },
                     onAppFont,
                 )
                 ChoiceSetting(
                     uiText(language, "App background", "應用程式背景"),
                     uiText(language, "Video wallpaper follows the current track across pages. Audio uses liquid metal. Wallpaper is always muted.", "影片背景會跟隨目前曲目並跨頁播放，純音訊使用液態金屬，背景永遠靜音。"),
-                    AppBackgroundMode.entries,
+                    defaultFirst(AppBackgroundMode.entries, AppBackgroundMode.CURRENT_VIDEO),
                     preferences.backgroundMode,
                     {
                         when (it) {
-                            AppBackgroundMode.DEFAULT -> uiText(language, "Default", "預設")
+                            AppBackgroundMode.DEFAULT -> uiText(language, "Liquid metal", "液態金屬")
                             AppBackgroundMode.CUSTOM_IMAGE -> uiText(language, "Image", "圖片")
                             AppBackgroundMode.CUSTOM_VIDEO -> uiText(language, "Silent MP4", "靜音 MP4")
                             AppBackgroundMode.CURRENT_VIDEO -> uiText(language, "Now-playing video", "播放中影片")
@@ -212,9 +219,13 @@ fun SettingsScreen(
                                     ChoiceSetting(
                                         uiText(language, "Background fit", "背景適配"),
                                         uiText(language, "Choose how custom images and videos fill the screen. Cut to screen size is the default.", "選擇自訂圖片與影片如何填滿螢幕。預設為裁切至螢幕大小。"),
-                                        BackgroundScaleMode.entries,
+                                        defaultFirst(BackgroundScaleMode.entries, BackgroundScaleMode.CROP),
                                         preferences.backgroundScaleMode,
-                                        { it.label },
+                                        { uiText(language, it.label, when (it) {
+                                            BackgroundScaleMode.FIT -> "完整顯示"
+                                            BackgroundScaleMode.STRETCH -> "拉伸"
+                                            BackgroundScaleMode.CROP -> "裁切填滿"
+                                        }) },
                                         onBackgroundScaleMode,
                                     )
                                     when (preferences.backgroundMode) {
@@ -279,7 +290,7 @@ fun SettingsScreen(
                 SwitchSetting(uiText(language, "Show sleep timer", "顯示睡眠計時器"), uiText(language, "Optional player control. Hidden by default.", "選用播放控制，預設隱藏。"), preferences.showSleepControl, onShowSleepControl)
                 SwitchSetting(uiText(language, "A–B practice controls", "A–B 練習控制"), uiText(language, "Mark a section to repeat. Turning this off clears the markers.", "標記要重複的段落，關閉時會清除標記。"), preferences.showAbRepeat, onShowAbRepeat)
                 SwitchSetting(uiText(language, "Extended local search", "進階本機搜尋"), uiText(language, "Search artist, album and lyrics. Builds a local cache in the background; off by default.", "搜尋歌手、專輯及歌詞，在背景建立本機索引，預設關閉。"), preferences.extendedSearch, onExtendedSearch)
-                ChoiceSetting(uiText(language, "Playback speed", "播放速度"), uiText(language, "Applied immediately and remembered locally.", "立即套用並儲存在本機。"), speeds, playback.speed, { "${it}×" }, onSpeed)
+                ChoiceSetting(uiText(language, "Playback speed", "播放速度"), uiText(language, "Applied immediately and remembered locally.", "立即套用並儲存在本機。"), defaultFirst(speeds, 1f), playback.speed, { "${it}×" }, onSpeed)
                 ChoiceSetting(
                     uiText(language, "Repeat", "循環"),
                     uiText(language, "Repeat one remains the default after reset.", "重設後仍以單曲循環為預設。"),
@@ -294,7 +305,7 @@ fun SettingsScreen(
                 ChoiceSetting(
                     uiText(language, "Jump back / forward", "快退 / 快進"),
                     uiText(language, "How far the skip buttons move playback.", "快退快進按鈕一次移動的時間。"),
-                    seekOffsets,
+                    defaultFirst(seekOffsets, 5_000L),
                     preferences.seekOffsetMs,
                     { if (it >= 60_000L) "1m" else "${it / 1000}s" },
                     onSeekOffset,
@@ -304,7 +315,7 @@ fun SettingsScreen(
                 ChoiceSetting(
                     uiText(language, "Floating window shape", "浮動視窗形狀"),
                     uiText(language, "Mini window is the tiniest option. Compact and Follow video use Android's resizable picture-in-picture.", "「迷你視窗」尺寸最小；「精簡」與「跟隨影片」使用 Android 可縮放子母畫面。"),
-                    FloatingWindowMode.entries,
+                    defaultFirst(FloatingWindowMode.entries, FloatingWindowMode.MINI_WINDOW),
                     preferences.floatingWindowMode,
                     { if (it == FloatingWindowMode.COMPACT) uiText(language, "Compact", "精簡")
                       else if (it == FloatingWindowMode.FOLLOW_VIDEO) uiText(language, "Follow video", "跟隨影片")
@@ -361,11 +372,11 @@ fun SettingsScreen(
                 SectionTitle(uiText(language, "Library & cache", "音樂庫與快取"))
                 TextButton(onClick = onDuplicates, modifier = Modifier.padding(horizontal = 16.dp)) { Text(uiText(language, "Find duplicate files", "尋找重複檔案")) }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onBackup, modifier = Modifier.weight(1f)) { Text("Back up settings") }
-                    OutlinedButton(onClick = onRestore, modifier = Modifier.weight(1f)) { Text("Restore backup") }
+                    OutlinedButton(onClick = onBackup, modifier = Modifier.weight(1f)) { Text(uiText(language, "Back up settings", "備份設定")) }
+                    OutlinedButton(onClick = onRestore, modifier = Modifier.weight(1f)) { Text(uiText(language, "Restore backup", "還原備份")) }
                 }
                 Text(uiText(language, "Excluded Download folders", "排除的 Download 資料夾"), Modifier.padding(horizontal = 16.dp), fontWeight = FontWeight.Bold)
-                OutlinedTextField(folderDraft, { folderDraft = it }, label = { Text("Folder / subfolder") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(16.dp))
+                OutlinedTextField(folderDraft, { folderDraft = it }, label = { Text(uiText(language, "Folder / subfolder", "資料夾 / 子資料夾")) }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(16.dp))
                 TextButton(onClick = {
                     val path = folderDraft.trim().replace('\\', '/').trim('/')
                     if (path.isNotBlank() && path.split('/').none { it == ".." || it == "." } && ':' !in path) {

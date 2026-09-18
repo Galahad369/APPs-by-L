@@ -261,8 +261,9 @@ fun LibraryScreen(
                     Spacer(Modifier.width(6.dp))
                     Text(uiText(language, "Nodes", "關聯圖"), style = MaterialTheme.typography.labelLarge)
                 }
+                Spacer(Modifier.width(8.dp))
                 Box(Modifier.weight(1f)) {
-                    Button(onClick = { playlistMenuOpen = true }, modifier = Modifier.fillMaxWidth()
+                    Button(onClick = { playlistMenuOpen = true }, modifier = Modifier
                         .inspectElement("PLAYLIST_BUTTON", "Selects or manages a playlist")) {
                         Icon(Icons.AutoMirrored.Rounded.QueueMusic, null)
                         Spacer(Modifier.width(8.dp))

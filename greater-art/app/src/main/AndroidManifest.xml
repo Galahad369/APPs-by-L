@@ -25,7 +25,8 @@
         android:name="android.permission.ACCESS_NETWORK_STATE"
         tools:node="remove" />
 
-    <!-- Intentionally NO android.permission.INTERNET. -->
+    <!-- Never allow a transitive dependency to add network access to the merged APK. -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
 
     <application
         android:allowBackup="false"

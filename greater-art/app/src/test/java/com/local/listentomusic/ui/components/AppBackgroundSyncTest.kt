@@ -31,8 +31,16 @@ class AppBackgroundSyncTest {
 
 
     @Test
-    fun backgroundDecoderYieldsHardwarePriorityToPrimaryVideo() {
-        assertTrue(shouldPreferSoftwareBackgroundDecoder(primaryIsVideo = true))
-        assertFalse(shouldPreferSoftwareBackgroundDecoder(primaryIsVideo = false))
+    fun normalPlaybackDriftDoesNotContinuouslyFlushVideoDecoder() {
+        assertFalse(shouldResyncBackground(10_000, 10_350, true))
+        assertFalse(shouldResyncBackground(10_000, 12_000, true))
+        assertTrue(shouldResyncBackground(10_000, 12_001, true))
+    }
+
+    @Test
+    fun pausedFrameAndExplicitSeekUseTighterAlignment() {
+        assertFalse(shouldResyncBackground(1_000, 1_080, false))
+        assertTrue(shouldResyncBackground(1_000, 1_081, false))
+        assertTrue(shouldResyncBackground(30_000, 1_000, false))
     }
 }

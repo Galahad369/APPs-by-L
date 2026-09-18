@@ -74,6 +74,9 @@ Write-Host "Checking APK containers for sensitive entries..."
 if (-not ("System.IO.Compression.ZipFile" -as [type])) { Add-Type -AssemblyName System.IO.Compression.FileSystem }
 $apks = @(Invoke-Git ls-files "*.apk")
 foreach ($relativePath in $apks) {
+    # A local artifact rename can leave old tracked names pending deletion.
+    # Audit the containers that actually exist without altering the user's index.
+    if (-not (Test-Path -LiteralPath (Join-Path $root $relativePath) -PathType Leaf)) { continue }
     $archive = [System.IO.Compression.ZipFile]::OpenRead((Join-Path $root $relativePath))
     try {
         foreach ($entry in $archive.Entries) {

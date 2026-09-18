@@ -283,6 +283,7 @@ class MiniWindowOverlayService : Service() {
         artBox?.addView(row)
 
         videoView = PlayerView(this).apply {
+            tag = "MINI_WINDOW"
             layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             useController = false
             // Fill the exact 103×56dp window. FIT can create a one-pixel letterbox
@@ -327,7 +328,7 @@ class MiniWindowOverlayService : Service() {
             gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
             // Overlay bounds are already inset from system bars on affected Samsung builds.
             // Adding the navigation inset again placed the X too high and broke collision.
-            y = dp(crossMargin)
+            y = dp(crossMargin) + 3 // Physical pixels above the existing bottom anchor.
         }
         crossParams = layout
         try {
@@ -452,7 +453,7 @@ class MiniWindowOverlayService : Service() {
 
     private fun crossTargetDrawable(active: Boolean) = GradientDrawable().apply {
         shape = GradientDrawable.OVAL
-        setColor(if (active) 0xF2FF3B30.toInt() else 0xC4D92D25.toInt())
+        setColor(if (active) 0xFFFF3B30.toInt() else 0xE8D92D25.toInt())
         setStroke(dp(2), if (active) 0xFFFF453A.toInt() else 0xDFFF453A.toInt())
     }
 
@@ -502,7 +503,7 @@ class MiniWindowOverlayService : Service() {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         crossParams?.let { layout ->
-            layout.y = dp(crossMargin)
+            layout.y = dp(crossMargin) + 3
             crossView?.let { view -> runCatching { wm?.updateViewLayout(view, layout) } }
         }
         clampPosition()

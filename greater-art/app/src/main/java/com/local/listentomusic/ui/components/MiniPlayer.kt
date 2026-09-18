@@ -167,21 +167,35 @@ fun MiniPlayer(
 
 @Composable
 private fun InlineVideoPreview(player: Player) {
-    var view by remember { mutableStateOf<PlayerView?>(null) }
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    var resumed by remember(lifecycle) {
+        mutableStateOf(lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))
+    }
+    DisposableEffect(lifecycle) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, _ ->
+            resumed = lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
     AndroidView(
         factory = { context ->
-            PlayerView(context).apply {
+            (android.view.LayoutInflater.from(context).inflate(
+                com.local.listentomusic.R.layout.background_video,
+                android.widget.FrameLayout(context), false,
+            ) as PlayerView).apply {
+                tag = "LIBRARY_MINI_PLAYER"
                 useController = false
                 isClickable = false
                 isFocusable = false
                 resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                 setKeepContentOnPlayerReset(true)
-            }.also { view = it }
+            }
         },
-        update = { VideoSurfaceOwner.attach(player, it) },
+        update = { if (resumed) VideoSurfaceOwner.attach(player, it) else VideoSurfaceOwner.detach(it) },
+        // Release this exact view, not a mutable reference in an effect keyed by itself.
+        // null -> created-view used to dispose that effect and detach the new surface.
+        onRelease = VideoSurfaceOwner::detach,
         modifier = Modifier.fillMaxSize(),
     )
-    DisposableEffect(player, view) {
-        onDispose { view?.let(VideoSurfaceOwner::detach) }
-    }
 }

@@ -255,7 +255,7 @@ fun GreaterArtApp(
                         val error by viewModel.graphError.collectAsStateWithLifecycle()
                         NodesScreen(graph, loading, error, playback.currentPath, padding,
                             { navigationScope.launch { libraryPager.animateScrollToPage(0) } }, viewModel::requestGraph,
-                            { viewModel.playGraphNode(it); playerOpen = true }, settings.graphOptions, viewModel::setGraphOptions)
+                            { viewModel.playGraphNode(it); playerOpen = true }, settings.graphOptions, viewModel::setGraphOptions, settings.appLanguage)
                     } else {
                     LibraryScreen(
                         appName = appName,
@@ -449,10 +449,10 @@ fun GreaterArtApp(
             }
             if (restoreConfirm) androidx.compose.material3.AlertDialog(
                 onDismissRequest = { restoreConfirm = false },
-                title = { androidx.compose.material3.Text("Restore settings and playlists?") },
-                text = { androidx.compose.material3.Text("The selected backup replaces portable settings and playlists. Media files remain unchanged.") },
-                confirmButton = { androidx.compose.material3.TextButton(onClick = { restoreConfirm = false; restorePicker.launch(arrayOf("application/json", "text/plain")) }) { androidx.compose.material3.Text("Choose backup") } },
-                dismissButton = { androidx.compose.material3.TextButton(onClick = { restoreConfirm = false }) { androidx.compose.material3.Text("Cancel") } },
+                title = { androidx.compose.material3.Text(uiText(settings.appLanguage, "Restore settings and playlists?", "還原設定與播放清單？")) },
+                text = { androidx.compose.material3.Text(uiText(settings.appLanguage, "The selected backup replaces portable settings and playlists. Media files remain unchanged.", "所選備份將取代可攜式設定與播放清單，不會更改媒體檔案。")) },
+                confirmButton = { androidx.compose.material3.TextButton(onClick = { restoreConfirm = false; restorePicker.launch(arrayOf("application/json", "text/plain")) }) { androidx.compose.material3.Text(uiText(settings.appLanguage, "Choose backup", "選擇備份")) } },
+                dismissButton = { androidx.compose.material3.TextButton(onClick = { restoreConfirm = false }) { androidx.compose.material3.Text(uiText(settings.appLanguage, "Cancel", "取消")) } },
             )
             if (showDuplicates) DuplicateDialog(library.files, playback.currentPath,
                 onDismiss = { showDuplicates = false }, onChanged = viewModel::rescan)

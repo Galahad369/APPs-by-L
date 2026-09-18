@@ -15,11 +15,15 @@ object VideoSurfaceOwner {
         if (player == null) { detach(target); return }
         val previous = active.get()
         if (previous === target && target.player === player) return
+        if (com.local.listentomusic.BuildConfig.DEBUG) android.util.Log.d("GreaterArtSurface",
+            "attach player=${System.identityHashCode(player)} from=${previous?.tag}:${System.identityHashCode(previous)} to=${target.tag}:${System.identityHashCode(target)} overlay=$overlay")
         if (previous?.player === player) PlayerView.switchTargetView(player, previous, target)
         else { previous?.player = null; target.player = player }
         active = WeakReference(target)
     }
     fun detach(view: PlayerView) {
+        if (view.player != null && com.local.listentomusic.BuildConfig.DEBUG) android.util.Log.d("GreaterArtSurface",
+            "detach target=${view.tag}:${System.identityHashCode(view)} active=${active.get() === view}")
         // An outgoing AnimatedContent page must not clear the incoming page's surface.
         view.player = null
         if (active.get() === view) active.clear()

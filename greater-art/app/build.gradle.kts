@@ -11,8 +11,8 @@ android {
         applicationId = "com.local.listentomusic"
         minSdk = 26
         targetSdk = 37
-        versionCode = 77
-        versionName = "1.11.1"
+        versionCode = 78
+        versionName = "1.11.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -55,11 +55,11 @@ android {
     }
 
     buildFeatures {
-        compose = true
-        buildConfig = true
-    }
+            compose = true
+            buildConfig = true
+        }
 
-    packaging {
+        packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
 }
@@ -84,7 +84,7 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
-    val media3Version = "1.11.1"
+    val media3Version = "1.11.0"
     implementation("androidx.media3:media3-exoplayer:$media3Version")
     implementation("androidx.media3:media3-session:$media3Version")
     implementation("androidx.media3:media3-ui:$media3Version")
