@@ -33,6 +33,9 @@ private val cantonese = mapOf(
     "Playback options" to "播放設定", "A–B practice controls" to "A–B 反覆練歌",
     "Extended local search" to "搵歌勁啲", "Waveform is being prepared; seeking is ready" to "整緊波形，照拖時間軸冇問題",
     "Add to…" to "加去…", "Clear" to "清晒",
+    "Toggle Ads On" to "開啟廣告",
+    "Optional parody: loud colours, wobbling buttons and a five-second skip. Buttons open a Rickroll in your browser." to "可選惡搞：高飽和配色、晃動按鈕同五秒跳過。按鈕會喺瀏覽器開啟 Rickroll。",
+    "ReplayGain" to "ReplayGain",
 )
 
 // Bundled offline translations. Keys deliberately match the existing English copy
@@ -212,10 +215,11 @@ This restores Mini window, dark theme, Repeat One and every other preference. Pl
 Mini window is the tiniest option. Compact and Follow video use Android's resizable picture-in-picture.|ミニウィンドウが最小です。他のモードはAndroidのサイズ変更可能な小窓を使用します。|Minifenster ist am kleinsten. Die anderen Modi nutzen Androids skalierbares Bild-in-Bild.|La mini-fenêtre est la plus petite. Les autres modes utilisent l’image dans l’image redimensionnable d’Android.
 When the current track is a video, a muted synchronized copy appears behind the interface. Audio tracks fall back to liquid metal.|動画の再生中は同期した無音の背景を表示します。音声曲では液体金属に戻ります。|Videos erscheinen synchron und stumm im Hintergrund. Bei Audio erscheint Flüssigmetall.|Une copie vidéo synchronisée et muette apparaît derrière l’interface. L’audio utilise le métal liquide.
 Use track gain tags with peak protection. Untagged files play unchanged; boosting needs a peak tag and device support.|曲のゲインとピークのタグを使用します。タグなしは変更せず、増幅にはピークタグと対応機器が必要です。|Nutzt Titel-Gain mit Spitzenschutz. Ohne Tags unverändert; Verstärkung benötigt Peak-Tags und Geräteunterstützung.|Utilise les gains avec protection des crêtes. Sans tags, aucun changement. L’amplification nécessite un tag de crête et un appareil compatible.
-Adds a local DEV panel with live screen, player, queue and permission details. Nothing is transmitted.|画面、プレーヤー、キュー、権限の診断を本機で表示します。送信はしません。|Zeigt lokale Diagnose für Ansicht, Player, Warteschlange und Berechtigungen. Keine Übertragung.|Affiche un diagnostic local de l’écran, du lecteur, de la file et des autorisations. Aucune transmission.
+Adds a local DEV panel with live screen, player, queue and permission details. Nothing is transmitted.|画面、プレーヤー、キュー、権限の診断を本機で表示します。送信はしません。|Zeigt lokale Diagnose für Ansicht, Player, Warteschlange und Berechtigungen. Keine Übertragung.|Affiche un diagnostic local de l'écran, du lecteur, de la file et des autorisations. Aucune transmission.
 "No Internet permission, ads, analytics, account, telemetry, or cloud library. Everything stays on this device."|ネット権限、広告配信、分析、アカウント、テレメトリー、クラウドはありません。すべて本機に保存します。|Keine Internetberechtigung, Werbenetzwerke, Analyse, Konten oder Cloud-Bibliothek. Alles bleibt auf dem Gerät.|Aucune autorisation Internet, régie publicitaire, analyse, compte ou bibliothèque cloud. Tout reste sur cet appareil.
 Toggle Ads On|広告をオンにする|Werbung aktivieren|Activer les pubs
 Optional parody: loud colours, wobbling buttons and a five-second skip. Buttons open a Rickroll in your browser.|任意のパロディ：派手な色、揺れるボタン、5秒スキップ。ボタンでブラウザが Rickroll を開きます。|Optionale Parodie: greller Farben, wackelnde Buttons und ein 5-Sekunden-Skip. Buttons öffnen einen Rickroll im Browser.|Parodie optionnelle : couleurs criardes, boutons qui tremblent et saut de 5 s. Les boutons ouvrent un Rickroll dans votre navigateur.
+ReplayGain|ReplayGain|ReplayGain|ReplayGain
 """.trimIndent().lineSequence().filter { it.isNotBlank() }.associate { line ->
     val parts = line.split('|')
     require(parts.size == 4) { "Invalid bundled translation row" }
