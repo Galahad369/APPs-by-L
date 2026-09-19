@@ -18,6 +18,7 @@ android {
         vectorDrawables.useSupportLibrary = true
     }
 
+    val pinnedSideloadKeystore = File(System.getProperty("user.home"), ".android/debug.keystore")
     val releaseKeystorePath = providers.environmentVariable("ANDROID_RELEASE_KEYSTORE").orNull
     val releaseStorePassword = providers.environmentVariable("ANDROID_RELEASE_STORE_PASSWORD").orNull
     val releaseKeyAlias = providers.environmentVariable("ANDROID_RELEASE_KEY_ALIAS").orNull
@@ -30,6 +31,14 @@ android {
     ).all { !it.isNullOrBlank() }
 
     signingConfigs {
+        if (pinnedSideloadKeystore.isFile) {
+            create("sideloadDebug") {
+                storeFile = pinnedSideloadKeystore
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
         if (releaseSigningConfigured) {
             create("release") {
                 storeFile = file(releaseKeystorePath!!)
@@ -41,6 +50,11 @@ android {
     }
 
     buildTypes {
+        getByName("debug") {
+            // Personal sideload updates retain the historical certificate. Clean CI
+            // runners without this file use AGP's disposable verification key.
+            if (pinnedSideloadKeystore.isFile) signingConfig = signingConfigs["sideloadDebug"]
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
