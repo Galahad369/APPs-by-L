@@ -45,21 +45,50 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
 
+      - name: Restore release signing key
+        shell: bash
+        env:
+          ANDROID_RELEASE_KEYSTORE_B64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_B64 }}
+          ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+          ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          : "${ANDROID_RELEASE_KEYSTORE_B64:?Missing ANDROID_RELEASE_KEYSTORE_B64 secret}"
+          : "${ANDROID_RELEASE_STORE_PASSWORD:?Missing ANDROID_RELEASE_STORE_PASSWORD secret}"
+          : "${ANDROID_RELEASE_KEY_ALIAS:?Missing ANDROID_RELEASE_KEY_ALIAS secret}"
+          : "${ANDROID_RELEASE_KEY_PASSWORD:?Missing ANDROID_RELEASE_KEY_PASSWORD secret}"
+          keyfile="$RUNNER_TEMP/greater-art-release.jks"
+          printf '%s' "$ANDROID_RELEASE_KEYSTORE_B64" | base64 --decode > "$keyfile"
+          chmod 600 "$keyfile"
+          echo "ANDROID_RELEASE_KEYSTORE=$keyfile" >> "$GITHUB_ENV"
+          echo "ANDROID_RELEASE_STORE_PASSWORD=$ANDROID_RELEASE_STORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "ANDROID_RELEASE_KEY_ALIAS=$ANDROID_RELEASE_KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "ANDROID_RELEASE_KEY_PASSWORD=$ANDROID_RELEASE_KEY_PASSWORD" >> "$GITHUB_ENV"
+
       - name: Build and verify tagged source
         working-directory: greater-art
         shell: bash
         run: |
           set -euo pipefail
           chmod +x gradlew
-          ./gradlew testDebugUnitTest lintDebug assembleDebug --no-daemon
+          ./gradlew testDebugUnitTest lintDebug assembleRelease --no-daemon
+
+      - name: Verify APK signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="greater-art/app/build/outputs/apk/release/app-release.apk"
+          test -f "$apk"
+          "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -n1)/apksigner" verify --verbose --print-certs "$apk"
 
       - name: Prepare versioned artifact and checksum
         id: asset
         shell: bash
         run: |
           set -euo pipefail
-          src="greater-art/app/build/outputs/apk/debug/app-debug.apk"
-          apk="GreaterArt-${RELEASE_TAG}-debug.apk"
+          src="greater-art/app/build/outputs/apk/release/app-release.apk"
+          apk="GreaterArt-${RELEASE_TAG}.apk"
           checksum="${apk}.sha256"
           test -f "$src"
           cp "$src" "$apk"
@@ -67,7 +96,7 @@ jobs:
           echo "apk=$apk" >> "$GITHUB_OUTPUT"
           echo "checksum=$checksum" >> "$GITHUB_OUTPUT"
 
-      - name: Create release from verified tag build
+      - name: Create release from verified signed tag build
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -78,4 +107,4 @@ jobs:
             "${{ steps.asset.outputs.checksum }}" \
             --verify-tag \
             --title "Greater Art ${RELEASE_TAG}" \
-            --notes "Built in GitHub Actions from the exact tagged source. This project currently distributes a debug-signed APK; SHA-256 is attached for integrity verification."
+            --notes "Built and release-signed in GitHub Actions from the exact tagged source. SHA-256 is attached for integrity verification."
