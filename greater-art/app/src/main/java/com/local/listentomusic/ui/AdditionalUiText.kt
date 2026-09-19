@@ -77,6 +77,17 @@ Sans serif|無襯線|サンセリフ|Serifenlos|Sans empattement
 Serif|襯線|セリフ|Serifenschrift|Avec empattement
 Monospace|等寬|等幅|Festbreitenschrift|Chasse fixe
 Cursive|手寫|筆記体|Schreibschrift|Cursive
+Black disc mode|黑膠唱片模式|ブラックディスクモード|Schwarze Schallplatte|Mode disque noir
+Spin a black vinyl display for audio tracks. Off by default.|音訊曲目顯示平滑旋轉的黑膠唱片，預設關閉。|音声トラックで黒いレコードを滑らかに回転表示します。初期設定はオフです。|Zeigt bei Audiotiteln eine sanft rotierende schwarze Schallplatte. Standardmäßig aus.|Affiche un vinyle noir tournant doucement pour les pistes audio. Désactivé par défaut.
+Offline play history|離線播放紀錄|オフライン再生履歴|Offline-Wiedergabeverlauf|Historique hors ligne
+Off by default. When enabled, played tracks and times stay only on this device and are never included in backups.|預設關閉。啟用後，播放曲目與時間只會留在此裝置，且永遠不會加入備份。|初期設定はオフです。有効にすると、再生した曲と時刻は端末内だけに保存され、バックアップには含まれません。|Standardmäßig aus. Titel und Zeiten bleiben nur auf diesem Gerät und werden nie gesichert.|Désactivé par défaut. Les titres et heures restent sur cet appareil et ne sont jamais sauvegardés.
+Play history|播放紀錄|再生履歴|Wiedergabeverlauf|Historique de lecture
+Record locally|只在本機記錄|端末内に記録|Lokal aufzeichnen|Enregistrer localement
+Disabled by default. History is never exported in settings backups.|預設關閉，播放紀錄永遠不會匯出到設定備份。|初期設定はオフです。履歴は設定バックアップに出力されません。|Standardmäßig aus. Der Verlauf wird nie mit den Einstellungen exportiert.|Désactivé par défaut. L’historique n’est jamais exporté avec les réglages.
+No local play history|尚無本機播放紀錄|ローカル再生履歴はありません|Kein lokaler Wiedergabeverlauf|Aucun historique local
+Burn history|燒毀紀錄|履歴を焼却|Verlauf verbrennen|Brûler l’historique
+Burn all play history?|燒毀所有播放紀錄？|再生履歴をすべて焼却しますか？|Gesamten Wiedergabeverlauf verbrennen?|Brûler tout l’historique ?
+This permanently removes the local record. Media files and playlists are unchanged.|這會永久移除本機紀錄，媒體檔案與播放清單不會變更。|ローカル記録を完全に削除します。メディアとプレイリストは変更されません。|Entfernt den lokalen Verlauf dauerhaft. Medien und Wiedergabelisten bleiben unverändert.|Supprime définitivement l’historique local. Les médias et playlists ne changent pas.
 """.trimIndent().lineSequence().filter(String::isNotBlank).associate { line ->
     val fields = line.split('|')
     require(fields.size == 5 && fields.none(String::isBlank)) { "Incomplete offline translation" }

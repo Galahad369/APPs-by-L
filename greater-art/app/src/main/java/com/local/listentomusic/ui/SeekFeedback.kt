@@ -3,6 +3,8 @@ package com.local.listentomusic.ui
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -35,14 +37,19 @@ internal fun SeekFeedback(deltaMs: Long, event: Long, modifier: Modifier = Modif
             visible = false
         }
     }
-    AnimatedVisibility(visible, modifier, enter = fadeIn(tween(80)), exit = fadeOut(tween(160))) {
-        Box(Modifier.size(92.dp).clip(CircleShape).background(Color.Black.copy(alpha = .38f))
+    AnimatedVisibility(
+        visible,
+        modifier,
+        enter = fadeIn(tween(90)) + scaleIn(tween(140), initialScale = .78f),
+        exit = fadeOut(tween(170)) + scaleOut(tween(170), targetScale = .90f),
+    ) {
+        Box(Modifier.size(88.dp).clip(CircleShape).background(Color.Black.copy(alpha = .44f))
             .semantics { contentDescription = if (accumulated < 0) "Rewound ${abs(accumulated) / 1000} seconds" else "Skipped forward ${abs(accumulated) / 1000} seconds" },
             contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(if (accumulated < 0) Icons.Rounded.FastRewind else Icons.Rounded.FastForward,
-                    null, tint = Color.White, modifier = Modifier.size(30.dp))
-                Text("${abs(accumulated) / 1000} seconds", color = Color.White,
+                    null, tint = Color.White, modifier = Modifier.size(27.dp))
+                Text("${abs(accumulated) / 1000}s", color = Color.White,
                     style = MaterialTheme.typography.labelMedium)
             }
         }

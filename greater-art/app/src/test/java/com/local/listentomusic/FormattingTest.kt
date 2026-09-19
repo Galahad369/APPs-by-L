@@ -48,6 +48,8 @@ class FormattingTest {
         assertTrue(defaults.preloadThumbnails)
         assertFalse(defaults.showFileDetails)
         assertEquals(AppBackgroundMode.CURRENT_VIDEO, defaults.backgroundMode)
+        assertFalse(defaults.blackDiscMode)
+        assertFalse(defaults.playHistoryEnabled)
         assertEquals(0.55f, defaults.backgroundDim, 0.001f)
         assertEquals(
             setOf(SortMode.CUSTOM, SortMode.NAME_ASC, SortMode.NAME_DESC, SortMode.DATE_DESC, SortMode.DATE_ASC),
@@ -55,10 +57,13 @@ class FormattingTest {
         )
     }
 
-    @Test fun miniWindowKeepsBothThreePixelReductions() {
+    @Test fun miniWindowUsesVisibleFootprintAndSquareVariant() {
         assertEquals(103, com.local.listentomusic.model.MiniWindowMetrics.widthPx(1f))
         assertEquals(206, com.local.listentomusic.model.MiniWindowMetrics.widthPx(2f))
         assertEquals(112, com.local.listentomusic.model.MiniWindowMetrics.heightPx(2f))
+        assertEquals(56, com.local.listentomusic.model.MiniWindowMetrics.squareWidthPx(1f))
+        assertTrue(com.local.listentomusic.model.MiniWindowMetrics.isSquareAspect(1f))
+        assertFalse(com.local.listentomusic.model.MiniWindowMetrics.isSquareAspect(16f / 9f))
     }
 
     @Test fun doubleTapSeekUsesOnlySideZones() {

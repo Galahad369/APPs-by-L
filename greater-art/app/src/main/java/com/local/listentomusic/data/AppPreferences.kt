@@ -51,6 +51,8 @@ data class UserPreferences(
     val extendedSearch: Boolean = false,
     val localOverrides: Map<String, com.local.listentomusic.model.LocalOverride> = emptyMap(),
     val replayGainEnabled: Boolean = false,
+    val blackDiscMode: Boolean = false,
+    val playHistoryEnabled: Boolean = false,
     val excludedFolders: List<String> = emptyList(),
     val jokeAdsEnabled: Boolean = false,
 )
@@ -80,6 +82,8 @@ data class LocalPlaylist(
     val paths: List<String>,
     val rule: com.local.listentomusic.model.PlaylistRule? = null,
 )
+
+data class PlayHistoryEntry(val path: String, val playedAtEpochMs: Long)
 
 class AppPreferences(private val context: Context) {
     private object Keys {
@@ -118,6 +122,9 @@ class AppPreferences(private val context: Context) {
         val extendedSearch = booleanPreferencesKey("extended_search")
         val localOverrides = stringPreferencesKey("local_overrides")
         val replayGainEnabled = booleanPreferencesKey("replay_gain_enabled")
+        val blackDiscMode = booleanPreferencesKey("black_disc_mode")
+        val playHistoryEnabled = booleanPreferencesKey("play_history_enabled")
+        val playHistory = stringPreferencesKey("play_history_v1")
         val excludedFolders = stringPreferencesKey("excluded_folders")
         val jokeAdsEnabled = booleanPreferencesKey("joke_ads_enabled")
     }
@@ -181,12 +188,17 @@ class AppPreferences(private val context: Context) {
             extendedSearch = prefs[Keys.extendedSearch] ?: false,
             localOverrides = decodeOverrides(prefs[Keys.localOverrides].orEmpty()),
             replayGainEnabled = prefs[Keys.replayGainEnabled] ?: false,
+            blackDiscMode = prefs[Keys.blackDiscMode] ?: false,
+            playHistoryEnabled = prefs[Keys.playHistoryEnabled] ?: false,
             excludedFolders = decodeOrder(prefs[Keys.excludedFolders].orEmpty()),
             jokeAdsEnabled = prefs[Keys.jokeAdsEnabled] ?: false,
         )
     }
 
     suspend fun current(): UserPreferences = values.first()
+    val playHistory: Flow<List<PlayHistoryEntry>> = context.dataStore.data.map { prefs ->
+        decodePlayHistory(prefs[Keys.playHistory].orEmpty())
+    }
     suspend fun setGraphOptions(value: com.local.listentomusic.graph.GraphOptions) = edit { it[Keys.graphOptions] = value.encode() }
 
     // Explicit portable preference allowlist: no last-played data, private background
@@ -196,7 +208,8 @@ class AppPreferences(private val context: Context) {
         Keys.playlists, Keys.activePlaylistId, Keys.excludedFolders)
     private val backupBooleans = listOf(Keys.showThumbnails, Keys.showFileDetails,
         Keys.preloadThumbnails, Keys.resumePlayback, Keys.autoPictureInPicture,
-        Keys.editableQueue, Keys.showSleepControl, Keys.showAbRepeat, Keys.extendedSearch, Keys.replayGainEnabled)
+        Keys.editableQueue, Keys.showSleepControl, Keys.showAbRepeat, Keys.extendedSearch,
+        Keys.replayGainEnabled, Keys.blackDiscMode)
 
     suspend fun exportBackup(): String {
         val prefs = context.dataStore.data.first()
@@ -317,6 +330,23 @@ class AppPreferences(private val context: Context) {
         }
     }
     suspend fun setReplayGainEnabled(value: Boolean) = edit { it[Keys.replayGainEnabled] = value }
+    suspend fun setBlackDiscMode(value: Boolean) = edit { it[Keys.blackDiscMode] = value }
+    suspend fun setPlayHistoryEnabled(value: Boolean) = edit { it[Keys.playHistoryEnabled] = value }
+
+    suspend fun recordPlayed(path: String, atEpochMs: Long = System.currentTimeMillis()) {
+        if (path.isBlank()) return
+        context.dataStore.edit { prefs ->
+            if (prefs[Keys.playHistoryEnabled] != true) return@edit
+            val existing = decodePlayHistory(prefs[Keys.playHistory].orEmpty())
+            val newest = existing.firstOrNull()
+            if (newest?.path == path && atEpochMs - newest.playedAtEpochMs < 30_000L) return@edit
+            prefs[Keys.playHistory] = encodePlayHistory(
+                (listOf(PlayHistoryEntry(path, atEpochMs)) + existing).take(500),
+            )
+        }
+    }
+
+    suspend fun clearPlayHistory() = edit { it.remove(Keys.playHistory) }
     suspend fun setExcludedFolders(value: List<String>) = edit { prefs ->
         prefs[Keys.excludedFolders] = value.distinct().sorted().joinToString("\n") { encode(it) }
     }
@@ -408,6 +438,9 @@ class AppPreferences(private val context: Context) {
             it.remove(Keys.showAbRepeat)
             it.remove(Keys.extendedSearch)
             it.remove(Keys.replayGainEnabled)
+            it.remove(Keys.blackDiscMode)
+            it.remove(Keys.playHistoryEnabled)
+            it.remove(Keys.playHistory)
             it.remove(Keys.excludedFolders)
             it.remove(Keys.jokeAdsEnabled)
             it[Keys.speed] = 1f
@@ -457,6 +490,22 @@ class AppPreferences(private val context: Context) {
         }.getOrNull() }
         LocalPlaylist(id, name, paths.distinct(), rule)
     }.toList()
+
+    private fun encodePlayHistory(entries: List<PlayHistoryEntry>): String = entries.joinToString("\n") { entry ->
+        "${entry.playedAtEpochMs}|${encode(entry.path)}"
+    }
+
+    private fun decodePlayHistory(encoded: String): List<PlayHistoryEntry> = encoded
+        .lineSequence()
+        .take(500)
+        .mapNotNull { line ->
+            val separator = line.indexOf('|')
+            if (separator <= 0) return@mapNotNull null
+            val epoch = line.substring(0, separator).toLongOrNull()?.takeIf { it > 0L } ?: return@mapNotNull null
+            val path = decode(line.substring(separator + 1))?.takeIf(String::isNotBlank) ?: return@mapNotNull null
+            PlayHistoryEntry(path, epoch)
+        }
+        .toList()
 
     private fun encode(value: String): String =
         Base64.encodeToString(value.toByteArray(Charsets.UTF_8), Base64.NO_WRAP or Base64.URL_SAFE)

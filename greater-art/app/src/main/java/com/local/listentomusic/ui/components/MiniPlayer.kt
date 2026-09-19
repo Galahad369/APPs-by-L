@@ -75,8 +75,14 @@ fun MiniPlayer(
     onNext: () -> Unit,
 ) {
     val density = LocalDensity.current
-    val previewWidth = with(density) { MiniWindowMetrics.widthPx(this.density).toDp() }
     val previewHeight = with(density) { MiniWindowMetrics.heightPx(this.density).toDp() }
+    val squarePreview = when {
+        playback.isVideo -> MiniWindowMetrics.isSquareAspect(playback.videoAspectRatio)
+        artwork != null -> MiniWindowMetrics.isSquareAspect(artwork.width.toFloat() / artwork.height.coerceAtLeast(1))
+        else -> true
+    }
+    val previewWidth = if (squarePreview) previewHeight
+        else with(density) { MiniWindowMetrics.widthPx(this.density).toDp() }
     val progress = if (playback.durationMs > 0L) {
         (playback.positionMs.toFloat() / playback.durationMs).coerceIn(0f, 1f)
     } else 0f
@@ -90,11 +96,11 @@ fun MiniPlayer(
     ) {
         LiquidMetalSurface(
             modifier = Modifier.fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 4.dp)
+                .padding(horizontal = 10.dp)
                 .clip(RoundedCornerShape(20.dp)),
             shape = RoundedCornerShape(20.dp),
         ) {
-            Column(modifier = Modifier.clickable(onClick = onOpen)) {
+            Box(modifier = Modifier.clickable(onClick = onOpen)) {
                 Row(
                     modifier = Modifier.fillMaxWidth().height(previewHeight),
                     verticalAlignment = Alignment.CenterVertically,
@@ -156,7 +162,7 @@ fun MiniPlayer(
                 }
                 LinearProgressIndicator(
                     progress = { progress },
-                    modifier = Modifier.fillMaxWidth().height(2.dp).padding(bottom = 1.dp),
+                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(2.dp),
                     color = MaterialTheme.colorScheme.secondary,
                     trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
                 )

@@ -6,6 +6,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,11 +17,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -37,6 +41,8 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Hub
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -55,10 +61,13 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -70,6 +79,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -85,6 +95,7 @@ import com.local.listentomusic.LibraryStatus
 import com.local.listentomusic.LibraryUiState
 import com.local.listentomusic.data.LibraryRowSize
 import com.local.listentomusic.data.UserPreferences
+import com.local.listentomusic.data.PlayHistoryEntry
 import com.local.listentomusic.model.MediaFile
 import com.local.listentomusic.model.MediaKind
 import com.local.listentomusic.model.MiniWindowMetrics
@@ -99,10 +110,13 @@ fun LibraryScreen(
     appName: String,
     state: LibraryUiState,
     preferences: UserPreferences,
+    playHistory: List<PlayHistoryEntry>,
     currentPath: String?,
     contentPadding: PaddingValues,
     onGrantStorageAccess: () -> Unit,
     onRefresh: () -> Unit,
+    onPlayHistoryEnabled: (Boolean) -> Unit,
+    onClearPlayHistory: () -> Unit,
     onQueryChange: (String) -> Unit,
     onSortChange: (SortMode) -> Unit,
     onMoveItem: (Int, Int) -> Unit,
@@ -142,6 +156,8 @@ fun LibraryScreen(
     var selectionMenu by remember { mutableStateOf(false) }
     var selectionNameDialog by remember { mutableStateOf(false) }
     var selectionName by remember { mutableStateOf("") }
+    var historyOpen by remember { mutableStateOf(false) }
+    var burnHistoryConfirm by remember { mutableStateOf(false) }
     Scaffold(
         modifier = Modifier.padding(contentPadding).inspectElement("LIBRARY_SCREEN", "Scrollable local media library"),
         containerColor = Color.Transparent,
@@ -177,15 +193,24 @@ fun LibraryScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onOpenSettings, modifier = Modifier.inspectElement("SETTINGS_BUTTON", "Opens Greater Art settings")) {
-                        Icon(Icons.Rounded.Settings, uiText(language, "Settings", "設定"))
+                    IconButton(onClick = onOpenSettings, modifier = Modifier.size(38.dp).inspectElement("SETTINGS_BUTTON", "Opens Greater Art settings")) {
+                        Icon(Icons.Rounded.Settings, uiText(language, "Settings", "設定"), Modifier.size(20.dp))
                     }
-                    IconButton(onClick = onRefresh, modifier = Modifier.inspectElement("REFRESH_LIBRARY_BUTTON", "Rescans Download for supported media")) {
-                        Icon(Icons.Rounded.Refresh, uiText(language, "Scan again", "重新掃描"))
+                    IconButton(onClick = { historyOpen = true }, modifier = Modifier.size(38.dp).inspectElement("PLAY_HISTORY_BUTTON", "Opens optional local playback history")) {
+                        Icon(
+                            Icons.Rounded.History,
+                            uiText(language, "Play history", "播放紀錄"),
+                            Modifier.size(20.dp),
+                            tint = if (preferences.playHistoryEnabled) MaterialTheme.colorScheme.secondary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    IconButton(onClick = onRefresh, modifier = Modifier.size(38.dp).inspectElement("REFRESH_LIBRARY_BUTTON", "Rescans Download for supported media")) {
+                        Icon(Icons.Rounded.Refresh, uiText(language, "Scan again", "重新掃描"), Modifier.size(20.dp))
                     }
                     if (activePlaylist == null) Box {
-                        IconButton(onClick = { sortMenuOpen = true }, modifier = Modifier.inspectElement("SORT_BUTTON", "Opens Library order choices")) {
-                            Icon(Icons.AutoMirrored.Rounded.Sort, uiText(language, "Sort", "排序"))
+                        IconButton(onClick = { sortMenuOpen = true }, modifier = Modifier.size(38.dp).inspectElement("SORT_BUTTON", "Opens Library order choices")) {
+                            Icon(Icons.AutoMirrored.Rounded.Sort, uiText(language, "Sort", "排序"), Modifier.size(20.dp))
                         }
                         DropdownMenu(sortMenuOpen, { sortMenuOpen = false }) {
                             SortMode.entries.forEach { mode ->
@@ -225,29 +250,45 @@ fun LibraryScreen(
                     }
                 }
             }
-            OutlinedTextField(
-                value = state.query,
-                onValueChange = onQueryChange,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)
-                    .inspectElement("LIBRARY_FILTER", "Local filename search and clear control"),
-                shape = RoundedCornerShape(10.dp),
-                singleLine = true,
-                leadingIcon = { Icon(Icons.Rounded.Search, null) },
-                trailingIcon = if (state.query.isNotEmpty()) {
-                    {
-                        IconButton(onClick = { onQueryChange("") }) {
-                            Icon(Icons.Rounded.Clear, uiText(language, "Clear filter", "清除篩選"))
-                        }
-                    }
-                } else null,
-                placeholder = { Text(uiText(language, "Filter library", "篩選音樂庫")) },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surface,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                    focusedBorderColor = MaterialTheme.colorScheme.secondary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                ),
+            val searchInteraction = remember { MutableInteractionSource() }
+            val searchFocused by searchInteraction.collectIsFocusedAsState()
+            val searchScale by animateFloatAsState(if (searchFocused) 1.012f else 1f, label = "library-filter-scale")
+            val searchGlow by animateColorAsState(
+                if (searchFocused) MaterialTheme.colorScheme.secondary.copy(alpha = .72f)
+                else MaterialTheme.colorScheme.outlineVariant.copy(alpha = .42f),
+                label = "library-filter-glow",
             )
+            LiquidMetalSurface(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp)
+                    .graphicsLayer { scaleX = searchScale; scaleY = searchScale }
+                    .border(1.dp, searchGlow, RoundedCornerShape(18.dp))
+                    .inspectElement("LIBRARY_FILTER", "Animated local filename search and clear control"),
+                shape = RoundedCornerShape(18.dp),
+            ) {
+                OutlinedTextField(
+                    value = state.query,
+                    onValueChange = onQueryChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    interactionSource = searchInteraction,
+                    shape = RoundedCornerShape(18.dp),
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Rounded.Search, null) },
+                    trailingIcon = if (state.query.isNotEmpty()) {
+                        {
+                            IconButton(onClick = { onQueryChange("") }) {
+                                Icon(Icons.Rounded.Clear, uiText(language, "Clear filter", "清除篩選"))
+                            }
+                        }
+                    } else null,
+                    placeholder = { Text(uiText(language, "Filter library", "篩選音樂庫")) },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedBorderColor = Color.Transparent,
+                        unfocusedBorderColor = Color.Transparent,
+                    ),
+                )
+            }
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -326,9 +367,9 @@ fun LibraryScreen(
                             contentAlignment = Alignment.Center,
                         ) {
                             Image(
-                                androidx.compose.ui.res.painterResource(com.local.listentomusic.R.drawable.splash_mark),
+                                androidx.compose.ui.res.painterResource(com.local.listentomusic.R.drawable.ic_launcher_foreground),
                                 null,
-                                Modifier.size(72.dp),
+                                Modifier.size(62.dp),
                                 contentScale = ContentScale.Fit,
                             )
                         }
@@ -379,7 +420,7 @@ fun LibraryScreen(
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize().inspectElement("LIBRARY_LIST", "Virtualized ordered media rows"),
-                        contentPadding = PaddingValues(bottom = 12.dp),
+                        contentPadding = PaddingValues(bottom = 2.dp),
                     ) {
                         itemsIndexed(
                             state.files,
@@ -410,6 +451,73 @@ fun LibraryScreen(
                 }
             }
         }
+    }
+
+    if (historyOpen) {
+        val dateFormat = remember { java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT) }
+        AlertDialog(
+            onDismissRequest = { historyOpen = false },
+            icon = { Icon(Icons.Rounded.History, null) },
+            title = { Text(uiText(language, "Play history", "播放紀錄")) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(uiText(language, "Record locally", "只在本機記錄"), fontWeight = FontWeight.SemiBold)
+                            Text(
+                                uiText(language, "Disabled by default. History is never exported in settings backups.", "預設關閉，播放紀錄永遠不會匯出到設定備份。"),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(preferences.playHistoryEnabled, onPlayHistoryEnabled)
+                    }
+                    if (playHistory.isEmpty()) {
+                        Text(uiText(language, "No local play history", "尚無本機播放紀錄"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        LazyColumn(Modifier.fillMaxWidth().heightIn(max = 370.dp)) {
+                            items(playHistory, key = { "${it.playedAtEpochMs}:${it.path}" }) { entry ->
+                                val file = state.files.firstOrNull { it.path == entry.path || it.sourcePath == entry.path }
+                                Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                                    Text(
+                                        file?.let { com.local.listentomusic.model.mediaTitle(it.name, it.path) }
+                                            ?: entry.path.substringAfterLast('/').substringAfterLast('\\').substringBeforeLast('.'),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        dateFormat.format(java.util.Date(entry.playedAtEpochMs)),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = .4f))
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                if (playHistory.isNotEmpty()) TextButton(onClick = { burnHistoryConfirm = true }) {
+                    Icon(Icons.Rounded.LocalFireDepartment, null, tint = MaterialTheme.colorScheme.error)
+                    Spacer(Modifier.width(5.dp))
+                    Text(uiText(language, "Burn history", "燒毀紀錄"), color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { historyOpen = false }) { Text(uiText(language, "Close", "關閉")) } },
+        )
+    }
+    if (burnHistoryConfirm) {
+        AlertDialog(
+            onDismissRequest = { burnHistoryConfirm = false },
+            icon = { Icon(Icons.Rounded.LocalFireDepartment, null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text(uiText(language, "Burn all play history?", "燒毀所有播放紀錄？")) },
+            text = { Text(uiText(language, "This permanently removes the local record. Media files and playlists are unchanged.", "這會永久移除本機紀錄，媒體檔案與播放清單不會變更。")) },
+            confirmButton = { TextButton(onClick = { onClearPlayHistory(); burnHistoryConfirm = false }) {
+                Text(uiText(language, "Burn history", "燒毀紀錄"), color = MaterialTheme.colorScheme.error)
+            } },
+            dismissButton = { TextButton(onClick = { burnHistoryConfirm = false }) { Text(uiText(language, "Cancel", "取消")) } },
+        )
     }
 
     if (selectionNameDialog) AlertDialog(onDismissRequest = { selectionNameDialog = false }, title = { Text(uiText(language, "Create playlist", "建立播放清單")) },

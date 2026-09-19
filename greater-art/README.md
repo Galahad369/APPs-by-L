@@ -6,6 +6,29 @@ ads, analytics, accounts, telemetry, or network access.
 
 ## Features
 
+- v1.12.1 changes the playback journey: tapping a Library row starts playback in
+  place, while tapping the live Library mini-player deliberately opens Now Playing.
+  The bottom player is shorter, uses a square preview for square artwork/video and
+  hands its initial bounds to the external floating player without resetting later
+  remembered positions.
+- The mini-window preserves the established visible `103×56dp` widescreen footprint,
+  switches to `56×56dp` for square art/video, reaches screen edges without a hidden
+  gutter, shows embedded audio artwork, and applies a strong transparent red tint
+  only while it overlaps the real close target. The target is another three physical
+  pixels higher than 1.11.7.
+- Library search now uses a focused liquid-metal treatment and a clear action; the
+  top bar uses denser controls. Initial loading uses the real app mark. Now Playing
+  keeps side-only double-tap seeking with one restrained YouTube-style cue, adds an
+  optional pause-aware black-disc presentation for audio, and leaves the center
+  double-tap zone inert.
+- Optional play history is disabled by default. When enabled, successful playback
+  transitions are stored locally (up to 500 entries), never included in settings
+  backups, and can be permanently burned from the Library. Resetting app settings
+  also clears it. Developer inspection can cycle through overlapping tagged elements.
+- Two standalone phone films document the exact journey: the
+  [user film](../greater-art-user-demo.html) and the
+  [technical journey](../greater-art-technical-demo.html).
+
 - v1.11.6 makes primary video ownership follow the visible player rather than view
   callback order. Developer Mode separates media/active-surface first-frame states,
   generations and actionable warnings. It also restores ambient-artwork retries on
@@ -173,7 +196,7 @@ $env:GRADLE_USER_HOME = Join-Path $env:USERPROFILE '.gradle'
 Current release artifact:
 
 ```text
-releases/GreaterArt-1.11.6.apk
+releases/GreaterArt-1.12.1.apk
 ```
 
 Versioned APKs are never overwritten. Builds remain signed by the pinned personal
@@ -264,14 +287,14 @@ against maintained open-source Android players.
 
 ## Current Verification Boundary
 
-For 1.11.6 (code 80): 96 unit tests passed; lint reports 0 errors, 17 warnings and 1 hint; the debug
+For 1.12.1 (code 82): 96 unit tests passed; lint reports 0 errors, 18 warnings and 1 hint; the debug
 build and APK signature verification passed. The application ID/signing certificate
 are unchanged and the packaged manifest has no INTERNET permission. No Android device
 was connected for this review build.
 
-APK: `releases/GreaterArt-1.11.6.apk` (26,585,380 bytes)
+APK: `releases/GreaterArt-1.12.1.apk` (26,024,921 bytes)
 
-SHA-256: `b62b1bb624d9aae150511c2f2b0eba9384f123fc18653008584748b240f1061b`.
+SHA-256: `4713ad2eb43cebb3c0c115300f26aeba163247cafee7e057e8bdeaf047609f7a`.
 
 The 1.9 series includes regression checks for mixer headroom, languages, natural
 sorting, playlist rules, CUE/M3U boundaries and local lyric parsing. Build checks do

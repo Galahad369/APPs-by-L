@@ -41,6 +41,10 @@ internal class UiInspectorState {
     var armed by mutableStateOf(false)
     var selected by mutableStateOf<InspectorRegion?>(null)
         private set
+    var matchingRegions by mutableStateOf<List<InspectorRegion>>(emptyList())
+        private set
+    var selectedMatchIndex by mutableIntStateOf(0)
+        private set
     var lastTouch by mutableStateOf(Offset.Zero)
         private set
     private var order = 0L
@@ -53,19 +57,27 @@ internal class UiInspectorState {
     }
 
     fun remove(key: Any) { regions.remove(key) }
-    fun arm() { selected = null; armed = true }
+    fun arm() { selected = null; matchingRegions = emptyList(); selectedMatchIndex = 0; armed = true }
     fun cancel() { armed = false }
-    fun clearSelection() { selected = null }
-    fun clear() { armed = false; selected = null; regions.clear() }
+    fun clearSelection() { selected = null; matchingRegions = emptyList(); selectedMatchIndex = 0 }
+    fun clear() { armed = false; clearSelection(); regions.clear() }
 
     fun pick(point: Offset) {
         lastTouch = point
-        selected = regions.values.asSequence()
+        matchingRegions = regions.values.asSequence()
             .filter { it.bounds.contains(point) }
             .sortedWith(compareBy<InspectorRegion> { it.bounds.width * it.bounds.height }.thenByDescending { it.order })
-            .firstOrNull()
+            .toList()
+        selectedMatchIndex = 0
+        selected = matchingRegions.firstOrNull()
             ?: InspectorRegion("UNREGISTERED_AREA", "No tagged Compose element at this point", Rect(point, 1f), Long.MAX_VALUE)
         armed = false
+    }
+
+    fun selectNextMatch() {
+        if (matchingRegions.size < 2) return
+        selectedMatchIndex = (selectedMatchIndex + 1) % matchingRegions.size
+        selected = matchingRegions[selectedMatchIndex]
     }
 }
 
@@ -130,6 +142,7 @@ internal fun UiInspectorHost(
                         appendLine("boundsPx=${region.bounds.left.toInt()},${region.bounds.top.toInt()} → ${region.bounds.right.toInt()},${region.bounds.bottom.toInt()}")
                         appendLine("sizePx=${region.bounds.width.toInt()}×${region.bounds.height.toInt()}")
                         appendLine("touchPx=${state.lastTouch.x.toInt()},${state.lastTouch.y.toInt()}")
+                        if (state.matchingRegions.isNotEmpty()) appendLine("stack=${state.selectedMatchIndex + 1}/${state.matchingRegions.size}")
                         append("sizeDp=${(region.bounds.width / density.density).toInt()}×${(region.bounds.height / density.density).toInt()}")
                     }
                 }
@@ -146,6 +159,11 @@ internal fun UiInspectorHost(
                             context.getSystemService(ClipboardManager::class.java)
                                 ?.setPrimaryClip(ClipData.newPlainText("Greater Art element", report))
                         }) { Text("COPY", color = inspectorAccent) }
+                        if (state.matchingRegions.size > 1) {
+                            TextButton(onClick = state::selectNextMatch) {
+                                Text("NEXT ${state.selectedMatchIndex + 1}/${state.matchingRegions.size}", color = inspectorAccent)
+                            }
+                        }
                         IconButton(onClick = state::clearSelection) { Icon(Icons.Rounded.Close, "Close selection", tint = Color.White) }
                     }
                 }

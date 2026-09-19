@@ -1,38 +1,48 @@
-HERMES SESSION HANDOFF — 2026-09-12
+HERMES SESSION HANDOFF — 2026-09-20
 
-STATUS: Session active. v1.9.16 APK built successfully.
+PROJECT
+- Path: greater-art/
+- Version: 1.12.1 (code 82)
+- APK: releases/GreaterArt-1.12.1.apk
+- SHA-256: 4713ad2eb43cebb3c0c115300f26aeba163247cafee7e057e8bdeaf047609f7a
+- Package: com.local.listentomusic
+- Signing certificate: 9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf
 
-WHAT WAS ACCOMPLISHED:
-- v1.9.16 APK built successfully using JDK21 wrapper jar, gradle assembleDebug
-- SHA-256: f3f6d61743381006cd9e18d4593bd2d9891b9b7ae29c8ecd64ea703138822d4e
-- APK located at: releases/GreaterArt-v1.9.16-debug.apk
-- Version bumped: 1.9.15 (code 66) → 1.9.16 (code 67) in app/build.gradle.kts
-- Nodes graph added (v1.9.16): filename-similarity graph page left of Library, pan/pinch/drag/tap, searchable picker, off-main physics, versioned cache
-- Queue race fixed: session-order fallback + explicit controller sync, no more dropped items
-- Mini-window transition fixed: shared VideoSurfaceOwner, overlay stops after Activity resumes
-- Red X corrected: crossMargin 14dp, crossSize 57dp, icon 25dp, brighter stroke, frame-batched drag
-- Waveform: stable physical-file cache keys, bounded 32-entry memory cache, current+next-3 preload
-- Performance: defer rescan, isolate wallpaper, no animated metal under opaque content
-- All 60 tests pass, lint 0 errors, assembleDebug passed, no INTERNET permission
-- Signing matches existing APK (SHA-256: 9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf)
+CURRENT USER JOURNEY
+1. App launch and local scan.
+2. Library is the default screen.
+3. Tapping a media row starts playback and stays in Library.
+4. The live Library mini-player appears at the bottom.
+5. Tapping that mini-player opens the Now Playing overlay.
+6. Leaving the app from Now Playing starts the configured floating mode; Mini is default.
+7. Tapping the floating window returns directly to Now Playing.
 
-TELEGRAM DELIVERY:
-- Not attempted (user said stop sending APKs)
-- APK available locally at releases/GreaterArt-v1.9.16-debug.apk
+1.12.1 CHANGES
+- Compact Library player, liquid-metal search focus, actual app mark on splash/scan.
+- Wide mini window remains 103×56dp; square artwork/video uses 56×56dp.
+- No invisible content gutter; saved drag position and physical bottom reach retained.
+- Close target raised another three physical pixels; overlap adds a strong red tint.
+- Optional black-disc audio presentation, disabled by default.
+- Optional offline play history, disabled by default, excluded from backups, capped at
+  500 entries, and removable with the confirmed Burn history action.
+- Inspector cycles all tagged elements under a touch.
+- One restrained side-only double-tap seek cue; center remains inert.
+- New standalone user and technical phone films at repository root and an aligned site.
 
-CONSTRAINTS (from HANDOFF.md):
-- No INTERNET permission changes, no appId/signing changes
-- Never overwrite versioned APKs (patch bump only for major)
-- Publishing needs explicit approval
-- APKs distributed via GitHub raw links when Vercel 50MB cap exceeded
+VERIFICATION
+- testDebugUnitTest lintDebug assembleDebug --offline --no-daemon --max-workers=2: PASS
+- 96 tests; 0 failures/errors
+- Lint: 0 errors, 18 warnings, 1 hint
+- APK signature and 16 KiB zip alignment: PASS
+- Manifest: no INTERNET permission
+- No Android device/emulator was connected. Do not represent build checks as device proof.
 
-NEXT STEPS:
-- Real-device verification needed: mini-window return, video frame pacing, graph gestures, TalkBack
-- Vercel deployment requires explicit approval
+NON-NEGOTIABLES
+- No INTERNET permission, ads, analytics, accounts or telemetry.
+- Preserve application ID and signing certificate.
+- Never overwrite a versioned APK.
+- Do not cap source video quality or FPS to hide rendering problems.
+- Portable backups must not include playback history or last-played state.
 
-FILES MODIFIED (this session):
-- greater-art/app/build.gradle.kts — versionCode 66→67, versionName 1.9.15→1.9.16
-- greater-art/releases/GreaterArt-v1.9.16-debug.apk — built artifact
-- greater-art/HANDOFF.md — v1.9.16 checkpoint added
-- greater-art/README.md — v1.9.16 features documented
-- greater-art/hermes-handoff.txt — updated to v1.9.16
+PRIMARY CONTINUATION FILE
+- Read greater-art/HANDOFF.md before changing playback, overlay or surface ownership.

@@ -8,6 +8,7 @@ import android.content.ComponentName
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Rect
+import android.graphics.BitmapFactory
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
@@ -42,6 +43,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 
 // A tiny, local-only floating player implemented with WindowManager.
@@ -66,6 +68,7 @@ class MiniWindowOverlayService : Service() {
         private val crossSize = 25
         private val crossMargin = 11
         private val crossBaseAlpha = 1f
+        private val crossRaisePx = 9
         private var crossActive: Boolean? = null
         private var framePending = false
         private var openingApp = false
@@ -84,10 +87,15 @@ class MiniWindowOverlayService : Service() {
 
     // views
     private var artBox: FrameLayout? = null
+    private var artView: ImageView? = null
+    private var dangerTint: View? = null
     private var videoView: PlayerView? = null
     private var titleView: TextView? = null
     private var toggleBtn: ImageButton? = null
     private var closeBtn: ImageButton? = null
+    private var currentAspectRatio = 0f
+    private var artworkIsSquare = true
+    private var artworkGeneration = 0
 
     // drag-to-close drop target (red cross at screen bottom-center)
     private var crossView: FrameLayout? = null
@@ -160,8 +168,7 @@ class MiniWindowOverlayService : Service() {
                 closeBtn?.visibility = View.GONE
                 // Video mode is pure video: no box and no chrome.
                 root?.background = if (v) null else ContextCompat.getDrawable(this@MiniWindowOverlayService, R.drawable.mini_player_bg)
-                params?.width = miniWidthPx()
-                params?.height = miniHeightPx()
+                updateMiniWindowSize()
                 clampPosition()
                 updateRootLayout()
             }
@@ -259,8 +266,9 @@ class MiniWindowOverlayService : Service() {
             gravity = android.view.Gravity.CENTER
             layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         }
-        val note = ImageView(this).apply {
+        artView = ImageView(this).apply {
             setImageResource(R.drawable.ic_launcher_foreground)
+            scaleType = ImageView.ScaleType.CENTER_CROP
             layoutParams = android.widget.LinearLayout.LayoutParams(dp(34), dp(34))
         }
         titleView = TextView(this).apply {
@@ -277,7 +285,7 @@ class MiniWindowOverlayService : Service() {
             setOnClickListener { controller?.let { if (it.isPlaying) it.pause() else it.play() } }
             layoutParams = android.widget.LinearLayout.LayoutParams(dp(28), dp(28))
         }
-        row.addView(note)
+        row.addView(artView)
         row.addView(titleView!!)
         // Same interaction for audio and video: tap anywhere opens Now Playing;
         // drag anywhere moves the window. No tiny competing child buttons.
@@ -305,6 +313,18 @@ class MiniWindowOverlayService : Service() {
 
         root?.addView(artBox!!)
         root?.addView(videoView!!)
+        dangerTint = View(this).apply {
+            setBackgroundColor(0x66FF3B30)
+            visibility = View.GONE
+            isClickable = false
+            isFocusable = false
+        }
+        dangerTint?.let { tint ->
+            root?.addView(tint, FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ))
+        }
     }
 
     private fun buildCross() {
@@ -329,7 +349,7 @@ class MiniWindowOverlayService : Service() {
             gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
             // Overlay bounds are already inset from system bars on affected Samsung builds.
             // Adding the navigation inset again placed the X too high and broke collision.
-            y = dp(crossMargin) + 6 // Another 3 physical pixels above 1.11.5.
+            y = dp(crossMargin) + crossRaisePx
         }
         crossParams = layout
         try {
@@ -370,6 +390,12 @@ class MiniWindowOverlayService : Service() {
         playing.value = p.isPlaying
         isVideo.value = p.currentMediaItem?.mediaMetadata?.mediaType == MediaMetadata.MEDIA_TYPE_VIDEO ||
             path?.substringAfterLast('.').orEmpty().lowercase() in videoExtensions
+        val videoSize = p.videoSize
+        currentAspectRatio = if (videoSize.width > 0 && videoSize.height > 0) {
+            videoSize.width * videoSize.pixelWidthHeightRatio / videoSize.height
+        } else 0f
+        updateMiniWindowSize()
+        updateArtwork(p.mediaMetadata.artworkData)
         videoView?.let { view ->
             if (isVideo.value) com.local.listentomusic.ui.components.VideoSurfaceOwner.attach(controller, view, overlay = true)
             else com.local.listentomusic.ui.components.VideoSurfaceOwner.detach(view)
@@ -423,6 +449,7 @@ class MiniWindowOverlayService : Service() {
                         root?.postOnAnimation {
                             if (generation == gestureGeneration) {
                                 val overlap = miniOverlapsCross()
+                                updateCrossAppearance(false)
                                 crossView?.visibility = View.INVISIBLE
                                 if (overlap) closeAndStopApp()
                             }
@@ -438,6 +465,7 @@ class MiniWindowOverlayService : Service() {
                 root?.removeCallbacks(dragFrame)
                 framePending = false
                 dragging = false
+                updateCrossAppearance(false)
                 crossView?.visibility = View.INVISIBLE
                 return true
             }
@@ -450,6 +478,7 @@ class MiniWindowOverlayService : Service() {
         crossActive = active
         crossImg?.alpha = if (active) 1f else crossBaseAlpha
         crossView?.background = crossTargetDrawable(active)
+        dangerTint?.visibility = if (active) View.VISIBLE else View.GONE
     }
 
     private fun crossTargetDrawable(active: Boolean) = GradientDrawable().apply {
@@ -504,7 +533,7 @@ class MiniWindowOverlayService : Service() {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         crossParams?.let { layout ->
-            layout.y = dp(crossMargin) + 6
+            layout.y = dp(crossMargin) + crossRaisePx
             crossView?.let { view -> runCatching { wm?.updateViewLayout(view, layout) } }
         }
         clampPosition()
@@ -521,8 +550,50 @@ class MiniWindowOverlayService : Service() {
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
-    private fun miniWidthPx() = MiniWindowMetrics.widthPx(resources.displayMetrics.density)
+    private fun useSquareWindow() = if (isVideo.value) {
+        MiniWindowMetrics.isSquareAspect(currentAspectRatio)
+    } else artworkIsSquare
+
+    private fun miniWidthPx() = if (useSquareWindow()) {
+        MiniWindowMetrics.squareWidthPx(resources.displayMetrics.density)
+    } else MiniWindowMetrics.widthPx(resources.displayMetrics.density)
     private fun miniHeightPx() = MiniWindowMetrics.heightPx(resources.displayMetrics.density)
+
+    private fun updateMiniWindowSize() {
+        val layout = params ?: return
+        val width = miniWidthPx()
+        val height = miniHeightPx()
+        if (layout.width == width && layout.height == height) return
+        layout.width = width
+        layout.height = height
+        clampPosition()
+        updateRootLayout()
+    }
+
+    private fun updateArtwork(data: ByteArray?) {
+        val generation = ++artworkGeneration
+        if (data == null) {
+            artworkIsSquare = true
+            artView?.setImageResource(R.drawable.ic_launcher_foreground)
+            updateMiniWindowSize()
+            return
+        }
+        scope.launch {
+            val decoded = withContext(Dispatchers.Default) {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeByteArray(data, 0, data.size, bounds)
+                var sample = 1
+                while (bounds.outWidth / sample > 256 || bounds.outHeight / sample > 256) sample *= 2
+                val bitmap = BitmapFactory.decodeByteArray(data, 0, data.size, BitmapFactory.Options().apply { inSampleSize = sample })
+                bitmap to MiniWindowMetrics.isSquareAspect(bounds.outWidth.toFloat() / bounds.outHeight.coerceAtLeast(1))
+            }
+            if (generation == artworkGeneration) {
+                artView?.setImageBitmap(decoded.first)
+                artworkIsSquare = decoded.second
+                updateMiniWindowSize()
+            }
+        }
+    }
 
     override fun onDestroy() {
         scope.cancel()

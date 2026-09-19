@@ -1,8 +1,8 @@
 # HANDOFF — Greater Art Android Media Player
 
 **Project:** `greater-art/` in the repository checkout
-**Current version:** `1.11.7` (code 81), red X moved 3px higher in mini window
-**Latest APK:** `releases/GreaterArt-1.11.7.apk` (verification below)
+**Current version:** `1.12.1` (code 82)
+**Latest APK:** `releases/GreaterArt-1.12.1.apk` (verification below)
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
@@ -16,9 +16,46 @@
   - Major: breaking change / redesign → `major++`, `minor=patch=0`, `versionCode++`.
 - **APK filename:** `GreaterArt-<versionName>.apk` in `releases/` (September 16 naming convention).
 - **Never overwrite a released APK.** Increment build number for re-spins.
-- **No remote mutation** from local refinement sessions (no tag, push, or release upload).
+- Remote publishing is task-scoped: push/tag/release only when the current user request
+  explicitly authorizes it; never infer that permission from this handoff.
 
 ## Current State
+
+### September 20 — 1.12.1 library-first journey, opt-in history and public demos
+
+- Library row taps now start playback without forcing navigation. The live bottom
+  player is the explicit route to Now Playing; mini-window taps still return directly
+  to that overlay. The compact bar no longer adds a separate vertical progress row,
+  reducing the unusable gap above it.
+- Library and floating previews use shared geometry: established `103×56dp` for wide
+  media and `56×56dp` for square art/video, with no invisible content gutter. The
+  overlay reads embedded artwork off the UI thread, remembers drag position, reaches
+  the physical bottom, and tints red while overlapping the real circular close zone.
+  The close target offset is `dp(11) + 9 physical px`, three pixels above 1.11.7.
+- Search has a focused liquid-metal scale/border response. Initial scan/splash uses
+  the actual app mark. Double-tap seek retains inert center space and one compact
+  side cue. Optional black-disc audio mode uses continuous linear rotation that
+  pauses without resetting.
+- Developer inspector now retains every tagged region beneath a touch and offers
+  NEXT cycling, so nested buttons can be selected instead of only the smallest box.
+- Optional play history defaults off, records only while actual playback is active,
+  is capped at 500 local entries, is excluded from portable backups, and has a
+  confirmed Burn action. Reset clears both the toggle and stored entries.
+- Public delivery was rebuilt around two dependency-free 1920×1080 phone films plus
+  a new landing page. The user and technical films both show the exact ordered flow:
+  launch → local scan → Library row play in place → Library mini-player → Now Playing
+  → floating mini-window.
+- Verification: `testDebugUnitTest lintDebug assembleDebug --offline --no-daemon
+  --max-workers=2` passed: 96 tests, 0 failures/errors; lint 0 errors, 18 warnings and
+  1 hint. APK metadata: package `com.local.listentomusic`, version 1.12.1/code 82,
+  min SDK 26, target 37, no INTERNET permission. Signature remains
+  `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`;
+  16 KiB zip alignment passed.
+- Artifact: `releases/GreaterArt-1.12.1.apk`, 26,024,921 bytes, SHA-256
+  `4713ad2eb43cebb3c0c115300f26aeba163247cafee7e057e8bdeaf047609f7a`.
+- Device boundary: no Android device/emulator was connected. Overlay geometry,
+  Samsung edge reach, real video surface handoff, Bluetooth behavior and installation
+  update remain device checks—not claims inferred from a successful build.
 
 ### September 18 — 1.11.7 red X position fix
 

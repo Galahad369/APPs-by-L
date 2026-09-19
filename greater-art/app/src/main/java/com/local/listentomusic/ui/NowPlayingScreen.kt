@@ -10,8 +10,11 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -96,6 +99,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
@@ -149,6 +153,7 @@ fun NowPlayingScreen(
     lyrics: LocalLyrics?,
     showFileDetails: Boolean,
     editableQueue: Boolean,
+    blackDiscMode: Boolean,
     language: AppLanguage,
     controller: MediaController?,
     contentPadding: PaddingValues,
@@ -271,6 +276,7 @@ fun NowPlayingScreen(
                 lyrics = lyrics,
                 showFileDetails = showFileDetails,
                 editableQueue = editableQueue,
+                blackDiscMode = blackDiscMode,
                 language = language,
                 fullscreen = fullscreen,
                 onHome = onHome,
@@ -446,6 +452,7 @@ private fun AudioPlayer(
     lyrics: LocalLyrics?,
     showFileDetails: Boolean,
     editableQueue: Boolean,
+    blackDiscMode: Boolean,
     language: AppLanguage,
     fullscreen: Boolean,
     onHome: () -> Unit,
@@ -507,10 +514,18 @@ private fun AudioPlayer(
                         },
                     )
                 },
-            shape = RoundedCornerShape(22.dp),
+            shape = if (blackDiscMode) CircleShape else RoundedCornerShape(22.dp),
             contentAlignment = Alignment.Center,
         ) {
-            if (artwork != null) {
+            if (blackDiscMode) {
+                BlackDiscArtwork(
+                    artwork = artwork,
+                    isPlaying = playback.isPlaying,
+                    mediaPath = playback.currentPath,
+                    language = language,
+                    modifier = Modifier.fillMaxSize().padding(5.dp),
+                )
+            } else if (artwork != null) {
                 Image(
                     bitmap = artwork.asImageBitmap(),
                     contentDescription = uiText(language, "Album artwork", "專輯封面"),
@@ -568,6 +583,61 @@ private fun AudioPlayer(
             WaveformTimeline(playback, waveform, onSeek, language, waveformLoading, artwork)
             PlayerBottomControls(playback, onRepeat, onPrevious, onTogglePlay, onNext, onSpeed)
         }
+        }
+    }
+}
+
+@Composable
+private fun BlackDiscArtwork(
+    artwork: Bitmap?,
+    isPlaying: Boolean,
+    mediaPath: String?,
+    language: AppLanguage,
+    modifier: Modifier = Modifier,
+) {
+    val rotation = remember(mediaPath) { Animatable(0f) }
+    val spindleColor = MaterialTheme.colorScheme.secondary.copy(alpha = .72f)
+    LaunchedEffect(mediaPath, isPlaying) {
+        if (!isPlaying) return@LaunchedEffect
+        while (true) {
+            rotation.animateTo(
+                targetValue = rotation.value + 360f,
+                animationSpec = tween(durationMillis = 14_000, easing = LinearEasing),
+            )
+            if (rotation.value >= 3600f) rotation.snapTo(rotation.value % 360f)
+        }
+    }
+    Box(
+        modifier = modifier.graphicsLayer { rotationZ = rotation.value },
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.fillMaxSize()) {
+            val radius = size.minDimension / 2f
+            drawCircle(Color(0xFF070808), radius)
+            listOf(.94f, .87f, .79f, .70f, .61f, .52f).forEachIndexed { index, scale ->
+                drawCircle(
+                    color = if (index % 2 == 0) Color.White.copy(alpha = .11f) else Color.Black.copy(alpha = .72f),
+                    radius = radius * scale,
+                    style = Stroke(width = (1f + index * .18f).dp.toPx()),
+                )
+            }
+            drawCircle(Color(0xFF171A1A), radius * .23f)
+            drawCircle(spindleColor, radius * .055f)
+        }
+        if (artwork != null) {
+            Image(
+                bitmap = artwork.asImageBitmap(),
+                contentDescription = uiText(language, "Album artwork", "專輯封面"),
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(.36f).clip(CircleShape),
+            )
+        } else {
+            Icon(
+                Icons.Rounded.MusicNote,
+                contentDescription = null,
+                tint = Color(0xFFCAD0CB),
+                modifier = Modifier.fillMaxSize(.16f),
+            )
         }
     }
 }

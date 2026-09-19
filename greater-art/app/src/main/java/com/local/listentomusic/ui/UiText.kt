@@ -36,6 +36,11 @@ private val cantonese = mapOf(
     "Toggle Ads On" to "開啟廣告",
     "Optional parody: loud colours, wobbling buttons and a five-second skip. Buttons open a Rickroll in your browser." to "可選惡搞：高飽和配色、晃動按鈕同五秒跳過。按鈕會喺瀏覽器開啟 Rickroll。",
     "ReplayGain" to "ReplayGain",
+    "Black disc mode" to "黑膠碟模式",
+    "Spin a black vinyl display for audio tracks. Off by default." to "播純音訊嗰陣轉黑膠碟，預設唔開。",
+    "Offline play history" to "離線聽歌紀錄", "Play history" to "聽歌紀錄",
+    "Record locally" to "淨係本機記", "No local play history" to "未有本機紀錄",
+    "Burn history" to "燒晒紀錄", "Burn all play history?" to "燒晒所有聽歌紀錄？",
 )
 
 // Bundled offline translations. Keys deliberately match the existing English copy

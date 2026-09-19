@@ -12,4 +12,7 @@ object MiniWindowMetrics {
 
     fun widthPx(density: Float): Int = max(1, (WIDTH_DP * density).toInt() - SHRINK_PX)
     fun heightPx(density: Float): Int = max(1, (HEIGHT_DP * density).toInt() - SHRINK_PX)
+    fun squareWidthPx(density: Float): Int = heightPx(density)
+
+    fun isSquareAspect(aspectRatio: Float): Boolean = aspectRatio in 0.90f..1.10f
 }

@@ -23,6 +23,7 @@ import com.local.listentomusic.data.ScanResult
 import com.local.listentomusic.data.ThumbnailRepository
 import com.local.listentomusic.data.WaveformRepository
 import com.local.listentomusic.data.UserPreferences
+import com.local.listentomusic.data.PlayHistoryEntry
 import com.local.listentomusic.data.LibraryRowSize
 import com.local.listentomusic.data.ThemeMode
 import com.local.listentomusic.data.AppLanguage
@@ -196,6 +197,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _settings = MutableStateFlow(UserPreferences())
     val settings: StateFlow<UserPreferences> = _settings.asStateFlow()
+    private val _playHistory = MutableStateFlow<List<PlayHistoryEntry>>(emptyList())
+    val playHistory: StateFlow<List<PlayHistoryEntry>> = _playHistory.asStateFlow()
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var tickerJob: Job? = null
@@ -216,6 +219,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         override fun onEvents(player: Player, events: Player.Events) {
             publishPlayback(player)
             if (events.contains(Player.EVENT_TIMELINE_CHANGED) || events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION)) syncPlaybackQueue()
+            if (player.isPlaying && (events.contains(Player.EVENT_IS_PLAYING_CHANGED) ||
+                    events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION))) {
+                player.currentMediaItem?.mediaId?.takeIf(String::isNotBlank)?.let { path ->
+                    viewModelScope.launch { preferences.recordPlayed(path) }
+                }
+            }
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -243,6 +252,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     init {
+        viewModelScope.launch { preferences.playHistory.collect { _playHistory.value = it } }
         viewModelScope.launch {
             preferences.values.collect {
                 val firstPreferences = !preferencesLoaded
@@ -535,6 +545,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     fun setReplayGainEnabled(value: Boolean) = updatePreference { preferences.setReplayGainEnabled(value) }
+    fun setBlackDiscMode(value: Boolean) = updatePreference { preferences.setBlackDiscMode(value) }
+    fun setPlayHistoryEnabled(value: Boolean) = updatePreference { preferences.setPlayHistoryEnabled(value) }
+    fun clearPlayHistory() = updatePreference { preferences.clearPlayHistory() }
     fun setJokeAdsEnabled(value: Boolean) = updatePreference { preferences.setJokeAdsEnabled(value) }
     fun setFolderExcluded(folder: String, excluded: Boolean) = updatePreference {
         val next = userPreferences.excludedFolders.toMutableSet().apply {

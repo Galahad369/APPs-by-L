@@ -74,6 +74,7 @@ fun GreaterArtApp(
     val playback by viewModel.playback.collectAsStateWithLifecycle()
     val controller by viewModel.controller.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val playHistory by viewModel.playHistory.collectAsStateWithLifecycle()
     val sleepTimer by viewModel.sleepTimer.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val backupPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri -> uri?.let { viewModel.backupSettings(it) } }
@@ -272,10 +273,13 @@ fun GreaterArtApp(
                         appName = appName,
                         state = library,
                         preferences = settings,
+                        playHistory = playHistory,
                         currentPath = playback.currentPath,
                         contentPadding = padding,
                         onGrantStorageAccess = onGrantStorageAccess,
                         onRefresh = viewModel::rescan,
+                        onPlayHistoryEnabled = viewModel::setPlayHistoryEnabled,
+                        onClearPlayHistory = viewModel::clearPlayHistory,
                         onQueryChange = viewModel::setQuery,
                         onSortChange = viewModel::setSortMode,
                         onMoveItem = viewModel::moveCustomItem,
@@ -297,7 +301,6 @@ fun GreaterArtApp(
                         onCreateSelected = viewModel::createSelectionPlaylist,
                         onPlay = {
                             viewModel.play(it)
-                            playerOpen = true
                         },
                     )
                     }
@@ -363,6 +366,8 @@ fun GreaterArtApp(
                     onExtendedSearch = viewModel::setExtendedSearch,
                     onFolderExcluded = viewModel::setFolderExcluded,
                     onReplayGainEnabled = viewModel::setReplayGainEnabled,
+                    onBlackDiscMode = viewModel::setBlackDiscMode,
+                    onPlayHistoryEnabled = viewModel::setPlayHistoryEnabled,
                     onBackup = { backupPicker.launch("Greater-Art-settings.json") },
                     onRestore = { restoreConfirm = true },
                     onDuplicates = { showDuplicates = true },
@@ -380,6 +385,7 @@ fun GreaterArtApp(
             }
             PlayerOverlay(sheetState, isPictureInPicture, { playerOpen = false }) {
                 NowPlayingScreen(playback, artwork, queue, lyrics, settings.showFileDetails, settings.editableQueue,
+                    settings.blackDiscMode,
                     settings.appLanguage, controller, PaddingValues(0.dp), isPictureInPicture,
                     onVideoBoundsChanged, onEnterPictureInPicture,
                     { screen = Screen.LIBRARY; playerOpen = false; navigationScope.launch { libraryPager.scrollToPage(0) } }, { playerOpen = false },

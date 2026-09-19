@@ -119,6 +119,8 @@ fun SettingsScreen(
     onExtendedSearch: (Boolean) -> Unit,
     onFolderExcluded: (String, Boolean) -> Unit,
     onReplayGainEnabled: (Boolean) -> Unit,
+    onBlackDiscMode: (Boolean) -> Unit,
+    onPlayHistoryEnabled: (Boolean) -> Unit,
     onEqualizer: () -> Unit,
     onBackup: () -> Unit,
     onRestore: () -> Unit,
@@ -290,6 +292,18 @@ fun SettingsScreen(
                     uiText(language, "Use track gain tags with peak protection. Untagged files play unchanged; boosting needs a peak tag and device support.", "使用曲目增益標籤及峰值保護。沒有標籤時保持原音量，增強音量需要峰值標籤和裝置支援。"),
                     preferences.replayGainEnabled,
                     onReplayGainEnabled,
+                )
+                SwitchSetting(
+                    uiText(language, "Black disc mode", "黑膠唱片模式"),
+                    uiText(language, "Spin a black vinyl display for audio tracks. Off by default.", "音訊曲目顯示平滑旋轉的黑膠唱片，預設關閉。"),
+                    preferences.blackDiscMode,
+                    onBlackDiscMode,
+                )
+                SwitchSetting(
+                    uiText(language, "Offline play history", "離線播放紀錄"),
+                    uiText(language, "Off by default. When enabled, played tracks and times stay only on this device and are never included in backups.", "預設關閉。啟用後，播放曲目與時間只會留在此裝置，且永遠不會加入備份。"),
+                    preferences.playHistoryEnabled,
+                    onPlayHistoryEnabled,
                 )
                 TextButton(onClick = onEqualizer, modifier = Modifier.padding(horizontal = 16.dp)) { Text(uiText(language, "Open system equalizer", "開啟系統等化器")) }
                 SwitchSetting(uiText(language, "Show sleep timer", "顯示睡眠計時器"), uiText(language, "Optional player control. Hidden by default.", "選用播放控制，預設隱藏。"), preferences.showSleepControl, onShowSleepControl)
