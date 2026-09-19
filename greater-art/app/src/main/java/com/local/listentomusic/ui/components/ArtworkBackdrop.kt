@@ -37,7 +37,12 @@ internal fun artworkGradientColors(pixels: IntArray, light: Boolean): List<Color
     val usable = pixels.filter { (it ushr 24) >= 128 }
     if (usable.isEmpty()) return listOf(base, base)
     // Quantized RGB histogram gives a representative color, not a grey average.
-    val dominant = usable.groupBy { ((it shr 20) and 15) * 256 + ((it shr 12) and 15) * 16 + ((it shr 4) and 15) }
+    // Ignore black letterboxing and near-neutral shadows when real color exists.
+    val colorful = usable.filter {
+        val channels = listOf((it shr 16) and 255, (it shr 8) and 255, it and 255)
+        channels.max() >= 64 && channels.max() - channels.min() >= 32
+    }
+    val dominant = colorful.ifEmpty { usable }.groupBy { ((it shr 20) and 15) * 256 + ((it shr 12) and 15) * 16 + ((it shr 4) and 15) }
         .maxBy { it.value.size }.value
     val tint = Color(
         red = dominant.map { (it shr 16) and 255 }.average().toFloat() / 255f,

@@ -244,7 +244,7 @@ private fun BackgroundVideo(
             .setLoadControl(androidx.media3.exoplayer.DefaultLoadControl.Builder()
                 .setBufferDurationsMs(3_000, 10_000, 100, 250).setTargetBufferBytes(16 * 1024 * 1024)
                 .setPrioritizeTimeOverSizeThresholds(false).build()).build().apply {
-            installVideoDiagnostics("APP_BACKGROUND")
+            installVideoDiagnostics(if (syncController != null) "CURRENT_VIDEO_BACKGROUND" else "CUSTOM_VIDEO_BACKGROUND")
             volume = 0f
             repeatMode = Player.REPEAT_MODE_ONE
             trackSelectionParameters = trackSelectionParameters.buildUpon()

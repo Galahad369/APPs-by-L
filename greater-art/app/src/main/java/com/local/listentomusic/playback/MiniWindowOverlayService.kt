@@ -64,7 +64,7 @@ class MiniWindowOverlayService : Service() {
         // Visible circle and collision radius are identical. With BOTTOM gravity, larger y is higher.
         private val crossHitSize = 57
         private val crossSize = 25
-        private val crossMargin = 14
+        private val crossMargin = 11
         private val crossBaseAlpha = 1f
         private var crossActive: Boolean? = null
         private var framePending = false
@@ -109,6 +109,7 @@ class MiniWindowOverlayService : Service() {
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate() {
         super.onCreate()
+        com.local.listentomusic.ui.components.VideoSurfaceOwner.serviceEvent("start")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             stopSelf()
             return
@@ -328,7 +329,7 @@ class MiniWindowOverlayService : Service() {
             gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
             // Overlay bounds are already inset from system bars on affected Samsung builds.
             // Adding the navigation inset again placed the X too high and broke collision.
-            y = dp(crossMargin) + 3 // Physical pixels above the existing bottom anchor.
+            y = dp(crossMargin) + 6 // Another 3 physical pixels above 1.11.5.
         }
         crossParams = layout
         try {
@@ -453,7 +454,7 @@ class MiniWindowOverlayService : Service() {
 
     private fun crossTargetDrawable(active: Boolean) = GradientDrawable().apply {
         shape = GradientDrawable.OVAL
-        setColor(if (active) 0xFFFF3B30.toInt() else 0xE8D92D25.toInt())
+        setColor(if (active) 0xFFFF3B30.toInt() else 0xFFD92D25.toInt())
         setStroke(dp(2), if (active) 0xFFFF453A.toInt() else 0xDFFF453A.toInt())
     }
 
@@ -503,7 +504,7 @@ class MiniWindowOverlayService : Service() {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         crossParams?.let { layout ->
-            layout.y = dp(crossMargin) + 3
+            layout.y = dp(crossMargin) + 6
             crossView?.let { view -> runCatching { wm?.updateViewLayout(view, layout) } }
         }
         clampPosition()
@@ -525,6 +526,7 @@ class MiniWindowOverlayService : Service() {
 
     override fun onDestroy() {
         scope.cancel()
+        com.local.listentomusic.ui.components.VideoSurfaceOwner.serviceEvent("stop")
         root?.removeCallbacks(dragFrame)
         root?.let { runCatching { wm?.removeViewImmediate(it) } }
         crossView?.let { runCatching { wm?.removeViewImmediate(it) } }

@@ -6,12 +6,19 @@ ads, analytics, accounts, telemetry, or network access.
 
 ## Features
 
+- v1.11.6 makes primary video ownership follow the visible player rather than view
+  callback order. Developer Mode separates media/active-surface first-frame states,
+  generations and actionable warnings. It also restores ambient-artwork retries on
+  session restore, moves Nodes right, and raises/brightens the floating close target.
+  Samsung rendering verification remains pending; see the
+  [surface investigation](docs/SURFACE_DEBUG_1.11.6.md) for evidence and limits.
+
 - v1.11.4 fixes a Library video-preview lifecycle detach, restores the preview on
   resume, and removes background video quality restrictions. Wallpaper follows
   pause/speed/seek events without rapid resync seeks. Source quality and frame rate
   remain uncapped; actual codec capability and smoothness depend on the device.
 - Now Playing uses restrained colors from cached artwork, tighter title spacing and
-  the existing bottom transport/queue layout. Nodes stays on the left. Settings put
+  the existing bottom transport/queue layout. Nodes is now on the right. Settings put
   default choices first; graph and newer controls support all six bundled languages.
   The close target is more opaque and three physical pixels higher; mini-window size,
   edge access and its remembered position are unchanged.
@@ -166,7 +173,7 @@ $env:GRADLE_USER_HOME = Join-Path $env:USERPROFILE '.gradle'
 Current release artifact:
 
 ```text
-releases/GreaterArt-1.11.4.apk
+releases/GreaterArt-1.11.6.apk
 ```
 
 Versioned APKs are never overwritten. Builds remain signed by the pinned personal
@@ -257,14 +264,14 @@ against maintained open-source Android players.
 
 ## Current Verification Boundary
 
-For 1.11.4 (code 78): 88 unit tests passed; lint reports 0 errors and 17 warnings; the debug
+For 1.11.6 (code 80): 96 unit tests passed; lint reports 0 errors, 17 warnings and 1 hint; the debug
 build and APK signature verification passed. The application ID/signing certificate
 are unchanged and the packaged manifest has no INTERNET permission. No Android device
 was connected for this review build.
 
-APK: `releases/GreaterArt-1.11.4.apk` (26,566,483 bytes)
+APK: `releases/GreaterArt-1.11.6.apk` (26,585,380 bytes)
 
-SHA-256: `c810733fc67c1ed1eb0ec031a8e88d87eeafceae63749eda75be4fb409186bd2`.
+SHA-256: `b62b1bb624d9aae150511c2f2b0eba9384f123fc18653008584748b240f1061b`.
 
 The 1.9 series includes regression checks for mixer headroom, languages, natural
 sorting, playlist rules, CUE/M3U boundaries and local lyric parsing. Build checks do

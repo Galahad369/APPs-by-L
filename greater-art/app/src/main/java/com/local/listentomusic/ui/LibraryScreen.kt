@@ -252,16 +252,6 @@ fun LibraryScreen(
                 Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                OutlinedButton(
-                    onClick = onOpenNodes,
-                    modifier = Modifier.inspectElement("NODES_BUTTON", "Opens filename-similarity graph"),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
-                ) {
-                    Icon(Icons.Rounded.Hub, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(uiText(language, "Nodes", "關聯圖"), style = MaterialTheme.typography.labelLarge)
-                }
-                Spacer(Modifier.width(8.dp))
                 Box(Modifier.weight(1f)) {
                     Button(onClick = { playlistMenuOpen = true }, modifier = Modifier
                         .inspectElement("PLAYLIST_BUTTON", "Selects or manages a playlist")) {
@@ -301,6 +291,16 @@ fun LibraryScreen(
                         }
                     }
                 }
+                OutlinedButton(
+                    onClick = onOpenNodes,
+                    modifier = Modifier.inspectElement("NODES_BUTTON", "Opens filename-similarity graph"),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp),
+                ) {
+                    Icon(Icons.Rounded.Hub, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(uiText(language, "Nodes", "關聯圖"), style = MaterialTheme.typography.labelLarge)
+                }
+                Spacer(Modifier.width(8.dp))
                 if (activePlaylist != null) {
                     Text(
                         uiText(language, "Hold + drag to reorder", "長按拖曳排序"),

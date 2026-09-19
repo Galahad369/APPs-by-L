@@ -1,8 +1,8 @@
 # HANDOFF — Greater Art Android Media Player
 
 **Project:** `greater-art/` in the repository checkout
-**Current version:** `1.11.5` (code 79), localization fixes for "Toggle Ads On" and "ReplayGain"
-**Latest APK:** `releases/GreaterArt-1.11.5.apk` (verification below)
+**Current version:** `1.11.7` (code 81), red X moved 3px higher in mini window
+**Latest APK:** `releases/GreaterArt-1.11.7.apk` (verification below)
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
@@ -19,6 +19,56 @@
 - **No remote mutation** from local refinement sessions (no tag, push, or release upload).
 
 ## Current State
+
+### September 18 — 1.11.7 red X position fix
+
+- `MiniWindowOverlayService.kt`: `crossMargin` 14 → 11 (moves red X 3dp higher in mini window overlay).
+- Verification: `testDebugUnitTest lintDebug assembleDebug --offline` succeeded. APK manifest confirms version 1.11.7/code 81.
+- **Delivered APK:** `releases/GreaterArt-1.11.7.apk`, 26,566,483 bytes.
+  SHA-256: `b62b1bb624d9aae150511c2f2b0eba9384f123fc18653008584748b240f1061b`.
+  Created only after final verification with overwrite disabled. No older APK changed.
+
+### September 18 — 1.11.6 surface investigation (local only)
+
+- Continued from committed local 1.11.5, preserving its translations and APK.
+  No commit, push, tag, upload or unrelated playback/cache/scanner rewrite.
+- Inspected Media3 1.11.0 PlayerView and MediaControllerImplBase source. Same-player
+  transfers intentionally connect the new view before clearing the old view; stale
+  TextureView/holder clears are guarded by Media3. Thus ordinary stale release is
+  **not a confirmed root cause** of the supplied Samsung black-frame snapshot.
+- VideoSurfaceOwner now arbitrates registered candidates using explicit foreground,
+  Now Playing/sheet and PiP state. Library cannot win just by updating later while
+  Now Playing is requested; foreground Activity blocks mini-overlay ownership.
+  A late release of a non-current view makes no PlayerView setter/clear call.
+- Added generation-aware frame diagnostics and per-owner flags, last-frame epoch,
+  decoder/codec-error/drop counts, presentation requests and mini-service start/stop.
+  Developer Mode shows warning reasons with a 2.5-second transition grace period.
+  Renderer timestamps reject pre-transfer frames; IPC Surface identity cannot be
+  verified by reference equality, and the report states this limitation explicitly.
+- The old tap latency and controller first-frame boolean represented different
+  scopes. Report now labels the latency as last-tap data rather than current-surface
+  evidence. It does not claim a rendered event proves pixels appeared on the phone.
+- CURRENT_VIDEO remains a separate muted decoder, with no primary owner calls.
+  Only its diagnostic role label changed. No quality, bitrate or FPS cap added.
+- Ambient tint now retries once the restored media record appears in Library/queue;
+  previously a first null result could survive indefinitely with the same path key.
+  Palette selection favors actual color over black borders. Nodes is now on the right.
+- Red close circle is fully opaque and another 3 physical pixels higher than 1.11.5
+  (14dp + 6px bottom offset); same geometry on creation/rotation and for collision.
+  Mini-window size, edge reach and saved spawn position are unchanged.
+- Build repair: inherited daemon criteria required unavailable Java 25 and attempted
+  a failed download. Criteria now use the installed Java 21, with no mismatched
+  Java 25 download URLs. Android bytecode target remains Java 17.
+- Detailed source map, evidence, state-model timeline and phone test procedure:
+  [Surface debugging report](docs/SURFACE_DEBUG_1.11.6.md).
+- **Device boundary:** `adb devices` showed no device. Samsung reproduction, observed
+  failing/fixed timelines, 10 real transitions, fullscreen/PiP/lockscreen and visible
+  frame-rate checks are NOT RUN. Unit-state traces are not presented as device logs.
+- Verification: `testDebugUnitTest lintDebug assembleDebug --offline --no-daemon --max-workers=2`
+  passed: 96 tests, 0 failures; lint 0 errors, 17 warnings and 1 hint. APK signature
+  and 16 KB zip alignment verified; package unchanged, no INTERNET permission.
+- Artifact: `releases/GreaterArt-1.11.6.apk`, 26,585,380 bytes, version 1.11.6/code 80.
+  SHA-256: `b62b1bb624d9aae150511c2f2b0eba9384f123fc18653008584748b240f1061b`.
 
 ### September 18 — 1.11.5 localization fix
 

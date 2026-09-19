@@ -118,7 +118,13 @@ fun GreaterArtApp(
             )
         }
     }
-    val artwork by produceState<Bitmap?>(initialValue = null, key1 = playback.currentPath, key2 = settings.localOverrides[playback.currentPath]) {
+    val artworkSource = remember(queue, library.files, playback.currentPath) {
+        queue.firstOrNull { it.path == playback.currentPath } ?: library.files.firstOrNull { it.path == playback.currentPath }
+    }
+    // On session restore the path can arrive before the local index. Retry when its
+    // media record arrives instead of keeping the initial null artwork indefinitely.
+    val artwork by produceState<Bitmap?>(initialValue = null, key1 = playback.currentPath,
+        key2 = settings.localOverrides[playback.currentPath], key3 = artworkSource) {
         value = null
         value = viewModel.loadCurrentArtwork(playback.currentPath)
     }
@@ -179,6 +185,11 @@ fun GreaterArtApp(
         silianRail = settings.silianRail,
     ) {
         val lightPalette = MaterialTheme.colorScheme.background.luminance() > 0.5f
+        androidx.compose.runtime.SideEffect {
+            com.local.listentomusic.ui.components.VideoSurfaceOwner.setPresentation(
+                playerOpen || sheetState.currentState || sheetState.targetState, isPictureInPicture,
+            )
+        }
         LaunchedEffect(lightPalette) {
             context.findActivity()?.let { activity ->
                 androidx.core.view.WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply {
@@ -397,9 +408,14 @@ fun GreaterArtApp(
                     "${region.label} · ${region.bounds.width.toInt()}×${region.bounds.height.toInt()}px" +
                         region.detail.takeIf(String::isNotBlank)?.let { " · $it" }.orEmpty()
                 }
-                val warning = playback.errorMessage != null ||
-                    (playback.isVideo && playback.isPlaying && playback.positionMs > 1_000L && !playback.videoFrameRendered) ||
-                    waveformDiagnostics.error != null
+                val surface by com.local.listentomusic.ui.components.VideoSurfaceOwner.state.collectAsStateWithLifecycle()
+                val warnings = surface.warnings(
+                    com.local.listentomusic.ui.components.VideoSurfaceOwner.expectedOwner,
+                    playback.isVideo && playback.isPlaying && controller?.playbackState == androidx.media3.common.Player.STATE_READY &&
+                        (playerOpen || screen == Screen.LIBRARY), android.os.SystemClock.elapsedRealtime(),
+                ) + listOfNotNull(if (playback.errorMessage != null) "PLAYBACK_ERROR" else null,
+                    if (waveformDiagnostics.error != null) "WAVEFORM_ERROR" else null)
+                val warning = warnings.isNotEmpty()
                 DeveloperDiagnostics(
                     report = buildString {
                         appendLine("version=${com.local.listentomusic.BuildConfig.VERSION_NAME}")
@@ -408,7 +424,9 @@ fun GreaterArtApp(
                         appendLine("playing=${playback.isPlaying} video=${playback.isVideo}")
                         appendLine("position=${playback.positionMs} duration=${playback.durationMs}")
                         appendLine("playerState=${controller?.playbackState ?: -1} buffered=${controller?.bufferedPosition ?: 0L}")
-                        appendLine("video=${playback.videoWidth}x${playback.videoHeight} firstFrame=${playback.videoFrameRendered}")
+                        appendLine("video=${playback.videoWidth}x${playback.videoHeight} controllerMediaFirstFrame=${playback.videoFrameRendered}")
+                        appendLine(com.local.listentomusic.ui.components.VideoSurfaceOwner.describe())
+                        appendLine("firstFrameAttribution=renderer timestamp after transfer; not a screen-capture proof")
                         appendLine("queue=${queue.size} library=${library.files.size}")
                         appendLine("repeat=${playback.repeatMode} random=${playback.shuffleEnabled}")
                         appendLine("floating=${settings.floatingWindowMode} auto=${settings.autoPictureInPicture}")
@@ -420,13 +438,13 @@ fun GreaterArtApp(
                             Environment.isExternalStorageManager()
                         appendLine("storage=$storageGranted overlay=${Settings.canDrawOverlays(context)}")
                         appendLine("device=${Build.MANUFACTURER} ${Build.MODEL} api=${Build.VERSION.SDK_INT}")
-                        appendLine("warning=$warning")
+                        appendLine("warnings=$warnings")
                         appendLine("\nAUDIO ENGINE")
                         appendLine(engineReport)
                         appendLine("\nVIEWPORT / PERFORMANCE")
                         appendLine("viewportPx=${viewport.width}x${viewport.height} density=${density.density} fontScale=${density.fontScale}")
                         appendLine("heapUsedMiB=${(Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / 1_048_576} heapLimitMiB=${Runtime.getRuntime().maxMemory() / 1_048_576}")
-                        appendLine("tapToFirstFrameMs=${com.local.listentomusic.playback.PlaybackDiagnostics.firstFrameDelayMs ?: "not reported"}")
+                        appendLine("lastTapToFirstFrameMs=${com.local.listentomusic.playback.PlaybackDiagnostics.firstFrameDelayMs ?: "not reported"} (last tap; independent of current surface)")
                         appendLine("$indexStatus")
                         appendLine("abControls=${settings.showAbRepeat} extendedSearch=${settings.extendedSearch} thumbPreload=${settings.preloadThumbnails}")
                         appendLine("displayOverrides=${settings.localOverrides.size} rulePlaylists=${settings.playlists.count { it.rule != null }}")
