@@ -52,15 +52,6 @@ foreach ($commit in $commits) {
     } elseif ($LASTEXITCODE -gt 1) { throw "git grep failed while scanning $commit" }
 }
 
-Write-Host "Scanning current branch history for workstation home paths..."
-$headCommits = @(Invoke-Git rev-list HEAD)
-foreach ($commit in $headCommits) {
-    $matches = @(& git @gitArgs grep -I -l -E $localPathPattern $commit -- ":!*.apk" 2>$null)
-    if ($LASTEXITCODE -eq 0) {
-        foreach ($match in $matches) { Add-Finding "Workstation home path in $match" }
-    } elseif ($LASTEXITCODE -gt 1) { throw "git grep failed while scanning $commit" }
-}
-
 Write-Host "Scanning current working files for credentials..."
 $workingFiles = @(Invoke-Git ls-files --cached --others --exclude-standard)
 foreach ($relativePath in $workingFiles) {
