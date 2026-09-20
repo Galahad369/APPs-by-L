@@ -23,15 +23,33 @@ import androidx.compose.ui.unit.dp
 
 /** In-Activity sheet: PiP and the shared video surface stay in the Activity window. */
 @Composable
-internal fun PlayerOverlay(state: MutableTransitionState<Boolean>, pictureInPicture: Boolean, onDismiss: () -> Unit, content: @Composable () -> Unit) {
+internal fun PlayerOverlay(
+    state: MutableTransitionState<Boolean>,
+    pictureInPicture: Boolean,
+    onDismiss: () -> Unit,
+    instantReveal: Boolean = false,
+    content: @Composable () -> Unit,
+) {
     if (pictureInPicture) { Box(Modifier.fillMaxSize()) { content() }; return }
     // One transition owns scrim + sheet completion. The wallpaper must not steal
     // the shared video surface until the longer sheet exit has actually finished.
     AnimatedVisibility(state, enter = EnterTransition.None, exit = ExitTransition.None) {
       Box(Modifier.fillMaxSize()) {
-        Box(Modifier.matchParentSize().animateEnterExit(enter = fadeIn(tween(180)), exit = fadeOut(tween(150)))
-            .background(Color.Black.copy(alpha = 0.45f)).clickable(onClick = onDismiss))
-        BoxWithConstraints(Modifier.fillMaxSize().animateEnterExit(enter = slideInVertically(tween(240)) { it }, exit = slideOutVertically(tween(180)) { it })) {
+        Box(
+            Modifier.matchParentSize()
+                .animateEnterExit(
+                    enter = if (instantReveal) EnterTransition.None else fadeIn(tween(180)),
+                    exit = fadeOut(tween(150)),
+                )
+                .background(Color.Black.copy(alpha = 0.45f))
+                .clickable(onClick = onDismiss),
+        )
+        BoxWithConstraints(
+            Modifier.fillMaxSize().animateEnterExit(
+                enter = if (instantReveal) EnterTransition.None else slideInVertically(tween(240)) { it },
+                exit = slideOutVertically(tween(180)) { it },
+            ),
+        ) {
             val landscape = maxWidth > maxHeight
             val sheetHeightPx = constraints.maxHeight.toFloat()
             val density = LocalDensity.current

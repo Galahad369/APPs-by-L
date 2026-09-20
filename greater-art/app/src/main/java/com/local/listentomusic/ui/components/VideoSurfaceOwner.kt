@@ -40,6 +40,18 @@ object VideoSurfaceOwner {
         val target = candidate?.view?.get()
         val player = candidate?.player?.get()
         if (target == null || player == null) {
+            // Mini -> app is a direct handoff to Now Playing. Keep the working overlay
+            // surface until the NOW_PLAYING PlayerView has actually registered instead
+            // of briefly dropping through LIBRARY_MINI / no-surface ownership.
+            if (shouldRetainMiniWindowForNowPlayingHandoff(
+                    currentOwner = state.value.owner,
+                    expectedOwner = expectedOwner,
+                    expectedCandidateReady = false,
+                )
+            ) {
+                log("handoff-wait expected=$expectedOwner", previous)
+                return
+            }
             if (previous != null && state.value.owner != expectedOwner) {
                 previous.player = null
                 active.clear()

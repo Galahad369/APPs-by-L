@@ -36,7 +36,9 @@ import com.local.listentomusic.playback.PlaybackService
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
@@ -47,6 +49,8 @@ class MainActivity : ComponentActivity() {
     private var videoSourceRect = Rect()
     private var miniWindowSourceRect = Rect()
     private var returnScan: kotlinx.coroutines.Job? = null
+    private var miniWindowReturnJob: kotlinx.coroutines.Job? = null
+    private var returningFromMiniWindow = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -81,6 +85,7 @@ class MainActivity : ComponentActivity() {
                 isPictureInPicture = isPictureInPicture,
                 onPlayerScreenChanged = {
                     playerScreenVisible = it
+                    if (it && returningFromMiniWindow) completeMiniWindowReturn()
                     updatePictureInPictureParams()
                 },
                 onVideoBoundsChanged = {
@@ -98,8 +103,16 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         com.local.listentomusic.ui.components.VideoSurfaceOwner.setActivityForeground(true)
-        // The Activity owns the foreground UI. Never leave a stale overlay above it.
-        stopService(Intent(this, MiniWindowOverlayService::class.java))
+        // A Mini Window tap is a direct continuation of Now Playing. During that
+        // handoff, keep the working overlay alive until the Now Playing surface is
+        // registered instead of destroying it on Activity resume.
+        if (!returningFromMiniWindow) {
+            stopService(Intent(this, MiniWindowOverlayService::class.java))
+        } else if (playerScreenVisible) {
+            // If a transient pause interrupted the handoff, resume waiting for the
+            // NOW_PLAYING surface instead of leaving the overlay stuck indefinitely.
+            completeMiniWindowReturn()
+        }
         viewModel.refreshPlaybackSession()
         // Reconcile files changed while the observer was stopped, after the return transition.
         returnScan?.cancel()
@@ -111,6 +124,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         returnScan?.cancel()
+        miniWindowReturnJob?.cancel()
         com.local.listentomusic.ui.components.VideoSurfaceOwner.setActivityForeground(false)
         super.onPause()
     }
@@ -223,8 +237,35 @@ class MainActivity : ComponentActivity() {
     private fun handleOpenPlayerIntent(intent: Intent?) {
         if (intent?.getBooleanExtra(MiniWindowOverlayService.EXTRA_OPEN_PLAYER, false) != true) return
         intent.removeExtra(MiniWindowOverlayService.EXTRA_OPEN_PLAYER)
+        returningFromMiniWindow = true
+        // Declare NOW_PLAYING as the foreground destination before onResume() changes
+        // the Activity foreground state. This prevents a transient LIBRARY_MINI owner.
+        com.local.listentomusic.ui.components.VideoSurfaceOwner.setPresentation(
+            nowPlayingVisible = true,
+            pictureInPicture = false,
+        )
         openPlayerRequest++
         playerScreenVisible = true
+    }
+
+    private fun completeMiniWindowReturn() {
+        miniWindowReturnJob?.cancel()
+        if (!viewModel.playback.value.isVideo) {
+            stopService(Intent(this, MiniWindowOverlayService::class.java))
+            returningFromMiniWindow = false
+            return
+        }
+        miniWindowReturnJob = lifecycleScope.launch {
+            // Event-driven handoff: stop the overlay once NOW_PLAYING owns the active
+            // video surface. The timeout is cleanup-only so an OEM/view failure cannot
+            // leave a system overlay stuck above the foreground app.
+            withTimeoutOrNull(1_500L) {
+                com.local.listentomusic.ui.components.VideoSurfaceOwner.state
+                    .first { it.owner == "NOW_PLAYING" }
+            }
+            stopService(Intent(this@MainActivity, MiniWindowOverlayService::class.java))
+            returningFromMiniWindow = false
+        }
     }
 
     private fun buildPictureInPictureParams(autoEnter: Boolean): PictureInPictureParams {

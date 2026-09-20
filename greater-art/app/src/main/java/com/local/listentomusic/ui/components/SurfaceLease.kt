@@ -7,6 +7,14 @@ internal fun expectedSurfaceOwner(foreground: Boolean, nowPlaying: Boolean, pip:
     else -> "LIBRARY_MINI"
 }
 
+internal fun shouldRetainMiniWindowForNowPlayingHandoff(
+    currentOwner: String,
+    expectedOwner: String,
+    expectedCandidateReady: Boolean,
+): Boolean = currentOwner == "MINI_WINDOW" &&
+    expectedOwner == "NOW_PLAYING" &&
+    !expectedCandidateReady
+
 /** Platform-independent ownership state. Calls are serialized on main. */
 internal data class SurfaceLease(
     val owner: String = "NONE", val view: Int = 0, val generation: Long = 0,
