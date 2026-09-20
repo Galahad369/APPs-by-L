@@ -16,10 +16,13 @@ The failure was not an Android/Kotlin compile error.
    workspace directory.
 2. `gh` was not installed, so a workflow that depended on `gh pr list`, `gh pr merge`,
    or `gh pr checks` could not run. Plain Git was available and was sufficient.
-3. Remote branches looked divergent even when their patches were already on `main`.
+3. The Windows `py` launcher resolved to a blocked Microsoft Store Python alias, and
+   plain `python` was not on PATH. A version check must prove the interpreter can run;
+   finding a launcher name is not enough.
+4. Remote branches looked divergent even when their patches were already on `main`.
    `git cherry origin/main <branch>` correctly showed `-` for patch-equivalent commits.
    Blindly retrying merges or waiting on PR tooling only burned time.
-4. Source, docs and binaries had drifted: source contained post-1.12.4 changes while
+5. Source, docs and binaries had drifted: source contained post-1.12.4 changes while
    Gradle still said 1.12.4, root/app READMEs advertised older versions, and the
    1.12.4 APK predated the newer source. `assembleDebug` does not copy or rename an APK
    into `releases/` and does not update documentation.
@@ -166,7 +169,11 @@ After the artifact exists, update these together:
 Then run from the repository root:
 
 ```powershell
-py -3 scripts\validate-greater-art-version.py
+$python = Get-Command python -ErrorAction SilentlyContinue
+if (-not $python) { throw 'A working Python 3 runtime is required for the version gate.' }
+& $python.Source --version
+if ($LASTEXITCODE -ne 0) { throw 'The resolved Python launcher cannot execute; do not use a blocked Windows Store alias.' }
+& $python.Source scripts\validate-greater-art-version.py
 pwsh -NoProfile -File scripts\audit-public-repo.ps1
 git diff --check
 ```
