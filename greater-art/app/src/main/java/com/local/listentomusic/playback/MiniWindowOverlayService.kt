@@ -68,7 +68,7 @@ class MiniWindowOverlayService : Service() {
         private val crossSize = 25
         private val crossMargin = 11
         private val crossBaseAlpha = 1f
-        private val crossRaisePx = 9
+        private val crossRaisePx = 10
         private var crossActive: Boolean? = null
         private var framePending = false
         private var openingApp = false

@@ -3,8 +3,8 @@
 This file describes the **current repository state only**. Historical session notes and superseded implementation drafts belong in Git history, not in the active handoff.
 
 **Project:** `greater-art/` in the repository checkout
-**Current version:** `1.12.3` (code 84)
-**Latest APK:** `releases/GreaterArt-1.12.3.apk` (verification below)
+**Current version:** `1.12.4` (code 85), red X moved 1px higher in mini window
+**Latest APK:** `releases/GreaterArt-1.12.4.apk` (verification below)
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
@@ -19,6 +19,14 @@ This file describes the **current repository state only**. Historical session no
 - Signing certificate SHA-256: `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 `app/build.gradle.kts` is the version source of truth. Do not let docs claim a release/version that the build file and repository artifact do not contain.
+
+### September 20 — 1.12.4 red X position fix
+
+- `MiniWindowOverlayService.kt`: `crossRaisePx` 9 → 10 (moves red X exactly 1 pixel higher in mini window overlay).
+- Verification: `testDebugUnitTest lintDebug assembleDebug --offline` succeeded. APK manifest confirms version 1.12.4/code 85.
+- **Delivered APK:** `releases/GreaterArt-1.12.4.apk`, 26,074,638 bytes.
+  SHA-256: `80c3cb9d5ee76f18c4a25fb59e409b820c1474a8df3a7b3c3dd94d65ba33e293`.
+  Created only after final verification with overwrite disabled. No older APK changed.
 
 ### September 20 — 1.12.3 Favorites persistence and Now Playing hierarchy
 
