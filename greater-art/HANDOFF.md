@@ -11,11 +11,11 @@ This file describes the **current repository state only**. Historical session no
 ## Repository state
 
 - Project: `greater-art/`
-- Version: **1.12.2**
-- Version code: **83**
+- Version: **1.12.3**
+- Version code: **84**
 - Application ID: `com.local.listentomusic`
-- APK: `releases/GreaterArt-1.12.2.apk`
-- APK SHA-256: `09a15cadecb06bfbf3c562fd163db8b8aea76a2fabe296ee42a09806ce8fd0f5`
+- APK: `releases/GreaterArt-1.12.3.apk`
+- APK SHA-256: `ac20c6535245dbe2440020f6e61026f155a7d56744e9488115b2e5186b9b55cb`
 - Signing certificate SHA-256: `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 `app/build.gradle.kts` is the version source of truth. Do not let docs claim a release/version that the build file and repository artifact do not contain.
