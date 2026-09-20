@@ -5,25 +5,38 @@ import org.junit.Test
 
 class SurfaceLeaseTest {
     @Test fun miniWindowStaysVisibleWhileNowPlayingSurfaceRegisters() {
-        assertTrue(shouldRetainMiniWindowForNowPlayingHandoff(
+        assertTrue(shouldRetainPrimarySurfaceDuringHandoff(
             currentOwner = "MINI_WINDOW",
             expectedOwner = "NOW_PLAYING",
             expectedCandidateReady = false,
         ))
-        assertFalse(shouldRetainMiniWindowForNowPlayingHandoff(
+        assertFalse(shouldRetainPrimarySurfaceDuringHandoff(
             currentOwner = "MINI_WINDOW",
             expectedOwner = "NOW_PLAYING",
             expectedCandidateReady = true,
         ))
     }
 
-    @Test fun miniWindowHoldDoesNotApplyToOtherDestinationChanges() {
-        assertFalse(shouldRetainMiniWindowForNowPlayingHandoff(
+    @Test fun nowPlayingAlsoStaysVisibleWhileMiniSurfaceRegisters() {
+        assertTrue(shouldRetainPrimarySurfaceDuringHandoff(
+            currentOwner = "NOW_PLAYING",
+            expectedOwner = "MINI_WINDOW",
+            expectedCandidateReady = false,
+        ))
+        assertFalse(shouldRetainPrimarySurfaceDuringHandoff(
+            currentOwner = "NOW_PLAYING",
+            expectedOwner = "MINI_WINDOW",
+            expectedCandidateReady = true,
+        ))
+    }
+
+    @Test fun handoffHoldDoesNotApplyToUnrelatedDestinations() {
+        assertFalse(shouldRetainPrimarySurfaceDuringHandoff(
             currentOwner = "MINI_WINDOW",
             expectedOwner = "LIBRARY_MINI",
             expectedCandidateReady = false,
         ))
-        assertFalse(shouldRetainMiniWindowForNowPlayingHandoff(
+        assertFalse(shouldRetainPrimarySurfaceDuringHandoff(
             currentOwner = "LIBRARY_MINI",
             expectedOwner = "NOW_PLAYING",
             expectedCandidateReady = false,
