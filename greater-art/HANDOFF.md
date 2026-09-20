@@ -20,9 +20,10 @@ This file describes the **current repository state only**. Historical session no
 
 `app/build.gradle.kts` is the version source of truth. Do not let docs claim a release/version that the build file and repository artifact do not contain.
 
-### September 20 — 1.12.4 red X position fix
+### September 20 — 1.12.4 red X position + Mini→Now Playing handoff
 
-- `MiniWindowOverlayService.kt`: `crossRaisePx` 9 → 10 (moves red X exactly 1 pixel higher in mini window overlay).
+- `MiniWindowOverlayService.kt`: `crossRaisePx` 10 → 14 (moves red X 4 additional physical pixels higher in mini window overlay; total +5px from 9).
+- PR #35 merged: Mini window tap now returns directly to NOW_PLAYING (no Library intermediate), surface retained until Now Playing PlayerView registers, instant sheet animation for mini return, duplicate session refresh removed.
 - Verification: `testDebugUnitTest lintDebug assembleDebug --offline` succeeded. APK manifest confirms version 1.12.4/code 85.
 - **Delivered APK:** `releases/GreaterArt-1.12.4.apk`, 26,074,638 bytes.
   SHA-256: `80c3cb9d5ee76f18c4a25fb59e409b820c1474a8df3a7b3c3dd94d65ba33e293`.
