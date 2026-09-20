@@ -146,7 +146,8 @@ fun GreaterArtApp(
     var editDisplay by remember { mutableStateOf<com.local.listentomusic.model.MediaFile?>(null) }
     var createRule by remember { mutableStateOf(false) }
     var sheetState by remember { mutableStateOf(androidx.compose.animation.core.MutableTransitionState(openPlayerRequest > 0)) }
-    sheetState.targetState = playerOpen
+    val playerPresentationRequested = playerOpen || openPlayerRequest > 0
+    sheetState.targetState = playerPresentationRequested
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
         val observer = object : androidx.lifecycle.DefaultLifecycleObserver {
@@ -161,16 +162,17 @@ fun GreaterArtApp(
 
     LaunchedEffect(openPlayerRequest) {
         if (openPlayerRequest > 0) {
-            viewModel.refreshPlaybackSession()
+            // MainActivity already refreshes the live MediaSession on resume. Do not
+            // make the Mini Window return wait on duplicate queue/session work before
+            // declaring Now Playing visible.
             playerOpen = true
-            // Overlay return is a direct reveal, not another slide through Library.
             sheetState = androidx.compose.animation.core.MutableTransitionState(true)
             onOpenPlayerRequestConsumed(openPlayerRequest)
         }
     }
 
-    LaunchedEffect(playerOpen) {
-        onPlayerScreenChanged(playerOpen)
+    LaunchedEffect(playerPresentationRequested) {
+        onPlayerScreenChanged(playerPresentationRequested)
     }
 
     BackHandler(enabled = screen != Screen.LIBRARY || playerOpen || libraryPager.currentPage == 1) {
@@ -188,7 +190,7 @@ fun GreaterArtApp(
         val lightPalette = MaterialTheme.colorScheme.background.luminance() > 0.5f
         androidx.compose.runtime.SideEffect {
             com.local.listentomusic.ui.components.VideoSurfaceOwner.setPresentation(
-                playerOpen || sheetState.currentState || sheetState.targetState, isPictureInPicture,
+                playerPresentationRequested || sheetState.currentState || sheetState.targetState, isPictureInPicture,
             )
         }
         LaunchedEffect(lightPalette) {
@@ -416,7 +418,12 @@ fun GreaterArtApp(
                 )
             }
             }
-            PlayerOverlay(sheetState, isPictureInPicture, { playerOpen = false }) {
+            PlayerOverlay(
+                sheetState,
+                isPictureInPicture,
+                { playerOpen = false },
+                instantReveal = openPlayerRequest > 0,
+            ) {
                 NowPlayingScreen(playback, artwork, queue, lyrics, settings.showFileDetails, settings.editableQueue,
                     settings.blackDiscMode,
                     settings.appLanguage, controller, PaddingValues(0.dp), isPictureInPicture,

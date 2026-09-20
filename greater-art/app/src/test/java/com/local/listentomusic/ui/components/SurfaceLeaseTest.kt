@@ -4,6 +4,31 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class SurfaceLeaseTest {
+    @Test fun miniWindowStaysVisibleWhileNowPlayingSurfaceRegisters() {
+        assertTrue(shouldRetainMiniWindowForNowPlayingHandoff(
+            currentOwner = "MINI_WINDOW",
+            expectedOwner = "NOW_PLAYING",
+            expectedCandidateReady = false,
+        ))
+        assertFalse(shouldRetainMiniWindowForNowPlayingHandoff(
+            currentOwner = "MINI_WINDOW",
+            expectedOwner = "NOW_PLAYING",
+            expectedCandidateReady = true,
+        ))
+    }
+
+    @Test fun miniWindowHoldDoesNotApplyToOtherDestinationChanges() {
+        assertFalse(shouldRetainMiniWindowForNowPlayingHandoff(
+            currentOwner = "MINI_WINDOW",
+            expectedOwner = "LIBRARY_MINI",
+            expectedCandidateReady = false,
+        ))
+        assertFalse(shouldRetainMiniWindowForNowPlayingHandoff(
+            currentOwner = "LIBRARY_MINI",
+            expectedOwner = "NOW_PLAYING",
+            expectedCandidateReady = false,
+        ))
+    }
     @Test fun presentationPriorityIncludesForegroundAndSystemPip() {
         assertEquals("LIBRARY_MINI", expectedSurfaceOwner(true, false, false))
         assertEquals("NOW_PLAYING", expectedSurfaceOwner(true, true, false))
