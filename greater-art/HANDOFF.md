@@ -1,25 +1,24 @@
 # HANDOFF — Greater Art Android Media Player
 
+This file describes the **current repository state only**. Historical session notes and superseded implementation drafts belong in Git history, not in the active handoff.
+
 **Project:** `greater-art/` in the repository checkout
 **Current version:** `1.12.3` (code 84)
 **Latest APK:** `releases/GreaterArt-1.12.3.apk` (verification below)
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
-## Version Management
+## Repository state
 
-- **Single source of truth:** `app/build.gradle.kts` (`versionCode`, `versionName`).
-- **HANDOFF.md must reflect the same values** — update both together on every version bump.
-- **Scheme:** `major.minor.patch` + monotonically increasing `versionCode`.
-  - Patch: bug fixes, tiny tweaks → `patch++`, `versionCode++`.
-  - Minor: user-visible feature → `minor++`, `patch=0`, `versionCode++`.
-  - Major: breaking change / redesign → `major++`, `minor=patch=0`, `versionCode++`.
-- **APK filename:** `GreaterArt-<versionName>.apk` in `releases/` (September 16 naming convention).
-- **Never overwrite a released APK.** Increment build number for re-spins.
-- Remote publishing is task-scoped: push/tag/release only when the current user request
-  explicitly authorizes it; never infer that permission from this handoff.
+- Project: `greater-art/`
+- Version: **1.12.2**
+- Version code: **83**
+- Application ID: `com.local.listentomusic`
+- APK: `releases/GreaterArt-1.12.2.apk`
+- APK SHA-256: `09a15cadecb06bfbf3c562fd163db8b8aea76a2fabe296ee42a09806ce8fd0f5`
+- Signing certificate SHA-256: `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
-## Current State
+`app/build.gradle.kts` is the version source of truth. Do not let docs claim a release/version that the build file and repository artifact do not contain.
 
 ### September 20 — 1.12.3 Favorites persistence and Now Playing hierarchy
 
@@ -52,1145 +51,132 @@
 
 ### September 20 — 1.12.2 surface continuity, offline sharing and Library dead-band fix
 
-- Diagnosed `READY_VIDEO_NO_FRAME` / `FIRST_FRAME_TIMEOUT` as an unnecessary
-  PlayerView recreation plus first-frame attribution race: the old view received the
-  new media's first-frame callback, then a path-keyed Compose block created a new
-  generation. Now Playing now retains one PlayerView per controller, surface leases
-  track player/view identity and transition reasons, and the independent controller
-  frame signal prevents that false diagnostic. This is not presented as proof against
-  all device-specific black frames; see `docs/SURFACE_DEBUG_1.12.2.md`.
-- Holding a playing foreground video for 700 ms temporarily switches to 2× with
-  haptic and overlay feedback. Release/cancel restores the exact previous speed and
-  the temporary value is never persisted. The middle double-tap zone remains inert.
-- Added exact-file sharing through a non-exported FileProvider, explicit multi-file
-  sharing, and portable relative-path M3U8 sharing for the current Library, named
-  playlists and current queue. Media files are neither copied nor loaded into RAM;
-  list exports are bounded 24-hour cache files. No absolute paths are written to M3U8.
-- Added local Favorites, queue-only search that preserves playback order, and a
-  truthful decoded waveform presentation without decorative fake equalizer motion.
-- Removed the screenshot-reported Library dead band: the Library no longer consumes
-  the outer mini-player Scaffold inset. Rows draw behind the player, while a small
-  LazyColumn end inset lets the last row scroll fully above it. Favorites also has a
-  correct empty state and no non-functional reorder affordance.
-- Future offline-only designs (Nodes Related, optional history portability, explicit
-  on-device voice/captions, desktop transfer) are documented without enabling network,
-  cloud, accounts, telemetry or silent exports in `docs/LOCAL-FUTURES-1.12.2.md`.
-- Verification: `testDebugUnitTest lintDebug assembleDebug --offline --no-daemon
-  --max-workers=2` passed: 99 tests, 0 failures/errors; lint 0 errors, 18 warnings and
-  1 hint. Package `com.local.listentomusic`, version 1.12.2/code 83, min SDK 26,
-  target 37, no INTERNET permission. Pinned signing certificate unchanged; APK v2
-  signature and 16 KiB zip alignment verified.
-- Artifact: `releases/GreaterArt-1.12.2.apk`, 26,711,353 bytes, SHA-256
-  `09a15cadecb06bfbf3c562fd163db8b8aea76a2fabe296ee42a09806ce8fd0f5`.
-- Device boundary: no Android device/emulator was connected. Surface output, 700 ms
-  hold cancellation, Sharesheet receivers and the exact mini-player overlap geometry
-  still require a real-device smoke test.
-- Repository strategy: work remains local on `main`; no branch merge loop, commit,
-  tag, push or remote release was performed in this session.
-
-### September 20 — 1.12.1 library-first journey, opt-in history and public demos
-
-- Library row taps now start playback without forcing navigation. The live bottom
-  player is the explicit route to Now Playing; mini-window taps still return directly
-  to that overlay. The compact bar no longer adds a separate vertical progress row,
-  reducing the unusable gap above it.
-- Library and floating previews use shared geometry: established `103×56dp` for wide
-  media and `56×56dp` for square art/video, with no invisible content gutter. The
-  overlay reads embedded artwork off the UI thread, remembers drag position, reaches
-  the physical bottom, and tints red while overlapping the real circular close zone.
-  The close target offset is `dp(11) + 9 physical px`, three pixels above 1.11.7.
-- Search has a focused liquid-metal scale/border response. Initial scan/splash uses
-  the actual app mark. Double-tap seek retains inert center space and one compact
-  side cue. Optional black-disc audio mode uses continuous linear rotation that
-  pauses without resetting.
-- Developer inspector now retains every tagged region beneath a touch and offers
-  NEXT cycling, so nested buttons can be selected instead of only the smallest box.
-- Optional play history defaults off, records only while actual playback is active,
-  is capped at 500 local entries, is excluded from portable backups, and has a
-  confirmed Burn action. Reset clears both the toggle and stored entries.
-- Public delivery was rebuilt around two dependency-free 1920×1080 phone films plus
-  a new landing page. The user and technical films both show the exact ordered flow:
-  launch → local scan → Library row play in place → Library mini-player → Now Playing
-  → floating mini-window.
-- Verification: `testDebugUnitTest lintDebug assembleDebug --offline --no-daemon
-  --max-workers=2` passed: 96 tests, 0 failures/errors; lint 0 errors, 18 warnings and
-  1 hint. APK metadata: package `com.local.listentomusic`, version 1.12.1/code 82,
-  min SDK 26, target 37, no INTERNET permission. Signature remains
-  `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`;
-  16 KiB zip alignment passed.
-- Artifact: `releases/GreaterArt-1.12.1.apk`, 26,024,921 bytes, SHA-256
-  `4713ad2eb43cebb3c0c115300f26aeba163247cafee7e057e8bdeaf047609f7a`.
-- Device boundary: no Android device/emulator was connected. Overlay geometry,
-  Samsung edge reach, real video surface handoff, Bluetooth behavior and installation
-  update remain device checks—not claims inferred from a successful build.
-
-### September 18 — 1.11.7 red X position fix
-
-- `MiniWindowOverlayService.kt`: `crossMargin` 14 → 11 (moves red X 3dp higher in mini window overlay).
-- Verification: `testDebugUnitTest lintDebug assembleDebug --offline` succeeded. APK manifest confirms version 1.11.7/code 81.
-- **Delivered APK:** `releases/GreaterArt-1.11.7.apk`, 26,566,483 bytes.
-  SHA-256: `b62b1bb624d9aae150511c2f2b0eba9384f123fc18653008584748b240f1061b`.
-  Created only after final verification with overwrite disabled. No older APK changed.
-
-### September 18 — 1.11.6 surface investigation (local only)
-
-- Continued from committed local 1.11.5, preserving its translations and APK.
-  No commit, push, tag, upload or unrelated playback/cache/scanner rewrite.
-- Inspected Media3 1.11.0 PlayerView and MediaControllerImplBase source. Same-player
-  transfers intentionally connect the new view before clearing the old view; stale
-  TextureView/holder clears are guarded by Media3. Thus ordinary stale release is
-  **not a confirmed root cause** of the supplied Samsung black-frame snapshot.
-- VideoSurfaceOwner now arbitrates registered candidates using explicit foreground,
-  Now Playing/sheet and PiP state. Library cannot win just by updating later while
-  Now Playing is requested; foreground Activity blocks mini-overlay ownership.
-  A late release of a non-current view makes no PlayerView setter/clear call.
-- Added generation-aware frame diagnostics and per-owner flags, last-frame epoch,
-  decoder/codec-error/drop counts, presentation requests and mini-service start/stop.
-  Developer Mode shows warning reasons with a 2.5-second transition grace period.
-  Renderer timestamps reject pre-transfer frames; IPC Surface identity cannot be
-  verified by reference equality, and the report states this limitation explicitly.
-- The old tap latency and controller first-frame boolean represented different
-  scopes. Report now labels the latency as last-tap data rather than current-surface
-  evidence. It does not claim a rendered event proves pixels appeared on the phone.
-- CURRENT_VIDEO remains a separate muted decoder, with no primary owner calls.
-  Only its diagnostic role label changed. No quality, bitrate or FPS cap added.
-- Ambient tint now retries once the restored media record appears in Library/queue;
-  previously a first null result could survive indefinitely with the same path key.
-  Palette selection favors actual color over black borders. Nodes is now on the right.
-- Red close circle is fully opaque and another 3 physical pixels higher than 1.11.5
-  (14dp + 6px bottom offset); same geometry on creation/rotation and for collision.
-  Mini-window size, edge reach and saved spawn position are unchanged.
-- Build repair: inherited daemon criteria required unavailable Java 25 and attempted
-  a failed download. Criteria now use the installed Java 21, with no mismatched
-  Java 25 download URLs. Android bytecode target remains Java 17.
-- Detailed source map, evidence, state-model timeline and phone test procedure:
-  [Surface debugging report](docs/SURFACE_DEBUG_1.11.6.md).
-- **Device boundary:** `adb devices` showed no device. Samsung reproduction, observed
-  failing/fixed timelines, 10 real transitions, fullscreen/PiP/lockscreen and visible
-  frame-rate checks are NOT RUN. Unit-state traces are not presented as device logs.
-- Verification: `testDebugUnitTest lintDebug assembleDebug --offline --no-daemon --max-workers=2`
-  passed: 96 tests, 0 failures; lint 0 errors, 17 warnings and 1 hint. APK signature
-  and 16 KB zip alignment verified; package unchanged, no INTERNET permission.
-- Artifact: `releases/GreaterArt-1.11.6.apk`, 26,585,380 bytes, version 1.11.6/code 80.
-  SHA-256: `b62b1bb624d9aae150511c2f2b0eba9384f123fc18653008584748b240f1061b`.
-
-### September 18 — 1.11.5 localization fix
-
-- Localization fixes for "Toggle Ads On" and "ReplayGain" settings: wrapped hardcoded English strings with `uiText()` and added translations for Japanese, German, French, and Cantonese in `UiText.kt`.
-- Verification: `testDebugUnitTest lintDebug assembleDebug --offline` succeeded. APK manifest confirms version 1.11.5/code 79.
-- **Delivered APK:** `releases/GreaterArt-1.11.5.apk`, 26,566,483 bytes.
-  SHA-256: `c810733fc67c1ed1eb0ec031a8e88d87eeafceae63749eda75be4fb409186bd2`.
-  Created only after final verification with overwrite disabled. No older APK changed.
-
-### September 18 — 1.11.4 local fixes and review
-
-- Local edits only. No commit, tag, push or remote change. Existing staged APK renames
-  and deleted historical filenames were preserved. Code 78 supersedes the documented
-  1.11.1/code 77 drift; do not roll version codes backwards again.
-- **Library video root cause found in code:** `InlineVideoPreview` saved its newly
-  created PlayerView into Compose state, then used that state as a DisposableEffect
-  key. The old effect's disposer read the *new* mutable view and could detach it just
-  after AndroidView attached it. It now releases the exact view via `onRelease`, and
-  lifecycle state explicitly reattaches after resume. A TextureView supports rounded
-  clipping without moving playback into another decoder. Real-device reproduction is
-  still unavailable; do not claim this proves every reported black-frame failure.
-- **Background:** independent muted player, audio track disabled, platform decoder
-  selection with fallback (no forced software decoder). Removed the 640×360 track
-  constraint. There is **no imposed video size, bitrate or FPS cap**. The old phrase
-  “maximum 640×360 decode” below was inaccurate: track selection is not transcoding.
-  Memory-bounded read-ahead is 16 MiB for wallpaper, not a quality restriction.
-  Pause/speed/seek mirror primary events; drift checks run every 5 seconds with a
-  2-second playing tolerance rather than repeated 250-ms polling/350-ms seeks.
-- **Presentation:** restrained Now Playing gradient sampled off-thread from existing
-  artwork (not live-frame capture), compact title spacing, transparent content
-  sections, unchanged FIT video stage. Library Nodes remains left of All songs.
-  Settings defaults appear first without resetting saved choices; Silian Rail is last.
-  Graph controls and newer safety/scaling/backup copy now follow the chosen language.
-  Graph drift is continuous at its animation loop boundary.
-- **Mini-window:** no size, padding, edge clamp, or saved spawn-position changes.
-  Red close circle is more opaque; its bottom offset is exactly 3 physical pixels
-  higher in both initial creation and rotation. Hit testing still uses the actual view.
-- **Privacy/security:** dependency-added INTERNET permission is removed at manifest
-  merge. Debug diagnostics log role/identity/state/decoder/frame drops/position, not
-  media paths or titles. Public-repo audit passed locally. Its APK scan now tolerates
-  tracked names pending deletion, without modifying the index.
-- **Regression prevention:** never key a cleanup effect by a mutable view that its
-  disposer reads. Background player never calls VideoSurfaceOwner. Never resolve a
-  rendering bug by silently capping source quality/FPS or forcing software decoding.
-- **Final verification:** Java 21 / Gradle wrapper `testDebugUnitTest lintDebug assembleDebug --offline`
-  succeeded. 88 tests, zero failures; lint zero errors, 17 warnings (plus one hint).
-  APK manifest confirms version 1.11.4/code 78, package unchanged, min SDK 26 and no
-  INTERNET permission. `apksigner verify --print-certs` matches the pinned certificate;
-  `zipalign -c -P 16 4` passes. APK container has no sensitive filename entries.
-  The exported media service warning was reviewed: `LocalLibraryCallback.onConnect`
-  rejects other packages unless Android marks their controllers trusted. Other lint
-  warnings include existing widget resources, compatibility/style and dependency notices;
-  dependency upgrades were not mixed into this rendering fix.
-- **Delivered APK:** `releases/GreaterArt-1.11.4.apk`, 26,566,483 bytes.
-  SHA-256: `c810733fc67c1ed1eb0ec031a8e88d87eeafceae63749eda75be4fb409186bd2`.
-  Created only after final verification with overwrite disabled. No older APK changed.
-
-#### Operational video debugging (next device session)
-
-1. Use a known-good MP4. In Library, compare liquid metal, image, custom video and
-   current-video wallpaper with the preview visible. For each, test play/pause/resume,
-   seek, next/previous, Now Playing ↔ Library ↔ Nodes, Home and mini-window return.
-2. Record: first frame rendered, position advancing, frozen/black/stale frame, time
-   of failure and whether it changes after navigation. Do not infer decoder contention.
-3. Capture `adb logcat -v threadtime GreaterArtVideo:D GreaterArtSurface:D AndroidRuntime:E '*:S'`.
-   `PRIMARY` and `APP_BACKGROUND` log decoder/init/first-frame/drop/error/state events.
-   Surface logs distinguish `LIBRARY_MINI_PLAYER`, `NOW_PLAYING` and `MINI_WINDOW`.
-   Wallpaper must never become a VideoSurfaceOwner target.
-4. If it persists, compare background absent / prepared-paused / playing / sync disabled
-   one at a time. Inspect codec allocation, frame drops and lifecycle identities before
-   changing architecture. Repeated seeks or attach/detach churn are different bugs from
-   hardware-decoder allocation or CPU/GPU saturation.
-5. Confirm source-rate playback, stable owner, no seek storm, responsive scroll and
-   clean audio. Screen record + collect `dumpsys gfxinfo` and logcat before/after.
-   One decoded stream with multiple GPU presentations is a larger fallback only if
-   genuine two-decoder limits are measured; do not replace wallpaper with low-FPS samples.
-
-No device/emulator was connected on September 18. All matrix/device frame-rate,
-OEM-overlay and installation checks remain **not run**; build success is not a
-substitute for those checks. Resume from these local changes, not an older APK.
-
-### September 16 — 1.10.4 sync & cleanup (this session)
-
-- Synced local repo with remote (already at 1.10.4 / code 76), then verified build passes.
-- Fixed version drift: build.gradle.kts had incorrectly bumped to 1.11.1 (code 77); reset to match HANDOFF.md at 1.10.4 (code 76).
-- Built debug APK with Java 21 via Gradle wrapper: `testDebugUnitTest lintDebug assembleDebug` — all pass.
-- APK output: `releases/GreaterArt-1.10.4.apk` (26,008,568 bytes, SHA-256 `49da0ebb8f6cc2a40793fe2ce92c2b92052dce5377d518ed7cdabd2d8ff581ef`).
-- Renamed all historical APKs in `releases/` to clean `GreaterArt-<version>.apk` format (removed `v` prefix, `-buildN`, `-debug` suffix).
-- Updated HANDOFF.md APK path and SHA-256 to match new naming and current build.
-
-### September 16 — 1.10.4 background scaling
-
-- Added background scaling choices for custom images and videos: `Fit` preserves the
-  complete source, `Stretch` fills the screen without preserving aspect ratio, and
-  `Cut to screen size` preserves aspect ratio while cropping overflow. The cut mode
-  remains the default and existing `CROP` preference values remain compatible.
-- Verification: `testDebugUnitTest lintDebug assembleDebug` succeeded. APK metadata
-  confirms version 1.10.4 / code 76. Final artifact:
-    `releases/GreaterArt-1.10.4.apk` (26,008,568 bytes), SHA-256
-    `49da0ebb8f6cc2a40793fe2ce92c2b92052dce5377d518ed7cdabd2d8ff581ef`.
-
-### September 15 — 1.10.3 local refinement (latest)
-
-- Local-only work: no commit, tag, push, release upload, or remote mutation.
-- Background fit options confirmed present: FIT/STRETCH/CROP (default) via `BackgroundScaleMode` enum, wired through preferences, Settings UI ("Background fit"), and `AppBackground.kt` rendering.
-- Missing `AppBackground` import in `GreaterArtApp.kt` added; build now passes.
-- Built debug APK: `app/build/outputs/apk/debug/app-debug.apk` (verified 1.10.3 / code 75).
-- Added Version Management spec to HANDOFF.md (single source of truth, semantic scheme, APK naming, no overwrite, no remote mutation).
-- Pulled remote (had 1.10.4), then reset local to 1.10.3 per "keep it local" — remote changes discarded.
-- Nodes previously forced an opaque background and the app root explicitly disabled its
-  wallpaper on graph page 1. The root now keeps the chosen background active and Nodes uses
-  a readable 72%-opaque theme veil, so DEFAULT, image, custom-video and current-video modes
-  remain visible without sacrificing graph contrast.
-- Library's live video initially failed because CURRENT_VIDEO wallpaper and the mini-player
-  both called `VideoSurfaceOwner.attach` on the same MediaController. Media3 has one primary
-  video output here, so whichever recomposed last stole the surface. CURRENT_VIDEO wallpaper
-  now uses the already-bounded secondary background ExoPlayer: muted, audio track disabled,
-  maximum 640×360 decode, lifecycle-paused and periodically resynchronized. Its presentation
-  uses `FIT` to preserve the complete source aspect ratio rather than stretching/cropping.
-  The Library preview alone owns the primary surface while Now Playing is closed.
-- The Library preview bounds are only a first-run spawn hint. MiniWindowOverlayService now
-  persists the user's last clamped X/Y locally after the first spawn, every completed drag
-  and configuration changes. Later service starts restore those coordinates and ignore the
-  Library hint, avoiding an unwanted reset to the bottom bar.
-- Verification: offline `testDebugUnitTest lintDebug assembleDebug` succeeded with 78 tests,
-  0 failures/errors and lint 0 errors / 13 warnings. APK metadata confirms package
-  `com.local.listentomusic`, version 1.10.3 / code 75, no INTERNET permission and the pinned
-  signing certificate. Final artifact: `releases/GreaterArt-v1.10.3-build2-debug.apk`
-  (25,955,028 bytes), SHA-256
-  `6171588da51568e7cd33928630531e53848d6abdf7b1ddba86c3b3ffa0555faa`.
-  The earlier `GreaterArt-v1.10.3-debug.apk` is preserved but superseded; build2 contains
-  the final saved-position implementation and its lint-clean KTX preference write.
-  No Android device was connected. Device-check the first spawn, saved-position restoration,
-  Samsung bottom edge, Library video handoff and CURRENT_VIDEO aspect presentation.
-
-### September 15 — 1.10.2 local refinement
-
-- Local-only work: no commit, tag, push, release upload, or remote mutation.
-- The reported size regression was real: the older 111×64dp overlay had a 4dp gutter,
-  giving it an effective visible footprint of 103×56dp. Removing the gutter while keeping
-  almost the full outer size made the replacement visibly larger/taller. The shared metric
-  is now the old effective 103×56dp directly, with no invisible content padding; the default
-  small Library thumbnail and in-app video preview use that same contract.
-- The bottom drag wall came from applying system-bar fitting in WindowManager and then
-  subtracting top+bottom insets again in the app clamp. Navigation-bar fitting and the
-  second subtraction are removed. Status-bar protection remains; users may intentionally
-  drag the overlay over the bottom navigation region as the older version allowed.
-- The in-app bottom player now renders the active video through the shared Media3 surface
-  owner only while Now Playing is closed. Its preview bounds seed the external overlay's
-  start position, so leaving the Activity begins at the matching bottom-player location.
-  Cleanup uses the existing identity-safe surface detach to avoid blanking the incoming view.
-- Now Playing's previous drag detector only dismissed after release, so the sheet appeared
-  immovable. The top handle now moves the complete sheet with the finger, uses distance or
-  downward velocity to dismiss, and springs back when cancelled. Queue and timeline gestures
-  remain untouched because dragging is limited to the handle. Audio/video bottom controls
-  have reduced dead padding and sit closer to the system navigation edge.
-- Library renders the actual launcher foreground instead of a generic note. Nodes is an
-  outlined secondary action with a graph glyph, while All songs remains the filled, wider
-  primary control. Nodes keeps cached background layout, adds tiny deterministic visible-only
-  drift, and expands weighted hub radii substantially so strong multi-link files dominate.
-- Double-tap feedback is reduced to the familiar fixed rewind/fast-forward glyph and seconds
-  label with a short fade. No rings, moving chevrons, scaling, or duplicate animation remains;
-  the central 30% still performs no seek.
-- Verification: offline `testDebugUnitTest lintDebug assembleDebug` succeeded with 78 tests,
-  0 failures/errors and lint 0 errors / 13 warnings. APK metadata confirms package
-  `com.local.listentomusic`, version 1.10.2 / code 74, no INTERNET permission and pinned
-  certificate SHA-256 `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`.
-  Final artifact: `releases/GreaterArt-v1.10.2-build2-debug.apk` (25,944,100 bytes),
-  SHA-256 `eb495ff89b2525fe379616cc77827607812715e6165add8f8f49895a05f343bf`.
-  The earlier `GreaterArt-v1.10.2-debug.apk` is preserved but superseded: its live-video
-  preview could still accept Android-view clicks instead of consistently passing them to
-  the mini-player row. Build2 makes that PlayerView non-clickable/non-focusable.
-  No device was connected. Real-device checks still required: Samsung bottom-edge overlap,
-  pull-down gesture/velocity, surface handoff without a black video frame, and dense-graph FPS.
-
-### September 13 — 1.10.1 local refinement
-
-- Local-only work: no commit, tag, push, release upload, or remote mutation.
-- Developer mode previously tagged only large parent regions and reused the active theme
-  for its report sheet. This made button picks resolve to vague screen names and could
-  produce black text over a black surface. Inspector/report surfaces now use an invariant
-  high-contrast debug palette. Individual Library, mini-player, Now Playing, graph and
-  reusable Settings controls register their own dynamic names; the diagnostics list is
-  generated from the live registered regions instead of a hard-coded list.
-- Mini overlay subtracts another exact three physical pixels (six total from the 111×64dp
-  base after density conversion). Default small Library thumbnails still use the same
-  physical metrics.
-- Both the Android system splash vector and in-app cold-scan state use a centered inset
-  mark. The scan screen is compact liquid metal with a thin progress line, avoiding the
-  cropped adaptive-launcher foreground formerly rendered at 96dp.
-- Library row actions now offer permanent source-file deletion through three distinct
-  confirmations. Deletion canonicalizes the target, refuses anything outside Download,
-  refuses directories, removes all queue/cue entries backed by that physical file, rescans,
-  and reports Android refusal. Android 8–9 get narrowly scoped legacy write permission;
-  current Android continues using the already-declared all-files access. INTERNET remains absent.
-- Double-tap seek previously treated every X coordinate as left or right and combined
-  rings, chevrons, scaling and a label. It now uses only the outer 35% zones, leaves the
-  middle 30% inert, and renders one short YouTube-like chevron/seconds cue. A pure regression
-  test guards left/middle/right behavior.
-- Graph link targets now widen nonlinearly as similarity weakens. The node with the greatest
-  sum of connection strengths is translated to graph origin, and Fit preserves that origin
-  at screen center. Cache v3 invalidates older coordinates. The wand performs one finite,
-  hub-first staggered reveal with restrained pop/bounce; there is no permanent UI physics loop.
-- Device-only checks still required: OEM file deletion, overlay pixel size, gesture feel,
-  system splash masking, and graph animation pacing on a large real library.
-- Verification: offline `testDebugUnitTest lintDebug assembleDebug` succeeded with 78
-  tests, 0 failures/errors, and lint 0 errors / 13 warnings. APK metadata confirms package
-  `com.local.listentomusic`, version 1.10.1 / code 73, no INTERNET permission, and pinned
-  certificate SHA-256 `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`.
-  Final artifact: `releases/GreaterArt-v1.10.1-build2-debug.apk` (26,458,654 bytes),
-  SHA-256 `d4dbc90e191c0a96fc8a98b77cecbf68441b46a36bbea867a8acdd21cb076f0a`.
-  The earlier `GreaterArt-v1.10.1-debug.apk` is preserved but superseded: it predates
-  the corrected Android 8–9 read/write permission request and was not overwritten.
-
-### September 13 — 1.10 local refinement
-
-- Local-only work: no commit, tag, push, release upload, or remote mutation.
-- The mini overlay now subtracts exactly three physical pixels from both dimensions
-  after density conversion. Default small Library thumbnails use those exact same
-  physical dimensions; medium and large Library rows remain genuinely larger.
-- Restored Newest/Oldest Library ordering. An explicit sort change synchronizes a
-  whole-library playback queue without losing the current item, position, or play state;
-  edited/partial queues and playlists remain authoritative. The filter field has a
-  one-tap clear action. Current-video wallpaper remains the default setting.
-- Developer mode now has a tap-to-inspect overlay. Tagged high-level regions report
-  name, purpose, root bounds, physical pixel size, dp size, and touch coordinates, with
-  one-tap local clipboard copy. Unknown areas are honestly labelled unregistered.
-- Replaced the oversized seek rings with bounded arcs and directional chevrons so the
-  finite double-tap effect cannot clip into broken-looking fragments.
-- Nodes keeps its finite/background architecture but now has cached v2 velocity-based
-  settling, persisted link-length/repulsion/elasticity controls, and connected-neighbour
-  spring response while dragging. There is still no endless physics loop competing with
-  playback or scrolling.
-- Added pure policy/size tests for queue synchronization and physical-pixel sizing.
-- Separate sibling project `pixel-measure-app/` is an offline portrait/landscape ruler.
-  It correctly distinguishes raw px from dp, measures A/B deltas and edge offsets, and
-  maps taps on a system-picked screenshot back to source-image pixels.
-- Verification: offline `testDebugUnitTest lintDebug assembleDebug` succeeded; 75 tests,
-  0 failures/errors, lint 0 errors / 13 warnings. APK metadata confirms package
-  `com.local.listentomusic`, version 1.10 / code 72, pinned signing certificate
-  `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`, and no INTERNET
-  permission. Artifact: `releases/GreaterArt-v1.10-debug.apk` (26,428,654 bytes), SHA-256
-  `131577e071ee48d083af672bb3344142a88708dac76f793dd5f024a43bc07898`.
-  Pixel Measure v1.0.1 also assembled with lint 0 errors; it requests no user permission.
-  No emulator/device was available, so touch feel, overlay edges, screenshot mapping, and
-  OEM window behavior still need a real-device smoke test.
-
-### September 13 — 1.9.19 recovery
-
-- A later external session added uncommitted changes to five Greater Art files after the
-  verified 1.9.18 build. Its final source was newer than its build artifact, so its reported
-  successful build did not verify the final worktree. The complete changed files were backed
-  up at `<user-home>/AppData/Local/Temp/GreaterArt-rogue-animation-backup-20260913`.
-- Restored those five files exactly to commit `ef73fef`, the previously tested 1.9.18 source.
-  This removed per-bar coroutine fan-out, duplicate Slider drag handling, fixed 120-BPM
-  pulses, duplicated waveform components and the accidental Small/Medium/Large thumbnail
-  collapse. Pixel Measure remains untouched in its separate untracked folder.
-- The intended draft motion remains in the restored source: one Canvas performs a short
-  staggered waveform reveal and restrained phase breath; cover movement follows real cached
-  waveform amplitude; the native Slider owns gestures and grows its thumb; cached artwork
-  and time lift while scrubbing; A/B attraction uses only actual markers; double-tap feedback
-  is finite and respects disabled Android animations. Speed uses the compact animated gauge.
-- Two local commits already existed before this recovery despite the earlier local-only
-  instruction. They remain unpushed (`main` was two commits ahead of `origin/main`); this
-  recovery does not rewrite Git history, commit, tag or push.
-- The named 1.9.18 release had also been replaced after its documented verification. Its
-  observed pre-recovery SHA-256 was
-  `b04a790ca87ee99c006235770d9a1dbbebe9158173f0e190920506934c4ce89f`, not the documented
-  `45465cdd...`. It remains untouched as evidence; 1.9.19 uses a new filename.
-- Verification: offline `testDebugUnitTest lintDebug assembleDebug` succeeded in 3m13s:
-  73 tests, 0 failures/errors; lint 0 errors / 13 warnings. APK metadata confirms package
-  `com.local.listentomusic`, version 1.9.19 / code 71, the pinned certificate above and no
-  INTERNET permission. `git diff --check` passed, and all five recovered source files match
-  `ef73fef`. Artifact: `releases/GreaterArt-v1.9.19-debug.apk` (25,830,608 bytes), SHA-256
-  `56bb06153ac6304b417b4eaf9d64a9ad90cf4dac78ee1a1722e207a41040cbe8`.
-  No Android device is connected, so gesture feel, frame pacing and overlay edge alignment
-  remain device-only checks.
-
-### September 13 — 1.9.18
-
-- User authorized immediate local implementation. No commit, tag, push or PR created
-  by this session; preserve the pre-existing main commit/tag and all versioned APKs.
-- Read draft.md completely and adapted its five animation ideas. Do NOT apply its raw
-  code: it contains composables inside Canvas, invalid APIs, competing Slider gesture
-  handlers and fabricated BPM/keyframe data. Actual motion is one waveform reveal/phase
-  canvas, real cached-envelope cover scale, a lightweight cached-cover/timestamp readout,
-  growing native seek thumbs and finite directional seek ripples. There are no per-bar
-  composables or invented beats. Motion follows visibility/play state and Android animator
-  settings. A/B magnetism applies only within 120ms of a real marker; no arbitrary snapping.
-- Replaced arbitrary speed arrows with a compact gauge/animated needle. Repeat/previous/
-  play/next/speed locations remain unchanged. Peek artwork is the cached track cover,
-  NOT a timestamp-specific video frame; no per-drag decoding was added.
-- Nodes is now RIGHT of Library: swipe LEFT to enter, RIGHT over the graph header to
-  return. Home targets Library page 0. Quiet opaque vault-style graph, weighted node
-  size/contrast, distinct current-track double-ring/play glyph and a Playing recenter action.
-  Six Graph controls persist in DataStore and participate in backup/reset. Graph styling
-  is independent of filename similarity/physics, so control edits do not rebuild the graph.
-- Remaining one-song queue root causes: tapping a graph source outside a filtered list
-  fell back to listOf(file); service restoration can also initially contain just one item.
-  Out-of-list taps now include the rest of the library. On reconnect, a restored singleton
-  appends library items once, preserving playback position and explicit single-song playlists.
-  Both scanner-first and controller-first startup orders are handled. User queue edits are
-  not continually expanded. Pure policy regression tests cover out-of-list taps and ordering.
-- Waveform warmup previously required currentPath and took video slots before filtering
-  audio. It now warms up to eight distinct physical audio sources at startup and around
-  current playback, deduplicated before requests, with cancellation on changed priorities.
-  Native waveform jobs have a 90-second cancellation bound. This does not guarantee that
-  every format/device decodes a waveform; playback and seeking stay independent.
-- Thumbnail warmup previously raced async sorting and could warm an empty/old list. It
-  now waits for sorting and includes the fresh scan snapshot as fallback. Cache keys stat
-  physical files rather than transient UI metadata. Disk hits precede negative-cache checks.
-  Failed video extraction can use MediaStore's indexed thumbnail and embedded art; frame
-  fallback remains scaled on supported APIs. Coverless/unsupported readable audio has its
-  own diagnostic counter instead of being described as a memory-cache failure.
-- Mini-window visible content had a 4dp internal gutter, creating an apparent invisible
-  wall at screen edges. Removed it; horizontal positioning uses window bounds, left gravity
-  and top/bottom-only system-bar inset fitting on Android 11+. Vertical bars remain protected.
-  Red target moved LOWER: bottom margin 19→14dp, with a substantially more opaque red fill.
-  Existing 57dp collision circle / 25dp white X geometry and frame-batched dragging remain.
-- Existing 1.9.17 artifact is code 69. Its observed SHA-256 is
-  `24f768ffc07ef7846fb23a2a16840cf95e6cb27f3fbd09afe34d3455421a6f07`, not the pasted
-  handoff's `3f7be02...`. It was not replaced or deleted; do not infer a cause for the mismatch.
-- Verification: final offline `testDebugUnitTest lintDebug assembleDebug` succeeded:
-  73 tests, 0 failures/errors; lint 0 errors / 13 warnings. Lint initially caught an API
-  guard placement around Insets access, corrected without suppressing the check.
-  APK verified as package `com.local.listentomusic`, version 1.9.18 / code 70,
-  pinned certificate unchanged, no INTERNET permission. `git diff --check` passed.
-  New artifact: `releases/GreaterArt-v1.9.18-debug.apk` (26,365,017 bytes), SHA-256
-  `45465cdd9b2ee75b49f911f20af63058e6844c823203862b3698451fea4a65b8`.
-  No Android device was connected. Must still device-test edge alignment on both navigation
-  modes, graph gestures/large fonts, restored queues, motion-disabled behavior, waveform
-  codec coverage, thumbnail failures and video frame pacing. No measured FPS claim.
-
-Hermes next: treat this section as authoritative over historical notes. Do not restore
-draft snippets, singleton out-of-list queues, thumbnail warmup-before-sort, or the old
-pager direction. Keep package/signing unchanged. Test then use a new versioned APK;
-do not overwrite 1.9.18 or commit/push without fresh user approval.
-
-### September 12 — 1.9.16: read this before historical notes
-
-- LOCAL ONLY on main. User explicitly forbids commits/pushes for this work. No PR
-  was created. Preserve all existing APKs, package ID and pinned signing identity.
-- Added optional Nodes page to the left of Library; Library stays the default. See
-  `docs/NODES.md` for exact filename-only weights, Unicode handling, top-six edges,
-  approximate >1,000-node candidate search, finite off-main physics and versioned cache.
-  Graph includes physical source files, independent of playlist/search/title overrides.
-  Canvas pan/pinch/drag/tap stays separate from header-based page swiping. A searchable
-  node picker provides an accessible alternative. No extra permissions/network/history.
-- Missing queue ROOT CAUSE: `mapNotNull` discarded active session items absent from a
-  not-yet-completed scan, and controller connection never explicitly synchronized queue.
-  Session order now always has a metadata-based fallback entry; scanner enriches it later.
-  Return-to-player intents immediately reveal the player sheet and refresh session state.
-  Duplicate session IDs have distinct row keys. Queue-size changes no longer trigger an
-  animated scroll through the whole list. Unit tests cover cold/partial scans and duplicates.
-- Mini-window ROOT CAUSE: overlay used its own uncoordinated surface binding and stopped
-  itself before launching the Activity. Overlay and in-app surfaces now share
-  VideoSurfaceOwner; Activity surfaces release while paused and reclaim on resume/PiP.
-  Successful Activity resume removes the overlay; failed launch leaves it retryable.
-  Both MP3 and MP4 keep the existing 111×64dp dimensions and identical whole-window tap
-  and drag behavior. Removed competing tiny audio child buttons. MINI_WINDOW and automatic
-  floating remain the existing defaults; explicit user settings and permission denial are
-  respected. Home/app-switch leaving uses the selected mode for either media type.
-- X ROOT CAUSE: reducing y under Gravity.BOTTOM moved the target DOWN, contrary to older
-  handoff notes. Bottom margin is now 14dp (was 5), circle 57dp (was 61), icon 25dp (was 28).
-  Circle/ring are brighter; active stroke now has a valid opaque ARGB alpha. Collision
-  still uses the visible circle and actual window coordinates. Drag layout is frame-batched,
-  target drawables update only on hover-state changes, and release waits for final layout.
-- Waveform ROOT CAUSE: requests before scan completion used a 0/0 size/time cache identity,
-  causing later misses; transition-only warmup missed reconnects and video-to-audio lookahead.
-  Cache identity now stats the physical source on IO. Added bounded 32-entry peak memory
-  cache; current + next three queue entries warm serially, with cancellation on queue/track
-  change. Removed the screen's unconditional 350ms wait, and reject nonfinite cached peaks.
-  Device codec support still determines whether a waveform can be generated.
-- Performance: defer return rescan until after the transition; isolate wallpaper in a
-  graphics layer; don't feed playback-position ticks into wallpaper or lyric-free queues;
-  don't draw animated metal beneath opaque video/image or a covering player sheet.
-  The current-video wallpaper still reuses one playback decoder. No second decoder was
-  added to "fix" frame drops. Real-device scroll/frame-rate improvement is not yet measured.
-- Personal build script now refuses versioned APK overwrite and verifies the pinned
-  signature before copying to releases. Older versions are untouched.
-- Verification pending final rebuild: tests/lint/APK signature and hash recorded below.
-  ADB returned no connected devices. Phone-only checks: warm/cold overlay return, Home
-  for MP3/MP4, PiP mode, power-key behavior, drag collision on both navigation modes,
-  graph swiping/pinch/large fonts/TalkBack, video frame pacing and waveform decode formats.
-
-Hermes continuation: read this section and docs/NODES.md, then inspect the local diff.
-Do not restore old queue mapNotNull logic, separate overlay surface ownership, or a
-per-frame graph physics loop. Do not commit/push unless the user newly authorizes it.
-Next release must use a new filename/version after the 1.9.16 artifact is created.
-For v1.9.17+ backlog and multi-model consult items, see `draft.md` — planning only, no code changes until approved.
-
-### September 9 — 1.9.4 reference-aligned Now Playing (newest)
-
-- Now Playing uses a stable four-action header in the requested order: floating
-  player, Home, fullscreen and Close. Home always returns to Library; Close dismisses
-  the player sheet and reveals whichever app page was underneath it.
-- Portrait video controls no longer compete with the status bar or cover the frame.
-  The header sits above the media; immersive landscape/fullscreen keeps an overlay
-  header inside the correctly inset video surface.
-- Audio artwork is larger, the queue owns the flexible middle area, and timeline plus
-  Repeat/Random, Previous, Play/Pause, Next and Speed stay fixed at the bottom.
-  A-B/Mix/Sleep options default collapsed so the queue is usable immediately.
-- Verification: 37 unit tests passed; lint completed with 0 errors / 13 warnings;
-  assembleDebug and signing verification passed. Package ID and pinned certificate
-  remain unchanged; the packaged manifest contains no INTERNET permission.
-- APK SHA-256: `86cf787103c14050c9be8ce02374953e381743ca412270f3e4d5e713d4a9770c`.
-- No Android device or emulator was connected. Insets, rotation, PiP/mini-window
-  handoff and large-font layout still need a real-device visual check.
-
-### September 9 — clean-runner signing fix
-
-- GitHub's Android CI and CodeQL builds failed before analysis because `debug` was
-  unconditionally assigned the private sideload keystore at `~/.android/debug.keystore`.
-  Clean runners correctly do not contain that local file.
-- Debug builds now use the pinned sideload identity only when that exact file exists.
-  A clean runner falls back to Android Gradle Plugin's disposable debug identity.
-  Release builds remain pinned, no keystore is committed, and published/versioned APKs
-  must still be built locally with the pinned certificate.
-- Verified both paths: the normal local test/lint/build passed, and an isolated
-  `user.home` with no keystore successfully generated a disposable debug key and built.
-  The versioned 1.9.3 APK hash remains unchanged.
-
-### September 9 — 1.9.3 corrected Now Playing layout (newest)
-
-- The screenshot-style layout belongs to Now Playing, not Library. The mistaken local
-  Library redesign was rolled back: Library retains its normal toolbar, filters,
-  scrollable file list and mini-player, and tapping a row opens Now Playing.
-- Now Playing keeps media at top, its scrollable playback queue in the remaining space,
-  and timeline/transport at bottom. Repeat/Random is mirrored left of Previous;
-  Speed is mirrored right of Next. Speed/repeat were removed from the expandable
-  options strip so controls are not duplicated.
-- Home replaces the ambiguous back arrow and returns to Library without stopping the
-  player. Floating and fullscreen actions remain at the top. Audio and portrait video
-  both use the same bottom-control ordering and the original selected theme.
-- Status/navigation icon colors follow the selected app palette, including after
-  fullscreen exits. Previously disposal restored the OS palette, which could conflict
-  with an explicit in-app dark/light selection.
-- The wrong-layout 1.9.2 APK remains a local intermediate and must not be published.
-  It was not overwritten. Final 1.9.3 validation/hash is recorded after rebuilding.
-- 1.9.3 validation: 37 unit tests passed; lint 0 errors / 13 warnings;
-  assembleDebug and signature verification passed. Package ID and pinned certificate
-  are unchanged; packaged permissions contain no INTERNET permission. Repository audit
-  passed. No Android device was connected, so visual/PiP checks remain outstanding.
-- 1.9.3 APK SHA-256: `77a428e8ecabf7d4b6ded4d8558d12fbefb8facc4142e4719ac34d8bbcc647f9`.
-- Original APKs/signing identity are preserved. No GitHub upload was retried for this
-  layout request; the previous explicit-publication approval remains outstanding.
-- Phone-only checks: status/navigation insets, landscape and large fonts, Home scroll
-  behavior, Library ↔ sheet ↔ PiP video handoff and actual screen readability.
-
-### September 9 update: current continuation checkpoint
-
-- The approved UI and local-library additions are in 1.9.1. Now Playing is an
-  in-Activity sheet, not a separate Dialog window, preserving PiP/surface ownership.
-  One transition owns scrim and sheet lifetimes: transferring video back before the
-  slide finishes would produce blank/sound-only frames. Verify navigation on a phone.
-- Secondary controls collapse behind an arrow. A–B is off by default and clears its
-  active range when disabled. A/B markers, mixer thumbnails, directional seek feedback,
-  smaller waveform bar counts and expanded local diagnostics are implemented.
-- Added local display overrides, natural sort, optional metadata/lyrics search,
-  multi-selection, rule playlists, removal undo, enhanced LRC/TTML/SRT and CUE tracks.
-  CUE IDs are virtual; every file IO, artwork, duplicate check, restore and permission
-  check must use sourcePath/sourceMediaPath, never treat the ID as a physical filename.
-- Queue edits now read back MediaController's actual queue. Updating a UI snapshot
-  after synchronous listener callbacks applied reorder twice; sorting the library
-  must never silently replace an active playback queue.
-- Position persistence had triggered full-library sorting. Only library-relevant
-  preference changes now sort, off the main thread. Saved exclusions load before the
-  first scan. Refresh preserves the existing list rather than flashing an empty state.
-- Thumbnail decode concurrency is globally limited to two, including visible requests
-  and preload. Fixed striped locks bound memory and prevent duplicate decode races.
-  Playback taps yield warmup capacity then resume the 300-item warmup; the previous
-  unconditional cancellation left covers cold. No phone startup benchmark is claimed.
-- Waveform UI no longer normalizes already-normalized peaks a second time. That
-  flattened bars toward full height. New tracks clear stale peaks; unavailable decoding
-  is distinct from loading. Animation follows playback position, not fabricated beats.
-- Metadata cache reuses unchanged file/sidecar tags. A lifecycle-bound MediaStore
-  observer debounces refresh; this is not a complete incremental row-merge index.
-  Unindexed sidecars still need Refresh. Search indexing is optional and off by default.
-- Mini-window dimensions are 126×42dp audio / 110×63dp video. Defaults remain mini
-  window, repeat One, current-video background, English, system font and dark theme.
-- Original media files are unchanged by these additions. CUE tracks sharing a physical
-  source are collapsed before duplicate hashing; playing sources are protected.
-  Display overrides and persisted cover grants are not in portable JSON backups.
-- Final verification: 37 unit tests passed, lint 0 errors / 13 warnings, and
-  assembleDebug passed. APK metadata confirms version 1.9.1/code 54, the unchanged
-  application ID, the pinned certificate above and no INTERNET permission.
-  Public-repository audit passed for history, working files and APK containers.
-- APK SHA-256: `70d08304d6f9a2dfcda54f5f6775ca0da659e04fad530c2a5777128ba7cc9cfc`.
-  Artifact: `releases/GreaterArt-v1.9.1-debug.apk`. Created once, not overwritten.
-- Publishing checkpoint: automated approval rejected the combined commit/push command
-  before execution, including after the exact public remote was verified. Changes are
-  local and uncommitted on `codex/greater-art-v1.9`; no PR was created. Obtain explicit
-  approval to publish this source/docs/workflow/APK payload to the public repository.
-  Keep intermediate `releases/GreaterArt-v1.9.0-debug.apk` out of staging.
-- No connected Android device was available. Phone-only
-  checks remain: background/overlay transitions, red-X targeting, ten voices, Bluetooth,
-  large libraries/fonts, actual waveform shape and word-timing cadence.
-
-Hermes continuation: read this section, README and the current diff before editing.
-Preserve the package ID, pinned signing certificate and every named APK. Do not restore
-the intermediate 1.9.0 implementation over these fixes. Use the next unused version for
-any later APK. Keep any device reports separate from unit/lint/build evidence.
-
-### September 8 update: read before older historical notes
-
-- Hermes released 1.8.0 in `6fc92a2` and updated its release docs in `e6dcfe6`.
-  Both commits and the released APK are preserved. New work uses `codex/greater-art-v1.9`.
-- Previous / Play-Pause / Next and the timeline occupy the bottom of Now Playing.
-  Audio waveform sits above the transport row; the queue uses remaining space above.
-  Portrait video has no duplicate transport overlay; fullscreen keeps bottom overlays.
-- Mix opens simultaneous playback: main track plus up to nine audio layers. Extra
-  layers have pause, mute, level and removal. Added videos disable their video renderer.
-  Layers are temporary and never saved as listening history.
-- PlaybackService owns every layer and MediaSession. Extra buffers are limited to
-  2 MiB each. One AudioFocusRequest coordinates all voices. External focus loss, noisy
-  routes, Bluetooth removal and service destruction apply to the full mix. Decoder
-  failures remove the failing layer. Ten is a capacity ceiling; actual codec capacity
-  depends on the phone and formats, and is not yet device-tested.
-- Mixer gains divide by total allocated voice count to retain headroom. Removing
-  layers restores main gain. ReplayGain applies to the main track only.
-- Red-X and stop-intent entry points synchronously stop every mixer voice before
-  requesting service destruction. The intermediate 1.9.0 APK is retained locally,
-  never overwritten; 1.9.1 adds this explicit shutdown step.
-- Current-video wallpaper is the new/reset default; explicitly saved choices remain.
-  It shares the main player's prepared decoder through VideoSurfaceOwner. Library and
-  Settings show the playing video; Now Playing takes surface ownership. Video navigation
-  avoids overlapping animations so views cannot compete for the same decoder output.
-- Only a separately selected custom MP4 uses a muted decoder, with a 4 MiB buffer.
-  It pauses when covered or the Activity is hidden. Hidden decorative animation stops.
-- Japanese, German, French and Cantonese join English and Traditional Chinese. Core
-  playback, navigation and settings translations are bundled offline. Cantonese uses
-  colloquial labels with Traditional Chinese fallback. Some older diagnostics,
-  interpolated messages and 1.8.0 utility dialogs retain English fallback. Native-speaker
-  review remains outstanding; do not claim every source literal is translated.
-- Fixed the missing Android Auto MEDIA_PLAY_FROM_SEARCH manifest declaration.
-  Internal media-ID validation now runs on IO instead of the main/service looper.
-- The eight features from the prior research batch landed in 1.8.0: tagged ReplayGain,
-  exclusions, exact duplicate report, system EQ, backup/restore, widget, car browsing,
-  and A–B repeat. The optional parody toggle remains default-off and unchanged here.
-- Verification: 21 unit tests passed; lint passed with 0 errors and 11 warnings;
-  assembleDebug passed. No phone is connected and no emulator is installed.
-- Remaining phone checks: ten voices, calls/Bluetooth, background notifications,
-  red-X closing all voices, lock screen, wallpaper transfers, large text and translations.
-
-Older numbered sections below are historical. Where they conflict, this section and
-the actual code describe the current implementation; no uncaptured crash is assumed.
-
-- Recursive local scan of all supported media under `Download`.
-- Cached thumbnails with a 300-item bounded two-worker warmup, prioritized viewport
-  lookahead, cache telemetry, search, name/custom sorting and playlists.
-- Media3 `MediaSessionService`, repeat-one default and notification controls.
-- Video fullscreen/rotation/PiP plus a separate tiny overlay mode.
-- Mini window is the new/reset default floating shape. Android automatic PiP is
-  explicitly disarmed for this mode so it cannot steal the Home-button transition.
-- Tiny overlay sizes: 124×40dp audio and 108×61dp video.
-- Default dark theme and animated black liquid-metal surfaces.
-- App backgrounds: default metal, custom image, muted MP4 and current video.
-- Background selection uses `OpenDocument` plus persisted read permission; it adds no
-  broad permission or network access.
-- English and Traditional Chinese settings.
-- Player screen has a compact Speed / Off-One-All-Random / Sleep row and an
-  unlabelled thumbnail-backed queue in the remaining space. Queue numbering is never
-  shown; format/duration/size appear only when Show file details is enabled.
-- Tapping the system mini window returns directly to Now Playing.
-- Matching sibling `.lrc` files display synchronized, seekable local lyrics.
-- Embedded MP3/FLAC/Opus lyrics are a local fallback; untimed text remains static.
-- Audio waveform peaks come from real decoded PCM and are cached without blocking play.
-- Same-name images and `cover`/`folder`/`front`/`album`/`artwork` files fill artwork gaps.
-- Optional queue editing, M3U/M3U8 import/export, an offline font catalog and a
-  full-screen local system inspector are available in Settings.
-- `Silian Rail` is a reversible final font option: bundled EB Garamond small caps and
-  the in-app `PIERCE&PIERCE` identity. It now uses the same persisted picker value as
-  every other font; reset explicitly disables it.
-- Media3 1.11.0, DataStore 1.2.1, AndroidX Core 1.19.0 and Lifecycle 2.11.0.
-- Bluetooth A2DP/BLE/SCO/hearing-aid removal pauses playback immediately.
-- The foreground Activity keeps the display awake; the hardware power key still locks it.
-
-## Bugs Fixed and Why They Happened
-
-### 1. Android 13+ launch crash
-
-`MainActivity` registered a runtime broadcast receiver without declaring whether it
-was exported. With target SDK 37 this can throw `SecurityException` during launch.
-
-**Fix:** register through `ContextCompat.registerReceiver(...,
-RECEIVER_NOT_EXPORTED)` and guard `unregisterReceiver`.
-
-**Rule:** every dynamically registered app-internal receiver needs an explicit
-not-exported flag on modern Android.
-
-### 2. Mini window failed to return or started on the wrong screen
-
-A Compose `LaunchedEffect` tied overlay service lifetime to the current screen and a
-dead `miniWindowVisible` state. After the service stopped itself, the effect key could
-remain unchanged, so Compose did not restart it on the next background transition.
-
-**Fix:** remove the dead Compose state/effect. `MainActivity.onUserLeaveHint` starts the
-overlay, `onResume` removes stale overlays, and explicit floating-player actions route
-through the same Activity method.
-
-**Rule:** Activity/process lifecycle owns system overlays; navigation composables do not.
-
-### 3. Bottom mini player covered the entire library
-
-`LiquidMetalSurface` placed `Canvas(Modifier.fillMaxSize())` inside a `Box` used by
-`Scaffold.bottomBar`. That decorative canvas participated in measurement and demanded
-the maximum available height, so the bottom bar became effectively full-screen.
-
-**Fix:** use `BoxScope.matchParentSize()` for the canvas and cap the inner mini-player
-surface at 62dp. The canvas now follows content size without influencing it.
-
-**Rule:** decorative Box children use `matchParentSize`; `fillMaxSize` is for layout
-content that is supposed to affect measurement.
-
-### 4. Overlay instability and leaks
-
-Older service code used `root!!`, a full-screen transparent close target, unreleased
-controller futures and ambiguous touch handling.
-
-**Fix:** nullable views, bounded position, tiny optional close target, owned drag/click
-gesture, `performClick`, detached video surface and `MediaController.releaseFuture`.
-
-**Rule:** an optional overlay failure must degrade gracefully, not stop playback.
-
-### 5. Audio seek thumb stuck at the end
-
-The audio slider used millisecond-sized `Float` ranges. Long durations lose enough
-precision to produce unstable visual positioning.
-
-**Fix:** the waveform slider operates in a normalized `0f..1f` range and converts to
-milliseconds only when seeking.
-
-### 6. Black text on the black/custom background
-
-Transparent `Surface` and `Scaffold` containers relied on inferred content colors.
-For transparent colors, that inference can be unspecified or inherited from the
-Activity. Light mode also placed black foreground colors directly over black metal.
-
-**Fix:** transparent containers declare `onBackground`/`onSurface` explicitly,
-liquid-metal content provides a stable foreground color, and light mode places a
-94%-opaque light base over media backgrounds.
-
-**Rule:** transparent layout containers must declare content contrast; never assume
-`contentColorFor(Color.Transparent)` will match the pixels behind them.
-
-### 7. A selected custom background could not be replaced reliably
-
-The active Image/MP4 choice only re-selected its mode, which made tapping it look
-dead. Replacement decoding could also leave the previous bitmap displayed.
-
-**Fix:** tapping an active Image/MP4 choice reopens the document picker, the button
-changes to “Change”, the old persisted URI grant is released after replacement, and
-the old bitmap is cleared before decoding the new one.
-
-### 8. Red-X drop could race playback shutdown
-
-The overlay called `stopSelf()` before sending `controller.stop()`. Service destruction
-could release the controller first, leaving playback or the task alive.
-
-**Fix:** stop and clear media first, stop `PlaybackService`, remove the foreground
-notification and overlay, then open the stop intent. `MainActivity` stops both services
-and calls `finishAndRemoveTask()`.
-
-### 9. Red-X target was visibly misplaced and unreliable
-
-The target used a guessed fixed Y offset while collision used reconstructed display
-coordinates. Gesture navigation, rotation, cutouts and OEM insets made those two
-coordinate systems disagree.
-
-**Fix:** position the bottom-centered target inside the overlay's already-inset frame,
-recompute after configuration changes, keep it measured while hidden, and detect
-collision from the actual attached view rectangles returned by Android.
-
-**Rule:** overlay hit testing must compare real window coordinates; do not derive one
-window's rectangle from `displayMetrics`.
-
-### 10. Thumbnail preload repeatedly cancelled itself
-
-Library scrolling called lookahead for nearly every visible index. Warmup and
-lookahead shared one coroutine job, so each call cancelled work started by the last.
-Launching hundreds of preload coroutines also created avoidable scheduling pressure.
-
-**Fix:** warm the first 300 entries once, request later windows only when crossing a
-100-row boundary, separate warmup/lookahead jobs, and use two queue workers. Visible
-thumbnail requests bypass the background preload throttle while sharing per-file locks.
-
-**Rule:** scrolling may advance a bounded prefetch window; it must not restart the
-same cache job for every row.
-
-### 11. Random and repeat were competing controls
-
-Separate Shuffle and Repeat buttons could represent contradictory modes, wasted a
-whole row, and old code rebuilt the queue when toggling shuffle.
-
-**Fix:** a single cycle is now `Off → One → All → Random → Off`. Random enables
-Media3 shuffle with repeat-all and never rebuilds or restarts the current queue. The
-three secondary controls share one dark, equal-width row.
-
-### 12. Player screen wasted its lower half
-
-The audio artwork could consume most of the viewport while video controls left a
-large blank panel. Users had to return to the library to select another song.
-
-**Fix:** cap audio artwork from live constraints and give the remaining height to a
-lazy song list. The same list fills portrait video's control panel. Rows show cached
-thumbnails, highlight the current file and play on a single tap.
-
-### 13. Screen timed out during active use
-
-The app did not express that a visible local player should stay awake.
-
-**Fix:** `MainActivity` sets `FLAG_KEEP_SCREEN_ON`. This is scoped to the visible
-Activity, requires no new permission and does not defeat the physical lock button.
-
-### 14. Mini-window tap always returned to the library
-
-The overlay started `MainActivity` without stating which destination was intended,
-while the Compose screen state always initialized to Library.
-
-**Fix:** the overlay sends a one-shot `EXTRA_OPEN_PLAYER` intent using
-`CLEAR_TOP | SINGLE_TOP`. `MainActivity` consumes it in both `onCreate` and
-`onNewIntent`, then a request counter moves Compose to Now Playing once media exists.
-
-**Rule:** external/system entry points must communicate navigation intent explicitly;
-do not make an overlay depend on private composable state.
-
-### 15. Queue metadata ignored the details preference
-
-The player queue always rendered index and extension, duplicating information and
-showing `MP4` even when file details were disabled.
-
-**Fix:** remove section/count/row numbering completely. Render extension, duration and
-size only when the existing Show file details preference is enabled.
-
-### 16. Bluetooth disconnect could expose playback through the phone speaker
-
-Media3 noisy-route handling was enabled, but relying on one broadcast path leaves
-room for OEM routing differences.
-
-**Fix:** keep Media3 handling and also register an `AudioDeviceCallback`. Removing a
-Bluetooth A2DP, BLE, SCO or hearing-aid output pauses an actively playing player. The
-callback is unregistered before player release and requires no Bluetooth permission.
-
-### 17. Local lyric files were ignored
-
-There was no sibling-file resolver or timed-text parser.
-
-**Fix:** match `song.lrc` and `song.mp3.lrc` case-insensitively beside the current
-media, decode UTF-8/UTF-16 BOM with Big5 fallback, parse multiple timestamps and
-offsets, and display a synchronized three-line panel. Tapping a line seeks locally.
-
-### 18. Mini mode opened system Follow-video PiP
-
-Android 12+ automatic PiP was enabled for every playing video. The OS entered its own
-PiP before `onUserLeaveHint` could start `MiniWindowOverlayService`.
-
-**Fix:** `updatePictureInPictureParams` sets `autoEnterEnabled(false)` whenever the
-selected mode is Mini window. The explicit floating button uses the same routing rule.
-
-**Rule:** never arm two competing background-window mechanisms for one lifecycle event.
-
-### 19. Red X was offset on Samsung navigation layouts
-
-The overlay frame was already inset by Android, then code added the navigation-bar
-inset again. This double offset moved the target above its intended location.
-
-**Fix:** anchor an invisible 92dp hit target 12dp from the overlay frame bottom, keep
-the visible X at 56dp, and compare both attached views' real screen rectangles.
-
-### 20. First load visibly shook and thumbnail warmup competed with UI
-
-Both ViewModel initialization and Activity resume requested a full scan. Afterward,
-300 previews were warmed as one uninterrupted storage task.
-
-**Fix:** ignore duplicate active scans; warm the first 24 previews first, then process
-24-item chunks with short yields. Visible requests still share per-file locks.
-
-### 21. Large files could pressure the process
-
-Time-prioritized buffering could exceed a predictable memory envelope on very high
-bitrate local video.
-
-**Fix:** cap ExoPlayer target buffering at 96 MiB, retain only five seconds behind the
-playhead and preserve decoder fallback plus one bounded retry.
-
-### 22. Video sometimes produced sound but no picture
-
-The current-video wallpaper created a second ExoPlayer for the same file while the
-real player also needed a video decoder. Some phones expose only one usable hardware
-decoder, so audio continued while the foreground surface stayed black.
-
-**Fix:** the wallpaper reuses the existing MediaController, old PlayerViews detach on
-release, and the foreground video surface is keyed by media path so stale surfaces are
-rebuilt on track changes. Developer mode reports video size and first-frame delivery.
-
-**Rule:** one playing item gets one decoder pipeline. Multiple views may take turns
-owning its surface; they must not create competing players for decoration.
-
-### 23. Thumbnail preload looked random or incomplete
-
-Preload reordered all videos before audio artwork and scroll lookahead used coarse
-late windows. In a mixed library, visible audio rows could wait behind unrelated video
-frame extraction.
-
-**Fix:** preserve caller/viewport priority, prefetch a 96-item window around the live
-scroll position, retain the staged 300-item warmup, and use three bounded workers with
-shared per-file locks. Developer mode exposes memory/disk/generation/failure counters.
-
-### 24. Waveform cache had no reliable warm path
-
-Waveforms were requested only while their Composable existed. Navigation could cancel
-the request, and codec failures were invisible.
-
-**Fix:** audio media transitions warm the cache independently; direct WAV PCM parsing
-handles common integer/float WAV files before MediaCodec fallback; status and decoder
-errors appear in the local inspector. Clearing preview cache clears waveforms too.
-
-### 25. Red-X collision disagreed with the visible target
-
-The target was drawn as a circle but collision used its square WindowManager bounds.
-Invisible square corners therefore counted as a drop, which felt several pixels off.
-
-**Fix:** collision now measures the actual attached views and tests the mini-window
-rectangle against the visible target circle using its real center and radius.
-
-### 26. Developer mode did not help reproduce UI bugs
-
-The old AlertDialog exposed a few static strings and no rendering/cache evidence.
-
-**Fix:** a full-screen local inspector now reports player state, buffered position,
-video frame delivery, thumbnail/cache activity, waveform status/error, permissions,
-device/API and named screen regions. It can overlay region IDs and copy one bug report.
-Nothing is transmitted.
-
-### 27. Mini-window failures silently changed the user's setting
-
-The overlay failure broadcast called `setFloatingWindowMode(COMPACT)`. One temporary
-permission/OEM failure therefore became a permanent preference change, so later Home
-presses stopped requesting Mini even after the device condition recovered.
-
-**Fix:** remove the destructive fallback and leave the saved Mini choice untouched.
-Missing permission is handled by the explicit floating action/settings flow.
-
-**Rule:** a runtime fallback may degrade one attempt; it must not rewrite user intent.
-
-### 28. Mini tap could lose its Now Playing destination
-
-The intent request could arrive before the restored MediaController reported media.
-Navigation depended on one transient Compose timing window.
-
-**Fix:** treat the request as pending Activity state, observe both request and media
-readiness, then consume it only after switching to Now Playing.
-
-### 29. Waveforms exaggerated silence and duplicated decoder work
-
-Dividing by a single maximum made codec noise visible and one spike flattened the rest.
-Media transition warmup and the Composable could also decode the same full file twice.
-
-**Fix:** noise-gated percentile normalization, a versioned cache, atomic cache writes
-and one decoder mutex with a cache recheck. Track changes cancel obsolete warmups and
-give playback a brief head start. Unit tests cover silence, noise and range.
-
-### 30. Developer telemetry made normal scrolling stutter
-
-Thumbnail counters were collected at the app root even with Developer Mode disabled.
-Every memory hit, disk hit and generation update could recompose the whole screen.
-
-**Fix:** collect diagnostics only inside the enabled inspector branch. Normal use no
-longer observes those high-frequency counters.
-
-### 31. Thumbnail warmup competed with first layout and scrolling
-
-Three background workers began immediately after scanning while visible rows, artwork
-and the player were settling.
-
-**Fix:** visible requests remain direct, bulk warmup waits 300 ms, runs in 24-item
-stages with cooperative gaps, and uses two workers. Scroll lookahead advances in wider
-boundaries so it cancels/restarts less often.
-
-## Quarantined Build
-
-`v1.7.2` is a known-crashed build. Keep its file untouched for forensic comparison,
-but never use it as a baseline, publish it as latest, or overwrite it. No device logcat
-was captured for that exact APK, so do not invent a more specific crash cause.
-
-## Deferred Features
-
-**Parallel Mixer (Mix) — removed from UI for v1.9.11**
-
-The ParallelMixerDialog and mix layer infrastructure exist in PlaybackService and
-ParallelPlayback but the Mix button in SecondaryControlRow was non-functional (arrow
-toggle broken, dialog not opening cleanly). Removed the Mix control entirely to keep
-the UI clean. The underlying mixer code (addCommand, removeCommand, toggleCommand,
-volumeCommand, stopCommand, MAX_EXTRA_LAYERS=9, mixLevel calculation) remains in
-ParallelPlayback.kt and PlaybackService.kt for future re-enablement.
-
-Re-add when: dedicated Mix button or long-press action is designed, arrow toggle
-behavior is fixed, and device testing confirms 10-voice playback stability.
-
-**Secondary controls collapser — removed for v1.9.12**
-
-The "Playback options" arrow toggle (optionsExpanded) was a dead collapser with
-nothing meaningful to hide — Sleep and A-B repeat are always shown when their
-preferences are enabled. Removed the toggle state, IconButton, and
-AnimatedVisibility wrapper. A-B and Sleep buttons now render inline when enabled.
-This keeps the row simple and avoids a broken arrow that expands to nothing.
-
-### September 11 — v1.9.13/v1.9.14 Red X refinements
-- crossMargin 13→10→5 (5px higher total)
-- crossSize 37→34→28 (smaller white X icon)
-- crossBaseAlpha 0.85→0.95→0.98 (nearly opaque)
-- White X via `setColorFilter(SRC_IN)` over red cross drawable
-- Hit area (crossHitSize=61) unchanged
-
-### September 12 — v1.9.15 queue stability + waveform preload + scroll perf
-- NowPlayingQueue: explicit `LaunchedEffect(key1, key2, key3)` keys fix scroll restoration on track change
-- WaveformTimeline: canvas bars 80→60 (25% fewer draw calls/frame)
-- Waveform preload: `waveformAheadJob` loads next 3 queue items after 800ms delay; current track after 600ms
-- LiquidMetalSurface unchanged; scroll lag reduced
-
-## Background Implementation
-
-- `data/AppPreferences.kt`: `AppBackgroundMode`, persisted image/video URIs and dimming.
-- `ui/components/AppBackground.kt`: sampled image decoding and a muted background
-  ExoPlayer with its audio renderer disabled.
-- `ui/GreaterArtApp.kt`: document pickers, persisted URI grants and root background layer.
-- Custom background video pauses when the app stops and releases on disposal.
-- Current-video background shares the main decoder through VideoSurfaceOwner.
-- Unsupported or revoked custom content leaves the default metal background visible.
-
-## Build and Verification
-
-```powershell
-cd '<path-to-APPs-by-L>\greater-art'
-$env:JAVA_HOME = 'C:\Program Files\Android\openjdk\jdk-21.0.8'
-$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
-$env:GRADLE_USER_HOME = Join-Path $env:USERPROFILE '.gradle'
-& "$env:JAVA_HOME\bin\java.exe" -jar gradle\wrapper\gradle-wrapper.jar testDebugUnitTest lintDebug assembleDebug
-```
-
-Never overwrite a versioned APK. Copy a successful build to a new release filename,
-then verify its hash, signature and merged permissions.
-
-No phone/emulator is connected on this machine. Remaining manual smoke test:
-
-1. Install as an update over the previous signed build.
-2. Grant all-files and overlay access.
-3. Confirm the library scrolls while the bottom player is visible.
-4. Test image, muted MP4 and current-video backgrounds.
-5. Test audio/video mini overlay, drag-to-close and fallback behavior.
-6. Capture failures with
-   `adb logcat -s MiniWindowOverlayService:* AndroidRuntime:* System.err:*`.
-
-## User Constraints
-
-- Never overwrite a versioned APK; use patch versions for small work and minor versions
-  for major features.
-- Never change the application ID or pinned signing identity.
-- Always finish delivery with the exact APK path.
-- No ads, telemetry, analytics, accounts, Internet permission or cloud dependency.
-- Keep interfaces direct, clean, balanced and human; avoid generic generated styling.
-- Caveman Ultra + Ponytail Ultra are default working modes.
-- Preserve unrelated dirty files and never expose local secrets.
-
-## Copy-Paste Hermes Continuation Prompt
+## Product invariants
+
+- Local-first media player.
+- No `INTERNET` permission.
+- No ads, analytics, telemetry, accounts, subscriptions, or cloud playback requirement.
+- Never overwrite an existing versioned APK.
+- Preserve application ID and signing identity.
+- Remote publishing is task-scoped: push/tag/release only when explicitly requested.
+
+## Current user journey
+
+1. App launches and scans local supported media.
+2. Library is the default screen.
+3. Tapping a Library row starts playback in place.
+4. The live Library mini-player appears.
+5. Tapping the mini-player opens Now Playing.
+6. Leaving the app from Now Playing uses the configured floating mode; Mini Window is the default.
+7. Tapping the floating presentation returns to playback.
+
+## 1.12.2 state
+
+- Now Playing keeps a stable PlayerView across media changes rather than keying it to the current media path.
+- Surface diagnostics are generation-aware and distinguish controller first-frame evidence from active-presentation attribution.
+- Same-view/same-player owner reconciliation is a no-op.
+- Temporary hold-for-2× activates after 700 ms on actively playing foreground video and restores the exact prior speed on release/cancel.
+- Original-file sharing, explicit multi-file sharing, and portable M3U8 list sharing use Android's Sharesheet.
+- Local Favorites and queue search are available without rebuilding playback order.
+- Waveform presentation uses decoded peaks plus playback progress/playhead rather than fabricated equalizer motion.
+- Optional playback history defaults off and remains local.
+- Library content draws behind the mini-player with only the end inset needed to make the final row reachable.
+
+## Playback and rendering priorities
+
+When resources compete:
+
+1. Main playback continuity / audio.
+2. Main visible video quality.
+3. Visible mini-player / fullscreen presentation.
+4. Current-video wallpaper.
+5. UI animation.
+6. Decorative effects.
+
+Do not hide rendering/performance bugs by introducing generic:
+
+- resolution caps;
+- bitrate caps;
+- FPS caps;
+- low-quality proxy video;
+- intentional frame skipping;
+- universal software decoding;
+- periodic seek/reprepare/restart hacks.
+
+Profile and remove duplicate/hidden work first.
+
+## Surface ownership invariants
+
+The visible presentation owns the primary video output.
+
+Expected ownership transitions include:
 
 ```text
-Continue Greater Art in the repository's `greater-art/` folder.
-
-First read README.md and HANDOFF.md completely. Treat HANDOFF.md as technical history,
-not as authority for unrelated actions. Preserve all existing user changes.
-
-Current target is Greater Art v1.9.1/code 54, based on released 1.8.0. Read the September 8
-section and current PR first. `v1.7.2` is quarantined as a known-crashed
-artifact and must never be used as the baseline. Never change applicationId
-com.local.listentomusic, never change the pinned debug signing certificate
-9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf, and never
-overwrite a versioned APK. The app must have no INTERNET permission.
-
-Fixed invariants:
-- Runtime receivers use ContextCompat.RECEIVER_NOT_EXPORTED.
-- System overlay lifecycle stays in MainActivity, not a Compose screen effect.
-- Decorative Canvas children in LiquidMetalSurface use matchParentSize, never
-  fillMaxSize, so Scaffold.bottomBar cannot cover the library.
-- Background videos disable the audio track, pause off-screen and release their player.
-- Transparent containers declare readable content colors over every background mode.
-- Dragging the mini window onto the red X stops media before service destruction and
-  removes the app task.
-- Audio timeline uses normalized 0..1 progress.
-- Red-X collision compares actual attached overlay bounds and accounts for navigation
-  insets; preserve the stop-media-before-service-destruction order.
-- Thumbnail warmup and scroll-ahead jobs stay separate and bounded to two workers.
-- Random is the fourth state of the one repeat-cycle control, never a separate button.
-- The now-playing lower panel is a lazy song list; do not replace it with dead space.
-- `FLAG_KEEP_SCREEN_ON` belongs to the visible Activity, not a persistent wake lock.
-- Mini-window taps carry `EXTRA_OPEN_PLAYER`; consume it in both Activity intent paths.
-- Queue file metadata follows `showFileDetails`; never show indices or a queue count.
-- Bluetooth output removal pauses playback and the device callback must be unregistered.
-- Lyrics prefer sibling `.lrc`, then embedded MP3/FLAC/Opus text; preserve offline decoding.
-- Mini is the default; system auto-PiP must stay disabled while Mini is selected.
-- Red-X positioning must not double-count system navigation insets.
-- Startup scans stay deduplicated and 300-thumbnail warming remains staged.
-- Waveform work stays off the UI thread and must never delay playback.
-- Font files remain bundled with their licenses; no runtime downloads.
-- Never create a second player for current-video wallpaper; reuse and detach the one
-  MediaController surface to avoid audio-only black-video failures.
-- Red-X hit testing must match its visible circle, not the invisible square view bounds.
-- Overlay start failure must never rewrite the persisted Mini selection.
-- Cache telemetry must remain uncollected while Developer Mode is off.
-- Waveform requests share one decoder and recheck the versioned cache after locking.
-- All extra mixer players belong to PlaybackService; the limit is nine plus main.
-- One audio-focus owner pauses all voices on external focus loss or Bluetooth removal.
-- Keep timeline and transport at the bottom; reserve space instead of covering the queue.
-- Current-video wallpaper shares VideoSurfaceOwner with the primary video stage.
-
-Before editing, inspect git status and explain a concrete plan. After approval, work in
-Caveman Ultra + Ponytail Ultra: direct communication, root-cause fixes, human UI and
-aggressive verification without fake claims. Run unit tests, lint and assembleDebug;
-audit APK version, permissions and signing certificate. If no Android device is
-connected, say so plainly and provide the exact new APK path.
+LIBRARY_MINI -> NOW_PLAYING
+NOW_PLAYING -> FULLSCREEN / PiP
+FULLSCREEN / PiP -> NOW_PLAYING
+NOW_PLAYING -> LIBRARY_MINI
+MINI_WINDOW -> foreground Activity presentation
 ```
+
+Rules:
+
+- stale detach/release must never clear a newer owner's output;
+- same owner + same PlayerView + same player + unchanged binding is a no-op;
+- a new diagnostic generation should correspond to a meaningful output/media epoch, not ordinary recomposition;
+- current-video wallpaper must not steal the primary surface;
+- diagnostic first-frame events are renderer/controller evidence, not screen-capture proof.
+
+Current diagnosis: [docs/SURFACE_DEBUG_1.12.2.md](docs/SURFACE_DEBUG_1.12.2.md).
+
+## Performance rules
+
+Investigate jank in this order:
+
+1. surface/view churn;
+2. hidden work behind Now Playing;
+3. duplicate/current-video background work;
+4. broad Compose recomposition from playback position;
+5. waveform redraw cost;
+6. thumbnail work;
+7. allocation, GC, blur, overdraw, and other CPU/GPU stalls.
+
+Keep source video at native quality whenever the device supports it.
+
+## Privacy-sensitive features
+
+- Favorites are local.
+- Playback history is optional and defaults off.
+- Manual share/export actions are explicit user actions, not background sync.
+- Future voice/caption/desktop/handoff ideas are architecture proposals only unless implemented and verified.
+- Do not silently add a network speech/translation fallback.
+
+See [docs/LOCAL-FUTURES-1.12.2.md](docs/LOCAL-FUTURES-1.12.2.md).
+
+## Verification
+
+The 1.12.2 repository build reports:
+
+- 99 unit tests passing;
+- lint: 0 errors, 18 warnings, 1 hint;
+- debug assemble passed;
+- APK signature verification passed;
+- 16 KiB zip alignment passed;
+- packaged manifest has no `INTERNET` permission.
+
+No Android device/emulator was connected for that verification. Do not convert build/test evidence into claims about Samsung surface output, overlay geometry, Bluetooth behavior, Sharesheet compatibility, or actual frame pacing.
+
+## Before changing playback/surfaces
+
+Read:
+
+- `README.md`
+- `docs/SURFACE_DEBUG_1.12.2.md`
+- `docs/NODES.md` if touching graph/library navigation
+- the relevant runtime source
+
+Then reproduce/instrument before applying architectural workarounds.
+
+## Before changing documentation
+
+Check `app/build.gradle.kts` and the actual `releases/` tree first. Documentation must not get ahead of repository code/artifacts again.

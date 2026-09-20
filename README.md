@@ -1,49 +1,66 @@
 # APPs by L
 
-A public, expandable collection of experimental Android apps. Each app lives in its own top-level folder, with shared automation and transferable agent skills kept at the repository root.
+A public collection of experimental Android apps. Each app lives in its own top-level folder and is intended to be understandable, auditable, and usable without hidden service dependencies.
 
-> **Vibe-coded disclosure:** These apps were built through iterative conversations with AI coding agents. The human supplied the ideas, taste, constraints, testing feedback, and final decisions; AI produced substantial code, documentation, and automation. “Vibe-coded” is a description of the workflow, not a claim that the software is flawless.
+> **Vibe-coded disclosure:** these projects were built through iterative work with AI coding agents. Human direction, product decisions, testing feedback, and final acceptance remain part of the development process; substantial implementation and documentation were AI-assisted.
 
 ## Apps
 
-### `greater-art/`
+### Greater Art
 
-Greater Art is an ad-free, offline local audio and video player. It requests no Internet permission and contains no analytics, accounts, subscriptions, telemetry, or cloud features.
+A local-first Android audio/video player built with Kotlin, Jetpack Compose, and Media3.
 
-- Documentation: [`greater-art/README.md`](greater-art/README.md)
-- Ready APK: [`greater-art/releases/GreaterArt-1.12.1.apk`](greater-art/releases/GreaterArt-1.12.1.apk)
-- User film: [`greater-art-user-demo.html`](greater-art-user-demo.html)
-- Technical journey: [`greater-art-technical-demo.html`](greater-art-technical-demo.html)
-- Public landing page: [apps-by-l.vercel.app](https://apps-by-l.vercel.app/)
+- Current repository version: **1.12.2 (code 83)**
+- Documentation: [greater-art/README.md](greater-art/README.md)
+- APK: [greater-art/releases/GreaterArt-1.12.2.apk](greater-art/releases/GreaterArt-1.12.2.apk)
+- User demonstration: [greater-art-user-demo.html](greater-art-user-demo.html)
+- Technical demonstration: [greater-art-technical-demo.html](greater-art-technical-demo.html)
+- Source directory: [greater-art/](greater-art/)
 
-### `useless-calculator/`
+Greater Art intentionally has no Internet permission, advertising, accounts, analytics, telemetry, or cloud playback dependency.
 
-Useless Calculator is harmless satire about hostile mobile-app onboarding. It presents absurd terms and unused permission prompts before blocking `=` behind a fake `$29.99/month` subscription screen.
+### Offline Toolbox / LocalKit
 
-Despite the joke, it includes:
+An offline-first utility workbench for local file, text, media, scan, conversion, and device tasks.
 
-- no Internet or notification permission
-- no analytics, advertising, billing, or background service
-- no reading, storing, or transmitting granted data
-- no editable password, wallet-secret, seed-phrase, or credential field
+- Documentation: [offline-toolbox/README.md](offline-toolbox/README.md)
+- Privacy notes: [offline-toolbox/PRIVACY.md](offline-toolbox/PRIVACY.md)
+- Verification notes: [offline-toolbox/VERIFICATION.md](offline-toolbox/VERIFICATION.md)
+- Source directory: [offline-toolbox/](offline-toolbox/)
 
-- Documentation: [`useless-calculator/README.md`](useless-calculator/README.md)
-- Ready APK: [`useless-calculator/UselessCalculator-v1.1.0-debug.apk`](useless-calculator/UselessCalculator-v1.1.0-debug.apk)
+### Useless Calculator
 
-Each app folder is standalone and includes its own Android project files. Future apps should follow the same one-folder-per-app structure.
+A harmless parody of hostile permission and subscription onboarding wrapped around a calculator.
+
+- Documentation: [useless-calculator/README.md](useless-calculator/README.md)
+- APK: [useless-calculator/UselessCalculator-v1.1.0-debug.apk](useless-calculator/UselessCalculator-v1.1.0-debug.apk)
+- Source directory: [useless-calculator/](useless-calculator/)
+
+## Repository structure
+
+```text
+APPs-by-L/
+├── greater-art/
+├── offline-toolbox/
+├── useless-calculator/
+├── skills/
+├── scripts/
+├── .github/
+├── README.md
+├── SECURITY.md
+└── index.html
+```
+
+Historical implementation drafts, superseded promo pages, and duplicate session handoffs are intentionally kept out of the current tree. Git history remains the archive.
 
 ## Security and privacy
 
-This public repository is intentionally designed to contain no personal secrets, production credentials, signing keys, analytics identifiers, or machine-specific paths.
+This public repository is intended to contain no production credentials, personal signing keys, local machine secrets, analytics identifiers, or private user data.
 
-- Commit metadata uses a pseudonym and a GitHub noreply address.
-- Keystores, credentials, local Android configuration, environment files, and private writing are ignored.
-- `scripts/audit-public-repo.ps1` scans the working tree and reachable Git history for high-confidence credential patterns, sensitive filenames, local user paths, and public commit emails.
-- GitHub Actions runs that audit on pushes, pull requests, and a weekly schedule.
-- CodeQL analyzes Kotlin/Java code, dependency review checks pull requests, and Dependabot monitors Gradle and workflow dependencies.
-- Workflow dependencies are pinned to immutable commit SHAs and run with minimum permissions.
-
-The included APKs are personal debug builds. Never treat a public repository as a password vault, and never paste a live credential into an issue, source file, commit, or AI prompt. See [`SECURITY.md`](SECURITY.md) for private reporting guidance.
+- Keystores, credentials, environment files, and machine-local Android configuration are excluded.
+- `scripts/audit-public-repo.ps1` scans for high-confidence credential patterns, sensitive filenames, local user paths, and unsafe public commit metadata.
+- GitHub Actions runs repository verification and security checks.
+- See [SECURITY.md](SECURITY.md) for reporting guidance.
 
 Run the local audit from the repository root:
 
@@ -51,24 +68,6 @@ Run the local audit from the repository root:
 pwsh -NoProfile -File scripts/audit-public-repo.ps1
 ```
 
-## Portable agent skills
-
-The [`skills/`](skills/) directory contains two reusable skills:
-
-- `build-android-app-hermes` builds, verifies, packages, and prepares native Android apps for delivery.
-- `learn-reusable-skill` turns a completed workflow, conversation, file set, or URL collection into one transferable Hermes skill.
-
-To add this repository to CC-Switch, open **Skills -> Repository Management -> Add Repository** and use:
-
-- Owner: `Galahad369`
-- Name: `APPs-by-L`
-- Branch: `main`
-- Subdirectory: `skills`
-
-CC-Switch can then copy or link installed skills into supported Codex, Claude Code, Gemini, OpenCode, and Hermes skill directories.
-
 ## Build verification
 
-GitHub Actions tests, lints, and builds the Android projects. Local commands are documented in each app folder.
-
-The code and APKs are provided for experimentation and personal sideloading. Review the source, permissions, and build output before installing software from any public repository.
+Each Android app is a standalone Gradle project with its own build instructions. Public APKs are experimental/personal sideload builds; review source, permissions, and verification notes before installation.
