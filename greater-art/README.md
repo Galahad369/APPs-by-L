@@ -6,6 +6,11 @@ ads, analytics, accounts, telemetry, or network access.
 
 ## Features
 
+- v1.12.3 fixes Favorites for filenames whose persisted path uses URL-safe Base64,
+  including affected CJK paths. The reader accepts both legacy standard Base64 and
+  the current URL-safe format. Favorites can now be played and shared as a real list.
+  Now Playing also places the title, Favorite and current-file Share actions in one
+  compact row, with Queue/Search/queue export grouped directly above the queue.
 - v1.12.2 keeps the playback journey library-first: tapping a Library row starts playback in
   place, while tapping the live Library mini-player deliberately opens Now Playing.
   The list now draws behind that player instead of reserving a permanent blank band;
@@ -203,7 +208,7 @@ $env:GRADLE_USER_HOME = Join-Path $env:USERPROFILE '.gradle'
 Current release artifact:
 
 ```text
-releases/GreaterArt-1.12.2.apk
+releases/GreaterArt-1.12.3.apk
 ```
 
 Versioned APKs are never overwritten. Builds remain signed by the pinned personal
@@ -294,14 +299,14 @@ against maintained open-source Android players.
 
 ## Current Verification Boundary
 
-For 1.12.2 (code 83): 99 unit tests passed; lint reports 0 errors, 18 warnings and 1 hint; the debug
+For 1.12.3 (code 84): 102 unit tests passed; lint reports 0 errors, 18 warnings and 1 hint; the debug
 build and APK signature verification passed. The application ID/signing certificate
 are unchanged and the packaged manifest has no INTERNET permission. No Android device
 was connected for this review build.
 
-APK: `releases/GreaterArt-1.12.2.apk` (26,711,353 bytes)
+APK: `releases/GreaterArt-1.12.3.apk` (26,074,638 bytes)
 
-SHA-256: `09a15cadecb06bfbf3c562fd163db8b8aea76a2fabe296ee42a09806ce8fd0f5`.
+SHA-256: `ac20c6535245dbe2440020f6e61026f155a7d56744e9488115b2e5186b9b55cb`.
 
 The 1.9 series includes regression checks for mixer headroom, languages, natural
 sorting, playlist rules, CUE/M3U boundaries and local lyric parsing. Build checks do

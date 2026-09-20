@@ -42,11 +42,13 @@ private val cantonese = mapOf(
     "Record locally" to "淨係本機記", "No local play history" to "未有本機紀錄",
     "Burn history" to "燒晒紀錄", "Burn all play history?" to "燒晒所有聽歌紀錄？",
     "Favorites" to "心水歌", "Add to Favorites" to "加落心水歌", "Remove from Favorites" to "移出心水歌",
+    "Share Favorites" to "分享心水歌",
     "No favorites yet. Add them with the ⋮ button." to "仲未有心水歌，用 ⋮ 按鈕加落去。",
     "Share media file" to "分享原檔", "Share playlist" to "分享歌單", "Share current queue" to "分享而家個播放隊列",
     "Share current Library list" to "分享而家個歌庫清單", "Search current queue" to "搵而家個播放隊列",
     "Share selected media files" to "分享揀咗嘅原檔", "Share original media files?" to "分享原始媒體檔？",
     "Share files" to "分享檔案", "Could not share these files" to "分享唔到呢啲檔案",
+    "Queue" to "播放佇列",
 )
 
 // Bundled offline translations. Keys deliberately match the existing English copy
@@ -232,6 +234,7 @@ Toggle Ads On|広告をオンにする|Werbung aktivieren|Activer les pubs
 Optional parody: loud colours, wobbling buttons and a five-second skip. Buttons open a Rickroll in your browser.|任意のパロディ：派手な色、揺れるボタン、5秒スキップ。ボタンでブラウザが Rickroll を開きます。|Optionale Parodie: greller Farben, wackelnde Buttons und ein 5-Sekunden-Skip. Buttons öffnen einen Rickroll im Browser.|Parodie optionnelle : couleurs criardes, boutons qui tremblent et saut de 5 s. Les boutons ouvrent un Rickroll dans votre navigateur.
 ReplayGain|ReplayGain|ReplayGain|ReplayGain
 Favorites|お気に入り|Favoriten|Favoris
+Share Favorites|お気に入りを共有|Favoriten teilen|Partager les favoris
 No favorites yet. Add them with the ⋮ button.|まだお気に入りはありません。⋮ボタンから追加できます。|Noch keine Favoriten. Füge sie über ⋮ hinzu.|Aucun favori. Ajoutez-en avec le bouton ⋮.
 Add to Favorites|お気に入りに追加|Zu Favoriten hinzufügen|Ajouter aux favoris
 Remove from Favorites|お気に入りから削除|Aus Favoriten entfernen|Retirer des favoris
@@ -247,6 +250,7 @@ Current Library list|現在のライブラリリスト|Aktuelle Bibliotheksliste
 Share selected media files|選択したメディアファイルを共有|Ausgewählte Mediendateien teilen|Partager les fichiers sélectionnés
 Share original media files?|元のメディアファイルを共有しますか？|Originaldateien teilen?|Partager les fichiers originaux ?
 Share files|ファイルを共有|Dateien teilen|Partager les fichiers
+Queue|キュー|Warteschlange|File d’attente
 Could not share these files|これらのファイルを共有できませんでした|Diese Dateien konnten nicht geteilt werden|Impossible de partager ces fichiers
 """.trimIndent().lineSequence().filter { it.isNotBlank() }.associate { line ->
     val parts = line.split('|')

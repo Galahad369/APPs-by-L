@@ -11,8 +11,8 @@ android {
                 applicationId = "com.local.listentomusic"
                 minSdk = 26
                 targetSdk = 37
-                versionCode = 83
-                versionName = "1.12.2"
+                versionCode = 84
+                versionName = "1.12.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true

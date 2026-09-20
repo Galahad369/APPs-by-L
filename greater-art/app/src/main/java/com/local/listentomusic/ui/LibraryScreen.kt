@@ -339,8 +339,15 @@ fun LibraryScreen(
                         DropdownMenuItem(
                             text = { Text(uiText(language, "Play this list", "播放此清單")) },
                             leadingIcon = { Icon(Icons.Rounded.PlayArrow, null) },
-                            onClick = { playlistMenuOpen = false; activePlaylist?.let { onPlayPlaylist(it.id) } },
-                            enabled = activePlaylist != null && activePlaylist.paths.isNotEmpty(),
+                            onClick = {
+                                playlistMenuOpen = false
+                                when {
+                                    favouritesActive -> onPlayPlaylist(com.local.listentomusic.data.FAVOURITES_PLAYLIST_ID)
+                                    activePlaylist != null -> onPlayPlaylist(activePlaylist.id)
+                                }
+                            },
+                            enabled = if (favouritesActive) state.files.isNotEmpty()
+                                else activePlaylist != null && state.files.isNotEmpty(),
                         )
                         DropdownMenuItem(
                             text = { Text(uiText(language, "Create playlist", "建立播放清單")) },
@@ -348,9 +355,11 @@ fun LibraryScreen(
                             leadingIcon = { Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, null) },
                         )
                         DropdownMenuItem(
-                            text = { Text(if (activePlaylist == null)
-                                uiText(language, "Share current Library list", "分享目前音樂庫清單")
-                            else uiText(language, "Share playlist", "分享播放清單")) },
+                            text = { Text(when {
+                                favouritesActive -> uiText(language, "Share Favorites", "分享我的最愛")
+                                activePlaylist == null -> uiText(language, "Share current Library list", "分享目前音樂庫清單")
+                                else -> uiText(language, "Share playlist", "分享播放清單")
+                            }) },
                             leadingIcon = { Icon(Icons.Rounded.Share, null) },
                             enabled = state.files.isNotEmpty(),
                             onClick = { playlistMenuOpen = false; onShareCurrentList() },

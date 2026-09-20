@@ -1,8 +1,8 @@
 # HANDOFF — Greater Art Android Media Player
 
 **Project:** `greater-art/` in the repository checkout
-**Current version:** `1.12.2` (code 83)
-**Latest APK:** `releases/GreaterArt-1.12.2.apk` (verification below)
+**Current version:** `1.12.3` (code 84)
+**Latest APK:** `releases/GreaterArt-1.12.3.apk` (verification below)
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
@@ -20,6 +20,35 @@
   explicitly authorizes it; never infer that permission from this handoff.
 
 ## Current State
+
+### September 20 — 1.12.3 Favorites persistence and Now Playing hierarchy
+
+- Root cause of the Favorite failure: Favorite/excluded-folder paths were written
+  with URL-safe Base64, while the shared ordered-path reader only accepted standard
+  Base64. Paths whose encoding contains `/` versus `_` could be saved and then vanish
+  on the next DataStore emission; CJK filenames made this easy to reproduce.
+- `StoredPathListCodec` now writes one canonical URL-safe format and reads both that
+  format and the legacy standard alphabet. Custom order, Favorites and excluded
+  folders share the same codec. Three regression tests cover a real CJK Download path,
+  the legacy format and corrupt-entry isolation.
+- The built-in Favorites destination now behaves as a real list: Play this list works,
+  list sharing uses the Favorites identity, removing a Favorite refreshes the view,
+  and the inactive reorder affordance remains hidden.
+- Reclaimed the screenshot-reported Now Playing space without shrinking video or
+  touch targets. Title, Favorite and current-original-file Share share one 48 dp action
+  row. Queue, Search and M3U8 queue export form a clear queue header. Optional A–B and
+  Sleep controls consume no row when both settings are disabled.
+- Playback quality remains native: no max resolution, bitrate or FPS constraint was
+  introduced. This patch does not claim to resolve the separate Samsung first-frame
+  report without a new real-device diagnostic.
+- Verification: 102 tests, 0 failures/errors; lint 0 errors, 18 warnings and 1 hint;
+  APK v2 signature and 16 KiB alignment verified; package/version is
+  `com.local.listentomusic` 1.12.3/code 84; packaged manifest has no INTERNET permission.
+- Artifact: `releases/GreaterArt-1.12.3.apk`, 26,074,638 bytes, SHA-256
+  `ac20c6535245dbe2440020f6e61026f155a7d56744e9488115b2e5186b9b55cb`.
+- Device boundary: no Android device/emulator was connected. Favorite persistence and
+  the compact Now Playing layout still need the supplied Samsung phone smoke test.
+- Work remains local on `main`; no commit, push, tag, branch merge or remote release.
 
 ### September 20 — 1.12.2 surface continuity, offline sharing and Library dead-band fix
 

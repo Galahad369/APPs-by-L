@@ -301,8 +301,11 @@ fun GreaterArtApp(
                         },
                         onShareCurrentList = {
                             navigationScope.launch {
-                                val label = settings.playlists.firstOrNull { it.id == settings.activePlaylistId }?.name
-                                    ?: uiText(settings.appLanguage, "Current Library list", "目前音樂庫清單")
+                                val label = when (settings.activePlaylistId) {
+                                    com.local.listentomusic.data.FAVOURITES_PLAYLIST_ID -> uiText(settings.appLanguage, "Favorites", "我的最愛")
+                                    else -> settings.playlists.firstOrNull { it.id == settings.activePlaylistId }?.name
+                                        ?: uiText(settings.appLanguage, "Current Library list", "目前音樂庫清單")
+                                }
                                 AndroidShare.list(context, label, library.files, uiText(settings.appLanguage, "Share current Library list", "分享目前音樂庫清單")).onFailure {
                                     android.widget.Toast.makeText(context, uiText(settings.appLanguage, "Could not share this list", "無法分享此清單"), android.widget.Toast.LENGTH_LONG).show()
                                 }
@@ -425,6 +428,15 @@ fun GreaterArtApp(
                     viewModel::loadWaveform, viewModel::moveQueueItem, viewModel::removeQueueItem,
                     viewModel::beginTemporaryDoubleSpeed, viewModel::endTemporaryDoubleSpeed,
                     playback.currentPath in settings.favouritePaths, viewModel::toggleFavourite,
+                    {
+                        val current = queue.firstOrNull { it.path == playback.currentPath }
+                            ?: library.files.firstOrNull { it.path == playback.currentPath }
+                        if (current != null) {
+                            AndroidShare.media(context, current, uiText(settings.appLanguage, "Share media file", "分享媒體檔案")).onFailure {
+                                android.widget.Toast.makeText(context, uiText(settings.appLanguage, "Could not share this file", "無法分享此檔案"), android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    },
                     {
                         navigationScope.launch {
                             AndroidShare.list(context, uiText(settings.appLanguage, "Current queue", "目前播放佇列"), queue,

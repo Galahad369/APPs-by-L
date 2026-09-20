@@ -196,6 +196,7 @@ fun NowPlayingScreen(
     onEndTemporaryDoubleSpeed: () -> Unit,
     isFavourite: Boolean,
     onToggleFavourite: (String) -> Unit,
+    onShareCurrentMedia: () -> Unit,
     onShareQueue: () -> Unit,
 ) {
     var fullscreen by rememberSaveable { mutableStateOf(false) }
@@ -289,6 +290,7 @@ fun NowPlayingScreen(
                         onShareQueue = onShareQueue,
                         isFavourite = isFavourite,
                         onToggleFavourite = { playback.currentPath?.let(onToggleFavourite) },
+                        onShareCurrentMedia = onShareCurrentMedia,
                         modifier = Modifier.fillMaxWidth().weight(1f),
                     )
                 }
@@ -326,6 +328,7 @@ fun NowPlayingScreen(
                 onShareQueue = onShareQueue,
                 isFavourite = isFavourite,
                 onToggleFavourite = { playback.currentPath?.let(onToggleFavourite) },
+                onShareCurrentMedia = onShareCurrentMedia,
             )
         }
     }
@@ -540,6 +543,7 @@ private fun AudioPlayer(
     onShareQueue: () -> Unit,
     isFavourite: Boolean,
     onToggleFavourite: () -> Unit,
+    onShareCurrentMedia: () -> Unit,
 ) {
     var waveformLoading by remember(playback.currentPath) { mutableStateOf(true) }
     val waveform by produceState<FloatArray?>(null, playback.currentPath) {
@@ -613,24 +617,17 @@ private fun AudioPlayer(
                 .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 0.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(
-                com.local.listentomusic.model.mediaTitle(playback.title, playback.currentPath),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
+            CurrentMediaHeader(
+                playback = playback,
+                isFavourite = isFavourite,
+                onToggleFavourite = onToggleFavourite,
+                onShareCurrentMedia = onShareCurrentMedia,
+                headline = true,
             )
-            Spacer(Modifier.height(12.dp))
-            SecondaryControlRow(
-                                                queue = queue,
-                                                onLoadThumbnail = onLoadThumbnail,
-                                                playback = playback,
-                                                 onSleepTimer = onSleepTimer,
-                                                 sleepTimer = sleepTimer,
-                                                 isFavourite = isFavourite,
-                                                 onToggleFavourite = onToggleFavourite,
-                                             )
+            if (playback.showAbRepeat || playback.showSleepControl) {
+                Spacer(Modifier.height(4.dp))
+                SecondaryControlRow(playback, onSleepTimer, sleepTimer)
+            }
             PlaybackError(playback.errorMessage)
             Spacer(Modifier.height(10.dp))
             NowPlayingQueue(
@@ -734,33 +731,26 @@ private fun SecondaryControls(
     onShareQueue: () -> Unit,
     isFavourite: Boolean,
     onToggleFavourite: () -> Unit,
+    onShareCurrentMedia: () -> Unit,
     modifier: Modifier,
 ) {
-    val onSurface = MaterialTheme.colorScheme.onSurface
     Column(
         modifier = modifier
             .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 0.dp),
         horizontalAlignment = Alignment.Start,
     ) {
-        Text(
-            com.local.listentomusic.model.mediaTitle(playback.title, playback.currentPath),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            color = onSurface,
+        CurrentMediaHeader(
+            playback = playback,
+            isFavourite = isFavourite,
+            onToggleFavourite = onToggleFavourite,
+            onShareCurrentMedia = onShareCurrentMedia,
+            headline = false,
         )
-        Spacer(Modifier.height(6.dp))
-        SecondaryControlRow(
-                                            queue = queue,
-                                            onLoadThumbnail = onLoadThumbnail,
-                                            playback = playback,
-                                             onSleepTimer = onSleepTimer,
-                                             sleepTimer = sleepTimer,
-                                             isFavourite = isFavourite,
-                                             onToggleFavourite = onToggleFavourite,
-                                         )
+        if (playback.showAbRepeat || playback.showSleepControl) {
+            Spacer(Modifier.height(4.dp))
+            SecondaryControlRow(playback, onSleepTimer, sleepTimer)
+        }
         PlaybackError(playback.errorMessage)
         Spacer(Modifier.height(6.dp))
         NowPlayingQueue(
@@ -843,7 +833,12 @@ private fun NowPlayingQueue(
                     },
                 )
             } else {
-                Spacer(Modifier.weight(1f))
+                Text(
+                    uiText(language, "Queue", "播放佇列"),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f).padding(start = 7.dp),
+                )
                 IconButton(onClick = { searchOpen = true }, modifier = Modifier.inspectElement("QUEUE_SEARCH_BUTTON", "Searches the current queue without changing its order")) {
                     Icon(Icons.Rounded.Search, uiText(language, "Search current queue", "搜尋目前播放佇列"))
                 }
@@ -1276,14 +1271,47 @@ private fun PlayerBottomControls(
 }
 
 @Composable
+private fun CurrentMediaHeader(
+    playback: PlaybackUiState,
+    isFavourite: Boolean,
+    onToggleFavourite: () -> Unit,
+    onShareCurrentMedia: () -> Unit,
+    headline: Boolean,
+) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            com.local.listentomusic.model.mediaTitle(playback.title, playback.currentPath),
+            style = if (headline) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleMedium,
+            fontWeight = if (headline) FontWeight.Bold else FontWeight.SemiBold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f).padding(start = if (headline) 0.dp else 2.dp, end = 4.dp),
+        )
+        IconButton(
+            onClick = onToggleFavourite,
+            modifier = Modifier.inspectElement("FAVOURITE_BUTTON", "Stores the current file in the local Favorites list"),
+        ) {
+            Icon(
+                if (isFavourite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                uiText(playback.appLanguage, if (isFavourite) "Remove from Favorites" else "Add to Favorites", if (isFavourite) "從我的最愛移除" else "加入我的最愛"),
+                tint = if (isFavourite) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outline,
+            )
+        }
+        IconButton(
+            onClick = onShareCurrentMedia,
+            modifier = Modifier.inspectElement("SHARE_CURRENT_MEDIA_BUTTON", "Shares the current original media file"),
+        ) {
+            Icon(Icons.Rounded.Share, uiText(playback.appLanguage, "Share media file", "分享媒體檔案"))
+        }
+    }
+}
+
+@Composable
 private fun SecondaryControlRow(
-    queue: List<MediaFile>,
-    onLoadThumbnail: suspend (MediaFile) -> Bitmap?,
     playback: PlaybackUiState,
     onSleepTimer: (Long) -> Unit,
     sleepTimer: SleepTimerState,
-    isFavourite: Boolean,
-    onToggleFavourite: () -> Unit,
 ) {
     val practice by com.local.listentomusic.playback.PracticeLoop.state.collectAsState()
     var sleepMenuOpen by remember { mutableStateOf(false) }
@@ -1301,13 +1329,6 @@ private fun SecondaryControlRow(
         else -> uiText(playback.appLanguage, "Sleep", "睡眠")
     }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onToggleFavourite, modifier = Modifier.inspectElement("FAVOURITE_BUTTON", "Stores a local-only favourite")) {
-            Icon(
-                if (isFavourite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                uiText(playback.appLanguage, if (isFavourite) "Remove from Favorites" else "Add to Favorites", if (isFavourite) "從我的最愛移除" else "加入我的最愛"),
-                tint = if (isFavourite) activeColor else outline,
-            )
-        }
         if (playback.showAbRepeat) Button(
             onClick = { com.local.listentomusic.playback.PracticeLoop.mark(playback.currentPath, playback.positionMs) },
             modifier = Modifier.weight(1f).height(40.dp), colors = controlColors,

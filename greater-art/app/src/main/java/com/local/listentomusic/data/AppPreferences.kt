@@ -258,9 +258,7 @@ class AppPreferences(private val context: Context) {
 
     suspend fun setCustomOrder(paths: List<String>) {
         context.dataStore.edit {
-            it[Keys.customOrder] = paths.joinToString("\n") { path ->
-                Base64.encodeToString(path.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-            }
+            it[Keys.customOrder] = StoredPathListCodec.encode(paths)
             it[Keys.sortMode] = SortMode.CUSTOM.name
         }
     }
@@ -340,7 +338,7 @@ class AppPreferences(private val context: Context) {
     suspend fun toggleFavourite(path: String) = edit { prefs ->
         val values = decodeOrder(prefs[Keys.favouritePaths].orEmpty()).toMutableList()
         if (!values.remove(path)) values.add(path)
-        prefs[Keys.favouritePaths] = values.distinct().joinToString("\n") { encode(it) }
+        prefs[Keys.favouritePaths] = StoredPathListCodec.encode(values)
     }
 
     suspend fun recordPlayed(path: String, atEpochMs: Long = System.currentTimeMillis()) {
@@ -358,7 +356,7 @@ class AppPreferences(private val context: Context) {
 
     suspend fun clearPlayHistory() = edit { it.remove(Keys.playHistory) }
     suspend fun setExcludedFolders(value: List<String>) = edit { prefs ->
-        prefs[Keys.excludedFolders] = value.distinct().sorted().joinToString("\n") { encode(it) }
+        prefs[Keys.excludedFolders] = StoredPathListCodec.encode(value.distinct().sorted())
     }
     suspend fun setJokeAdsEnabled(value: Boolean) = edit { it[Keys.jokeAdsEnabled] = value }
     suspend fun setActivePlaylist(id: String?) = edit { prefs ->
@@ -462,15 +460,7 @@ class AppPreferences(private val context: Context) {
         context.dataStore.edit { block(it) }
     }
 
-    private fun decodeOrder(encoded: String): List<String> = encoded
-        .lineSequence()
-        .filter { it.isNotBlank() }
-        .mapNotNull {
-            runCatching {
-                Base64.decode(it, Base64.NO_WRAP).toString(Charsets.UTF_8)
-            }.getOrNull()
-        }
-        .toList()
+    private fun decodeOrder(encoded: String): List<String> = StoredPathListCodec.decode(encoded)
 
     private suspend fun updatePlaylists(transform: (List<LocalPlaylist>) -> List<LocalPlaylist>) {
         context.dataStore.edit { prefs ->

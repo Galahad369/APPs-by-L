@@ -669,10 +669,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun playPlaylist(id: String) {
         val player = _controller.value ?: return
-        val playlist = userPreferences.playlists.firstOrNull { it.id == id } ?: return
         val byPath = scannedFiles.associateBy { it.path }
-        val queue = playlist.rule?.let { rule -> scannedFiles.filter { rule.matches(it, MediaScanner.targetFolder().path) } }
-            ?: playlist.paths.mapNotNull(byPath::get)
+        val queue = if (id == com.local.listentomusic.data.FAVOURITES_PLAYLIST_ID) {
+            userPreferences.favouritePaths.mapNotNull(byPath::get)
+        } else {
+            val playlist = userPreferences.playlists.firstOrNull { it.id == id } ?: return
+            playlist.rule?.let { rule -> scannedFiles.filter { rule.matches(it, MediaScanner.targetFolder().path) } }
+                ?: playlist.paths.mapNotNull(byPath::get)
+        }
         if (queue.isEmpty()) return
         lastPlaybackError = null
         player.setMediaItems(queue.map(MediaFile::toMediaItem), 0, 0L)
@@ -681,11 +685,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun filesForPlaylist(id: String): List<MediaFile> {
-        val playlist = userPreferences.playlists.firstOrNull { it.id == id } ?: return emptyList()
         val decorated = scannedFiles.map { file -> userPreferences.localOverrides[file.path]?.let { override ->
             file.copy(name = override.title.ifBlank { file.name }, coverUri = override.coverUri)
         } ?: file }
         val byPath = decorated.associateBy(MediaFile::path)
+        if (id == com.local.listentomusic.data.FAVOURITES_PLAYLIST_ID) {
+            return userPreferences.favouritePaths.mapNotNull(byPath::get)
+        }
+        val playlist = userPreferences.playlists.firstOrNull { it.id == id } ?: return emptyList()
         return playlist.rule?.let { rule -> decorated.filter { rule.matches(it, MediaScanner.targetFolder().path) } }
             ?: playlist.paths.mapNotNull(byPath::get)
     }

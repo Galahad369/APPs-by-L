@@ -2,9 +2,9 @@ HERMES SESSION HANDOFF — 2026-09-20
 
 PROJECT
 - Path: greater-art/
-- Version: 1.12.2 (code 83)
-- APK: releases/GreaterArt-1.12.2.apk
-- SHA-256: 09a15cadecb06bfbf3c562fd163db8b8aea76a2fabe296ee42a09806ce8fd0f5
+- Version: 1.12.3 (code 84)
+- APK: releases/GreaterArt-1.12.3.apk
+- SHA-256: ac20c6535245dbe2440020f6e61026f155a7d56744e9488115b2e5186b9b55cb
 - Package: com.local.listentomusic
 - Signing certificate: 9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf
 
@@ -17,22 +17,17 @@ CURRENT USER JOURNEY
 6. Leaving the app from Now Playing starts the configured floating mode; Mini is default.
 7. Tapping the floating window returns directly to Now Playing.
 
-1.12.2 CHANGES
-- Fixed the Library dead band above the bottom player: content draws behind it and the
-  final row gets only a scroll-end safety inset.
-- Preserved one PlayerView across media changes and made surface/frame diagnostics
-  generation-aware, fixing a confirmed false READY_VIDEO_NO_FRAME path.
-- Added 700 ms hold-for-temporary-2× on the foreground video with exact speed restore.
-- Added local Favorites and current-queue search without rebuilding playback order.
-- Added exact original-file Sharesheet sharing, explicit multi-file sharing, and
-  portable relative-path M3U8 sharing for Library, playlist and queue.
-- Waveform UI now shows decoded peaks with playback coloring and a precise playhead;
-  it does not synthesize fake equalizer activity.
-- Architecture-only future notes are in greater-art/docs/LOCAL-FUTURES-1.12.2.md.
+1.12.3 CHANGES
+- Fixed Favorite persistence for CJK/other paths affected by the standard-vs-URL-safe
+  Base64 mismatch; backward compatible with existing custom-order data.
+- Favorites now supports Play this list and correctly labelled list sharing.
+- Compact Now Playing header groups title + Favorite + current-file Share; the Queue
+  header owns Search + queue M3U8 export. Hidden A–B/Sleep controls reserve no space.
+- No video quality, bitrate or FPS cap was added.
 
 VERIFICATION
 - testDebugUnitTest lintDebug assembleDebug --offline --no-daemon --max-workers=2: PASS
-- 99 tests; 0 failures/errors
+- 102 tests; 0 failures/errors
 - Lint: 0 errors, 18 warnings, 1 hint
 - APK signature and 16 KiB zip alignment: PASS
 - Manifest: no INTERNET permission
