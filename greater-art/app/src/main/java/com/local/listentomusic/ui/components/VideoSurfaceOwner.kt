@@ -14,9 +14,10 @@ object VideoSurfaceOwner {
     private var foreground = false
     private var nowPlaying = false
     private var pip = false
+    private var handoffTarget: String? = null
     private var noOpReconciles = 0
     internal val state = MutableStateFlow(SurfaceLease())
-    val expectedOwner: String get() = expectedSurfaceOwner(foreground, nowPlaying, pip)
+    val expectedOwner: String get() = handoffTarget ?: expectedSurfaceOwner(foreground, nowPlaying, pip)
     fun setActivityForeground(value: Boolean) {
         if (foreground != value) { foreground = value; log("foreground=$value expected=$expectedOwner", active.get()) }
         reconcile()
@@ -25,6 +26,18 @@ object VideoSurfaceOwner {
         val changed = nowPlaying != nowPlayingVisible || pip != pictureInPicture
         nowPlaying = nowPlayingVisible; pip = pictureInPicture
         if (changed) log("presentationRequested=$expectedOwner", active.get())
+        reconcile()
+    }
+    fun beginHandoff(targetOwner: String) {
+        if (handoffTarget == targetOwner) return
+        handoffTarget = targetOwner
+        log("handoffBegin target=$targetOwner", active.get())
+        reconcile()
+    }
+    fun finishHandoff(targetOwner: String) {
+        if (handoffTarget != targetOwner) return
+        handoffTarget = null
+        log("handoffFinish target=$targetOwner expected=$expectedOwner", active.get())
         reconcile()
     }
     fun attach(player: Player?, target: PlayerView, overlay: Boolean = false) {
@@ -43,7 +56,7 @@ object VideoSurfaceOwner {
             // Mini -> app is a direct handoff to Now Playing. Keep the working overlay
             // surface until the NOW_PLAYING PlayerView has actually registered instead
             // of briefly dropping through LIBRARY_MINI / no-surface ownership.
-            if (shouldRetainMiniWindowForNowPlayingHandoff(
+            if (shouldRetainPrimarySurfaceDuringHandoff(
                     currentOwner = state.value.owner,
                     expectedOwner = expectedOwner,
                     expectedCandidateReady = false,

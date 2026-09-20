@@ -50,6 +50,7 @@ class MainActivity : ComponentActivity() {
     private var miniWindowSourceRect = Rect()
     private var returnScan: kotlinx.coroutines.Job? = null
     private var miniWindowReturnJob: kotlinx.coroutines.Job? = null
+    private var miniWindowExitJob: kotlinx.coroutines.Job? = null
     private var returningFromMiniWindow = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -125,7 +126,9 @@ class MainActivity : ComponentActivity() {
     override fun onPause() {
         returnScan?.cancel()
         miniWindowReturnJob?.cancel()
+        miniWindowExitJob?.cancel()
         com.local.listentomusic.ui.components.VideoSurfaceOwner.setActivityForeground(false)
+        com.local.listentomusic.ui.components.VideoSurfaceOwner.finishHandoff("MINI_WINDOW")
         super.onPause()
     }
 
@@ -184,9 +187,10 @@ class MainActivity : ComponentActivity() {
             !playback.isVideo ||
             viewModel.settings.value.floatingWindowMode == FloatingWindowMode.MINI_WINDOW
         ) {
-            if (startMiniWindowIfAllowed(openSettingsWhenMissing = true)) {
-                moveTaskToBack(true)
-            }
+            startMiniWindowIfAllowed(
+                openSettingsWhenMissing = true,
+                backgroundWhenReady = true,
+            )
             return
         }
         if (!playerScreenVisible || !playback.isVideo) return
@@ -196,7 +200,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun startMiniWindowIfAllowed(openSettingsWhenMissing: Boolean = false): Boolean {
+    private fun startMiniWindowIfAllowed(
+        openSettingsWhenMissing: Boolean = false,
+        backgroundWhenReady: Boolean = false,
+    ): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             if (openSettingsWhenMissing) {
                 runCatching {
@@ -211,15 +218,44 @@ class MainActivity : ComponentActivity() {
             return false
         }
         return runCatching {
-            com.local.listentomusic.ui.components.VideoSurfaceOwner.setActivityForeground(false)
+            val playback = viewModel.playback.value
+            // Request MINI_WINDOW without lying about Activity lifecycle. The old
+            // NOW_PLAYING surface remains valid until the destination is registered.
+            com.local.listentomusic.ui.components.VideoSurfaceOwner.beginHandoff("MINI_WINDOW")
             ContextCompat.startForegroundService(this, Intent(this, MiniWindowOverlayService::class.java).apply {
                 if (!miniWindowSourceRect.isEmpty) {
                     putExtra(MiniWindowOverlayService.EXTRA_START_X, miniWindowSourceRect.left)
                     putExtra(MiniWindowOverlayService.EXTRA_START_Y, miniWindowSourceRect.top)
                 }
             })
+            if (backgroundWhenReady) completeMiniWindowExit(playback.isVideo)
             true
-        }.getOrElse { false }
+        }.getOrElse {
+            com.local.listentomusic.ui.components.VideoSurfaceOwner.finishHandoff("MINI_WINDOW")
+            false
+        }
+    }
+
+    private fun completeMiniWindowExit(video: Boolean) {
+        miniWindowExitJob?.cancel()
+        if (!video) {
+            com.local.listentomusic.ui.components.VideoSurfaceOwner.setActivityForeground(false)
+            com.local.listentomusic.ui.components.VideoSurfaceOwner.finishHandoff("MINI_WINDOW")
+            moveTaskToBack(true)
+            return
+        }
+        miniWindowExitJob = lifecycleScope.launch {
+            // Keep Now Playing visible until the Mini Window has both ownership and
+            // a rendered frame. Timeout is failure cleanup, not normal sequencing.
+            withTimeoutOrNull(1_500L) {
+                com.local.listentomusic.ui.components.VideoSurfaceOwner.state.first {
+                    it.owner == "MINI_WINDOW" && it.firstFrame
+                }
+            }
+            com.local.listentomusic.ui.components.VideoSurfaceOwner.setActivityForeground(false)
+            com.local.listentomusic.ui.components.VideoSurfaceOwner.finishHandoff("MINI_WINDOW")
+            moveTaskToBack(true)
+        }
     }
 
     private fun handleStopIntent(intent: Intent?): Boolean {
@@ -244,6 +280,7 @@ class MainActivity : ComponentActivity() {
             nowPlayingVisible = true,
             pictureInPicture = false,
         )
+        com.local.listentomusic.ui.components.VideoSurfaceOwner.beginHandoff("NOW_PLAYING")
         openPlayerRequest++
         playerScreenVisible = true
     }
@@ -251,6 +288,7 @@ class MainActivity : ComponentActivity() {
     private fun completeMiniWindowReturn() {
         miniWindowReturnJob?.cancel()
         if (!viewModel.playback.value.isVideo) {
+            com.local.listentomusic.ui.components.VideoSurfaceOwner.finishHandoff("NOW_PLAYING")
             stopService(Intent(this, MiniWindowOverlayService::class.java))
             returningFromMiniWindow = false
             return
@@ -261,8 +299,9 @@ class MainActivity : ComponentActivity() {
             // leave a system overlay stuck above the foreground app.
             withTimeoutOrNull(1_500L) {
                 com.local.listentomusic.ui.components.VideoSurfaceOwner.state
-                    .first { it.owner == "NOW_PLAYING" }
+                    .first { it.owner == "NOW_PLAYING" && it.firstFrame }
             }
+            com.local.listentomusic.ui.components.VideoSurfaceOwner.finishHandoff("NOW_PLAYING")
             stopService(Intent(this@MainActivity, MiniWindowOverlayService::class.java))
             returningFromMiniWindow = false
         }
