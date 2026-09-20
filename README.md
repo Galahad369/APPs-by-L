@@ -10,9 +10,9 @@ A public collection of experimental Android apps. Each app lives in its own top-
 
 A local-first Android audio/video player built with Kotlin, Jetpack Compose, and Media3.
 
-- Current repository version: **1.12.3 (code 84)**
+- Current repository version: **1.12.5 (code 86)**
 - Documentation: [greater-art/README.md](greater-art/README.md)
-- APK: [greater-art/releases/GreaterArt-1.12.3.apk](greater-art/releases/GreaterArt-1.12.2.apk)
+- APK: [greater-art/releases/GreaterArt-1.12.5.apk](greater-art/releases/GreaterArt-1.12.5.apk)
 - User demonstration: [greater-art-user-demo.html](greater-art-user-demo.html)
 - Technical demonstration: [greater-art-technical-demo.html](greater-art-technical-demo.html)
 - Source directory: [greater-art/](greater-art/)

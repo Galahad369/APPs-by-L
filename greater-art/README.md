@@ -4,12 +4,20 @@ Greater Art is a native Kotlin/Jetpack Compose player for local music and video.
 
 ## Current release
 
-- Version: **1.12.3**
-- Version code: **84**
+- Version: **1.12.5**
+- Version code: **86**
 - Application ID: `com.local.listentomusic`
-- APK: `releases/GreaterArt-1.12.3.apk`
-- APK SHA-256: `ac20c6535245dbe2440020f6e61026f155a7d56744e9488115b2e5186b9b55cb`
+- APK: `releases/GreaterArt-1.12.5.apk`
+- APK SHA-256: `5f876dea74951e0cb44b05029cff6bd4c06431b7289f3ee3d1971474a524af4c`
 - Signing certificate SHA-256: `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
+- v1.12.5 makes the Now Playing ↔ Mini Window surface handoff symmetric and
+  readiness-gated. The working source surface stays alive until the destination owns
+  the player and renders its first frame; audio transitions do not wait on a video
+  frame. Mini Window returns directly to Now Playing without a task animation.
+- The release also adds a repository version-consistency gate so the Gradle version,
+  READMEs, handoff, landing-page link, release APK and APK SHA-256 cannot silently
+  drift apart again. See the
+  [ChatGPT → Hermes build playbook](docs/CHATGPT_TO_HERMES_BUILD_PLAYBOOK.md).
 - v1.12.3 fixes Favorites for filenames whose persisted path uses URL-safe Base64,
   including affected CJK paths. The reader accepts both legacy standard Base64 and
   the current URL-safe format. Favorites can now be played and shared as a real list.
@@ -124,7 +132,7 @@ $env:GRADLE_USER_HOME = Join-Path $env:USERPROFILE '.gradle'
 Current release artifact:
 
 ```text
-releases/GreaterArt-1.12.3.apk
+releases/GreaterArt-1.12.5.apk
 ```
 
 Versioned APKs are never overwritten. Builds remain signed by the pinned personal
@@ -174,22 +182,21 @@ app/src/main/java/com/local/listentomusic/
 
 ## Verification boundary
 
-The 1.12.2 build passed:
+For 1.12.5 (code 86): 105 unit tests passed; lint reports 0 errors, 18 warnings and 1 hint;
+the debug build, APK v2 signature and 16 KiB alignment checks passed. The application
+ID and pinned signing certificate are unchanged, and the packaged manifest has no
+INTERNET permission. No Android device was connected for this review build.
 
-For 1.12.3 (code 84): 102 unit tests passed; lint reports 0 errors, 18 warnings and 1 hint; the debug
-build and APK signature verification passed. The application ID/signing certificate
-are unchanged and the packaged manifest has no INTERNET permission. No Android device
-was connected for this review build.
+APK: `releases/GreaterArt-1.12.5.apk` (26,074,638 bytes)
 
-APK: `releases/GreaterArt-1.12.3.apk` (26,074,638 bytes)
-
-SHA-256: `ac20c6535245dbe2440020f6e61026f155a7d56744e9488115b2e5186b9b55cb`.
+SHA-256: `5f876dea74951e0cb44b05029cff6bd4c06431b7289f3ee3d1971474a524af4c`.
 
 Real-device checks remain required for visible surface output, overlay geometry, Sharesheet receivers, Bluetooth behavior, hold-to-2× cancellation, and device-specific performance.
 
 ## Current technical notes
 
 - [HANDOFF.md](HANDOFF.md) — concise continuation state and non-negotiable invariants.
+- [docs/CHATGPT_TO_HERMES_BUILD_PLAYBOOK.md](docs/CHATGPT_TO_HERMES_BUILD_PLAYBOOK.md) — exact recovery and release procedure when ChatGPT/GitHub work must be pulled and built by Hermes.
 - [docs/NODES.md](docs/NODES.md) — filename graph behavior and limits.
 - [docs/SURFACE_DEBUG_1.12.2.md](docs/SURFACE_DEBUG_1.12.2.md) — current surface-warning diagnosis.
 - [docs/LOCAL-FUTURES-1.12.2.md](docs/LOCAL-FUTURES-1.12.2.md) — architecture-only future possibilities.

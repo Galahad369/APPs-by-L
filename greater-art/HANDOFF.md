@@ -3,22 +3,46 @@
 This file describes the **current repository state only**. Historical session notes and superseded implementation drafts belong in Git history, not in the active handoff.
 
 **Project:** `greater-art/` in the repository checkout
-**Current version:** `1.12.4` (code 85), red X moved 1px higher in mini window
-**Latest APK:** `releases/GreaterArt-1.12.4.apk` (verification below)
+**Current version:** `1.12.5` (code 86)
+**Latest APK:** `releases/GreaterArt-1.12.5.apk` (verification below)
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 ## Repository state
 
 - Project: `greater-art/`
-- Version: **1.12.3**
-- Version code: **84**
+- Version: **1.12.5**
+- Version code: **86**
 - Application ID: `com.local.listentomusic`
-- APK: `releases/GreaterArt-1.12.3.apk`
-- APK SHA-256: `ac20c6535245dbe2440020f6e61026f155a7d56744e9488115b2e5186b9b55cb`
+- APK: `releases/GreaterArt-1.12.5.apk`
+- APK SHA-256: `5f876dea74951e0cb44b05029cff6bd4c06431b7289f3ee3d1971474a524af4c`
 - Signing certificate SHA-256: `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 `app/build.gradle.kts` is the version source of truth. Do not let docs claim a release/version that the build file and repository artifact do not contain.
+
+### September 21 — 1.12.5 symmetric surface handoff and release recovery
+
+- Merged every remaining remote feature/security branch into `main`. Two old fix
+  branches were patch-equivalent to changes already on main; their history was merged
+  without reapplying or reverting the working implementation.
+- Now Playing → Mini Window and Mini Window → Now Playing use the same explicit,
+  readiness-gated surface handoff. The source remains visible until the destination
+  owns the Media3 surface and renders a first frame. Audio skips the video-frame wait.
+- Mini Window return goes directly to Now Playing with Android task animation disabled.
+- Added the version-consistency CI/script from the security branch. It validates the
+  Gradle version, READMEs, handoff, landing page, APK filename and APK SHA-256.
+- The failed Hermes build was environmental rather than a Kotlin compiler failure:
+  the runner could not create the Gradle wrapper lock under the user `.gradle` cache,
+  and GitHub CLI was not installed for its attempted PR workflow. The exact recovery
+  path is documented in `docs/CHATGPT_TO_HERMES_BUILD_PLAYBOOK.md`.
+- Verification: 105 unit tests, 0 failures/errors; lint 0 errors, 18 warnings and 1
+  hint; debug assemble, APK v2 signature and 16 KiB alignment passed. Package is
+  `com.local.listentomusic` 1.12.5/code 86; no packaged INTERNET permission; pinned
+  signing certificate unchanged.
+- Artifact: `releases/GreaterArt-1.12.5.apk`, 26,074,638 bytes, SHA-256
+  `5f876dea74951e0cb44b05029cff6bd4c06431b7289f3ee3d1971474a524af4c`.
+- Device boundary: no Android device/emulator was connected. Both directions of the
+  overlay handoff still require a real-device visual smoke test.
 
 ### September 20 — 1.12.4 red X position + Mini→Now Playing handoff
 
@@ -164,9 +188,9 @@ See [docs/LOCAL-FUTURES-1.12.2.md](docs/LOCAL-FUTURES-1.12.2.md).
 
 ## Verification
 
-The 1.12.2 repository build reports:
+The 1.12.5 repository build reports:
 
-- 99 unit tests passing;
+- 105 unit tests passing;
 - lint: 0 errors, 18 warnings, 1 hint;
 - debug assemble passed;
 - APK signature verification passed;
