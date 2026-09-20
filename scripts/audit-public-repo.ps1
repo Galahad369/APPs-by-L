@@ -35,12 +35,29 @@ $credentialPatterns = @(
 )
 $credentialPattern = $credentialPatterns -join "|"
 
+# Keep workstation identities out of public source. Split literals so the
+# scanner does not match its own implementation.
+$localPathPatterns = @(
+    ("C:" + "[\\/]+Users[\\/]+[A-Za-z0-9._-]+[\\/]"),
+    ("/Users/" + "[A-Za-z0-9._-]+/")
+)
+$localPathPattern = $localPathPatterns -join "|"
+
 Write-Host "Scanning reachable Git history for credentials..."
 $commits = @(Invoke-Git rev-list --all)
 foreach ($commit in $commits) {
     $matches = @(& git @gitArgs grep -I -l -E $credentialPattern $commit -- ":!*.apk" 2>$null)
     if ($LASTEXITCODE -eq 0) {
         foreach ($match in $matches) { Add-Finding "Credential pattern in $match" }
+    } elseif ($LASTEXITCODE -gt 1) { throw "git grep failed while scanning $commit" }
+}
+
+Write-Host "Scanning current branch history for workstation home paths..."
+$headCommits = @(Invoke-Git rev-list HEAD)
+foreach ($commit in $headCommits) {
+    $matches = @(& git @gitArgs grep -I -l -E $localPathPattern $commit -- ":!*.apk" 2>$null)
+    if ($LASTEXITCODE -eq 0) {
+        foreach ($match in $matches) { Add-Finding "Workstation home path in $match" }
     } elseif ($LASTEXITCODE -gt 1) { throw "git grep failed while scanning $commit" }
 }
 
@@ -54,6 +71,7 @@ foreach ($relativePath in $workingFiles) {
         if ($item.Length -gt 5MB -or $item.Extension -eq ".apk") { continue }
         $content = [System.IO.File]::ReadAllText($path)
         if ($content -match $credentialPattern) { Add-Finding "Credential pattern in working file: $relativePath" }
+        if ($content -match $localPathPattern) { Add-Finding "Workstation home path in working file: $relativePath" }
     } catch [System.IO.IOException] { continue } catch [System.UnauthorizedAccessException] { continue }
 }
 
@@ -89,4 +107,4 @@ if ($findings.Count -gt 0) {
     Write-Host "Public repository audit failed with $($findings.Count) finding(s)." -ForegroundColor Red
     exit 1
 }
-Write-Host "[OK] No high-confidence secrets, sensitive filenames, or public author emails found." -ForegroundColor Green
+Write-Host "[OK] No high-confidence secrets, workstation home paths, sensitive filenames, or public author emails found." -ForegroundColor Green
