@@ -71,6 +71,11 @@ import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.RemoveCircleOutline
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Clear
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
@@ -79,6 +84,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -111,6 +118,11 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -132,10 +144,13 @@ import com.local.listentomusic.model.LocalLyrics
 import com.local.listentomusic.sleepTimerOptions
 import com.local.listentomusic.ui.components.LiquidMetalSurface
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
 internal val playbackSpeeds = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f)
+internal const val HOLD_2X_ACTIVATION_MS = 700L
 
 /** Side seek zones only. The middle 30% is deliberately inert on double tap. */
 internal fun doubleTapSeekDelta(x: Float, width: Float, seekOffsetMs: Long): Long? = when {
@@ -177,6 +192,11 @@ fun NowPlayingScreen(
     onLoadWaveform: suspend (String) -> FloatArray?,
     onMoveQueueItem: (Int, Int) -> Unit,
     onRemoveQueueItem: (Int) -> Unit,
+    onBeginTemporaryDoubleSpeed: () -> Boolean,
+    onEndTemporaryDoubleSpeed: () -> Unit,
+    isFavourite: Boolean,
+    onToggleFavourite: (String) -> Unit,
+    onShareQueue: () -> Unit,
 ) {
     var fullscreen by rememberSaveable { mutableStateOf(false) }
 
@@ -237,6 +257,8 @@ fun NowPlayingScreen(
                     onSeek = onSeek,
                     seekOffsetMs = seekOffsetMs,
                     onSeekBy = onSeekBy,
+                    onBeginTemporaryDoubleSpeed = onBeginTemporaryDoubleSpeed,
+                    onEndTemporaryDoubleSpeed = onEndTemporaryDoubleSpeed,
                     modifier = if (immersiveVideo) {
                         Modifier.fillMaxSize()
                     } else {
@@ -264,6 +286,9 @@ fun NowPlayingScreen(
                         onSeek = onSeek,
                         onMoveQueueItem = onMoveQueueItem,
                         onRemoveQueueItem = onRemoveQueueItem,
+                        onShareQueue = onShareQueue,
+                        isFavourite = isFavourite,
+                        onToggleFavourite = { playback.currentPath?.let(onToggleFavourite) },
                         modifier = Modifier.fillMaxWidth().weight(1f),
                     )
                 }
@@ -298,6 +323,9 @@ fun NowPlayingScreen(
                 onLoadWaveform = onLoadWaveform,
                 onMoveQueueItem = onMoveQueueItem,
                 onRemoveQueueItem = onRemoveQueueItem,
+                onShareQueue = onShareQueue,
+                isFavourite = isFavourite,
+                onToggleFavourite = { playback.currentPath?.let(onToggleFavourite) },
             )
         }
     }
@@ -319,6 +347,8 @@ private fun VideoPlayerStage(
     onSeek: (Long) -> Unit,
     seekOffsetMs: Long = 5_000L,
     onSeekBy: (Long) -> Unit,
+    onBeginTemporaryDoubleSpeed: () -> Boolean,
+    onEndTemporaryDoubleSpeed: () -> Unit,
     modifier: Modifier,
 ) {
     var controlsVisible by rememberSaveable { mutableStateOf(true) }
@@ -328,6 +358,8 @@ private fun VideoPlayerStage(
     val hasDuration = playback.durationMs > 0L
     val maximum = if (hasDuration) playback.durationMs.toFloat() else 1f
     val position = if (seeking) seekPosition else if (hasDuration) playback.positionMs.toFloat() else 0f
+    val haptics = LocalHapticFeedback.current
+    var temporaryDoubleSpeed by remember { mutableStateOf(false) }
 
     LaunchedEffect(controlsVisible, playback.isPlaying, playback.currentPath) {
         if (controlsVisible && playback.isPlaying) {
@@ -340,6 +372,23 @@ private fun VideoPlayerStage(
         modifier = modifier.inspectElement("VIDEO_STAGE", "Side double-tap seeks; center double-tap does nothing")
             .background(Color.Black).pointerInput(seekOffsetMs) {
             detectTapGestures(
+                onPress = {
+                    coroutineScope {
+                        val activation = launch {
+                            delay(HOLD_2X_ACTIVATION_MS)
+                            if (playback.isPlaying && onBeginTemporaryDoubleSpeed()) {
+                                temporaryDoubleSpeed = true
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            }
+                        }
+                        tryAwaitRelease()
+                        activation.cancel()
+                        if (temporaryDoubleSpeed) {
+                            onEndTemporaryDoubleSpeed()
+                            temporaryDoubleSpeed = false
+                        }
+                    }
+                },
                 onTap = { controlsVisible = !controlsVisible },
                 onDoubleTap = { offset ->
                     doubleTapSeekDelta(offset.x, size.width.toFloat(), seekOffsetMs)?.let { delta ->
@@ -352,6 +401,20 @@ private fun VideoPlayerStage(
         contentAlignment = Alignment.Center,
     ) {
         VideoSurface(playback.currentPath, controller, onVideoBoundsChanged, Modifier.fillMaxSize())
+        AnimatedVisibility(
+            visible = temporaryDoubleSpeed,
+            enter = fadeIn(tween(100)),
+            exit = fadeOut(tween(120)),
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 18.dp),
+        ) {
+            Text(
+                "2×",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.clip(CircleShape).background(Color.Black.copy(alpha = .58f))
+                    .padding(horizontal = 13.dp, vertical = 7.dp),
+            )
+        }
         SeekFeedback(seekFeedback.first, seekFeedback.second, Modifier.align(if (seekFeedback.first < 0) Alignment.CenterStart else Alignment.CenterEnd))
 
         AnimatedVisibility(
@@ -474,6 +537,9 @@ private fun AudioPlayer(
     onLoadWaveform: suspend (String) -> FloatArray?,
     onMoveQueueItem: (Int, Int) -> Unit,
     onRemoveQueueItem: (Int) -> Unit,
+    onShareQueue: () -> Unit,
+    isFavourite: Boolean,
+    onToggleFavourite: () -> Unit,
 ) {
     var waveformLoading by remember(playback.currentPath) { mutableStateOf(true) }
     val waveform by produceState<FloatArray?>(null, playback.currentPath) {
@@ -560,9 +626,11 @@ private fun AudioPlayer(
                                                 queue = queue,
                                                 onLoadThumbnail = onLoadThumbnail,
                                                 playback = playback,
-                                                onSleepTimer = onSleepTimer,
-                                                sleepTimer = sleepTimer,
-                                            )
+                                                 onSleepTimer = onSleepTimer,
+                                                 sleepTimer = sleepTimer,
+                                                 isFavourite = isFavourite,
+                                                 onToggleFavourite = onToggleFavourite,
+                                             )
             PlaybackError(playback.errorMessage)
             Spacer(Modifier.height(10.dp))
             NowPlayingQueue(
@@ -578,6 +646,7 @@ private fun AudioPlayer(
                 onLoadThumbnail = onLoadThumbnail,
                 onMoveQueueItem = onMoveQueueItem,
                 onRemoveQueueItem = onRemoveQueueItem,
+                onShareQueue = onShareQueue,
                 modifier = Modifier.fillMaxWidth().weight(1f),
             )
             WaveformTimeline(playback, waveform, onSeek, language, waveformLoading, artwork)
@@ -662,6 +731,9 @@ private fun SecondaryControls(
     onSeek: (Long) -> Unit,
     onMoveQueueItem: (Int, Int) -> Unit,
     onRemoveQueueItem: (Int) -> Unit,
+    onShareQueue: () -> Unit,
+    isFavourite: Boolean,
+    onToggleFavourite: () -> Unit,
     modifier: Modifier,
 ) {
     val onSurface = MaterialTheme.colorScheme.onSurface
@@ -684,9 +756,11 @@ private fun SecondaryControls(
                                             queue = queue,
                                             onLoadThumbnail = onLoadThumbnail,
                                             playback = playback,
-                                            onSleepTimer = onSleepTimer,
-                                            sleepTimer = sleepTimer,
-                                        )
+                                             onSleepTimer = onSleepTimer,
+                                             sleepTimer = sleepTimer,
+                                             isFavourite = isFavourite,
+                                             onToggleFavourite = onToggleFavourite,
+                                         )
         PlaybackError(playback.errorMessage)
         Spacer(Modifier.height(6.dp))
         NowPlayingQueue(
@@ -702,6 +776,7 @@ private fun SecondaryControls(
             onLoadThumbnail = onLoadThumbnail,
             onMoveQueueItem = onMoveQueueItem,
             onRemoveQueueItem = onRemoveQueueItem,
+            onShareQueue = onShareQueue,
             modifier = Modifier.fillMaxWidth().weight(1f),
         )
         Timeline(playback, onSeek)
@@ -723,9 +798,28 @@ private fun NowPlayingQueue(
     onLoadThumbnail: suspend (MediaFile) -> Bitmap?,
     onMoveQueueItem: (Int, Int) -> Unit,
     onRemoveQueueItem: (Int) -> Unit,
+    onShareQueue: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
+    var query by rememberSaveable { mutableStateOf("") }
+    val searchFocus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    LaunchedEffect(searchOpen) {
+        if (searchOpen) {
+            searchFocus.requestFocus()
+            keyboard?.show()
+        }
+    }
     val currentIndex = queue.indexOfFirst { it.path == currentPath }
+    val visibleQueue = remember(queue, query) {
+        val normalized = query.trim()
+        queue.withIndex().filter { (_, file) -> normalized.isBlank() ||
+            file.name.contains(normalized, ignoreCase = true) ||
+            file.artist.contains(normalized, ignoreCase = true) ||
+            file.album.contains(normalized, ignoreCase = true)
+        }
+    }
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = currentIndex.coerceAtLeast(0),
     )
@@ -733,6 +827,31 @@ private fun NowPlayingQueue(
         if (currentIndex >= 0 && !listState.isScrollInProgress) listState.scrollToItem(currentIndex)
     }
     Column(modifier.inspectElement("NOW_PLAYING_QUEUE", "Ordered playback queue and optional synchronized lyrics")) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            if (searchOpen) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    modifier = Modifier.weight(1f).height(52.dp).focusRequester(searchFocus),
+                    singleLine = true,
+                    placeholder = { Text(uiText(language, "Search current queue", "搜尋目前播放佇列")) },
+                    leadingIcon = { Icon(Icons.Rounded.Search, null) },
+                    trailingIcon = {
+                        IconButton(onClick = { if (query.isNotEmpty()) query = "" else searchOpen = false }) {
+                            Icon(Icons.Rounded.Clear, uiText(language, "Clear", "清除"))
+                        }
+                    },
+                )
+            } else {
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = { searchOpen = true }, modifier = Modifier.inspectElement("QUEUE_SEARCH_BUTTON", "Searches the current queue without changing its order")) {
+                    Icon(Icons.Rounded.Search, uiText(language, "Search current queue", "搜尋目前播放佇列"))
+                }
+                IconButton(onClick = onShareQueue, enabled = queue.isNotEmpty(), modifier = Modifier.inspectElement("SHARE_QUEUE_BUTTON", "Shares the ordered queue as M3U8")) {
+                    Icon(Icons.Rounded.Share, uiText(language, "Share current queue", "分享目前播放佇列"))
+                }
+            }
+        }
         if (lyrics != null) {
             SyncedLyricsPanel(
                 lyrics = lyrics,
@@ -756,7 +875,9 @@ private fun NowPlayingQueue(
                 state = listState,
                 contentPadding = PaddingValues(vertical = 4.dp),
             ) {
-                itemsIndexed(queue, key = { index, file -> "$index:${file.path}" }, contentType = { _, _ -> "queue-song" }) { index, file ->
+                items(visibleQueue, key = { indexed -> "${indexed.index}:${indexed.value.path}" }, contentType = { "queue-song" }) { indexed ->
+                    val index = indexed.index
+                    val file = indexed.value
                     val selected = file.path == currentPath
                     Row(
                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
@@ -1161,6 +1282,8 @@ private fun SecondaryControlRow(
     playback: PlaybackUiState,
     onSleepTimer: (Long) -> Unit,
     sleepTimer: SleepTimerState,
+    isFavourite: Boolean,
+    onToggleFavourite: () -> Unit,
 ) {
     val practice by com.local.listentomusic.playback.PracticeLoop.state.collectAsState()
     var sleepMenuOpen by remember { mutableStateOf(false) }
@@ -1178,6 +1301,13 @@ private fun SecondaryControlRow(
         else -> uiText(playback.appLanguage, "Sleep", "睡眠")
     }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = onToggleFavourite, modifier = Modifier.inspectElement("FAVOURITE_BUTTON", "Stores a local-only favourite")) {
+            Icon(
+                if (isFavourite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                uiText(playback.appLanguage, if (isFavourite) "Remove from Favorites" else "Add to Favorites", if (isFavourite) "從我的最愛移除" else "加入我的最愛"),
+                tint = if (isFavourite) activeColor else outline,
+            )
+        }
         if (playback.showAbRepeat) Button(
             onClick = { com.local.listentomusic.playback.PracticeLoop.mark(playback.currentPath, playback.positionMs) },
             modifier = Modifier.weight(1f).height(40.dp), colors = controlColors,
@@ -1332,7 +1462,10 @@ internal fun VideoSurface(
         surfaceLifecycle.addObserver(observer)
         onDispose { surfaceLifecycle.removeObserver(observer) }
     }
-    key(mediaKey, controller) {
+    // Keep the same PlayerView across media transitions. Keying this view by path
+    // created a fresh surface after Media3 had already rendered the new first frame,
+    // producing generation N+1 / last-frame generation N false alarms.
+    key(controller) {
         AndroidView(
         factory = { context ->
             PlayerView(context).apply {

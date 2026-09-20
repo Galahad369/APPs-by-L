@@ -54,16 +54,10 @@ internal fun snapPracticePosition(position: Long, duration: Long, markers: List<
 internal fun AnimatedWaveformBars(peaks: FloatArray?, fraction: Float, active: Color, inactive: Color,
     playing: Boolean, modifier: Modifier) {
     val reveal = remember { Animatable(1f) }
-    val phase = remember { Animatable(0f) }
-    val running = motionActive(playing) && peaks != null
     LaunchedEffect(peaks) {
         if (peaks != null && android.animation.ValueAnimator.areAnimatorsEnabled()) {
             reveal.snapTo(0f); reveal.animateTo(1f, tween(420))
         } else reveal.snapTo(1f)
-    }
-    LaunchedEffect(running) {
-        if (running) phase.animateTo(1f, infiniteRepeatable(tween(2600, easing = LinearEasing)))
-        else phase.snapTo(0f)
     }
     Canvas(modifier.graphicsLayer()) {
         val count = peaks?.size ?: 60
@@ -71,12 +65,15 @@ internal fun AnimatedWaveformBars(peaks: FloatArray?, fraction: Float, active: C
         repeat(count) { i ->
             val peak = peaks?.get(i) ?: .025f
             val entrance = (reveal.value * 1.3f - i.toFloat() / count * .3f).coerceIn(0f, 1f)
-            // 3% decorative sheen/breath preserves the real peak envelope even while paused.
-            val breath = if (running) .985f + .015f * cos((phase.value + i * .025f) * 2f * PI.toFloat()) else 1f
-            val height = size.height * (.06f + peak * .9f * entrance) * breath
+            val height = size.height * (.06f + peak * .9f * entrance)
             val x = spacing * (i + .5f)
             drawLine(if ((i + 1f) / count <= fraction) active else inactive, Offset(x, (size.height-height)/2),
                 Offset(x, (size.height+height)/2), min(2.25.dp.toPx(), spacing * .55f), StrokeCap.Round)
+        }
+        if (peaks != null) {
+            val playheadX = size.width * fraction.coerceIn(0f, 1f)
+            drawLine(active.copy(alpha = if (playing) .95f else .78f), Offset(playheadX, 0f), Offset(playheadX, size.height), 1.25.dp.toPx())
+            drawCircle(active, 2.5.dp.toPx(), Offset(playheadX, size.height / 2f))
         }
     }
 }

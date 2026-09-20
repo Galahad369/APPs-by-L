@@ -39,10 +39,13 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Hub
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.LocalFireDepartment
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -93,6 +96,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import com.local.listentomusic.LibraryStatus
 import com.local.listentomusic.LibraryUiState
+import com.local.listentomusic.data.AppLanguage
 import com.local.listentomusic.data.LibraryRowSize
 import com.local.listentomusic.data.UserPreferences
 import com.local.listentomusic.data.PlayHistoryEntry
@@ -128,6 +132,10 @@ fun LibraryScreen(
     onRemoveFromPlaylist: (String) -> Unit,
     onDeletePlaylist: (String) -> Unit,
     onDeleteFile: suspend (MediaFile) -> String?,
+    onShareMedia: (MediaFile) -> Unit,
+    onShareCurrentList: () -> Unit,
+    onShareSelectedFiles: (List<MediaFile>) -> Unit,
+    onToggleFavourite: (String) -> Unit,
     onLoadThumbnail: suspend (MediaFile) -> Bitmap?,
     onPreloadAhead: (Int, Int) -> Unit,
     onOpenSettings: () -> Unit,
@@ -140,6 +148,7 @@ fun LibraryScreen(
 ) {
     val language = preferences.appLanguage
     val activePlaylist = preferences.playlists.firstOrNull { it.id == preferences.activePlaylistId }
+    val favouritesActive = preferences.activePlaylistId == com.local.listentomusic.data.FAVOURITES_PLAYLIST_ID
     var sortMenuOpen by remember { mutableStateOf(false) }
     var playlistMenuOpen by remember { mutableStateOf(false) }
     var createPlaylistOpen by remember { mutableStateOf(false) }
@@ -158,6 +167,7 @@ fun LibraryScreen(
     var selectionName by remember { mutableStateOf("") }
     var historyOpen by remember { mutableStateOf(false) }
     var burnHistoryConfirm by remember { mutableStateOf(false) }
+    var shareSelectedConfirm by remember { mutableStateOf(false) }
     Scaffold(
         modifier = Modifier.padding(contentPadding).inspectElement("LIBRARY_SCREEN", "Scrollable local media library"),
         containerColor = Color.Transparent,
@@ -247,6 +257,11 @@ fun LibraryScreen(
                             DropdownMenuItem(text = { Text(playlist.name) }, onClick = { onAddSelected(playlist.id, selected); selected = emptyList(); selectionMenu = false })
                         }
                         DropdownMenuItem(text = { Text(uiText(language, "Create playlist", "建立播放清單")) }, onClick = { selectionMenu = false; selectionNameDialog = true })
+                        DropdownMenuItem(
+                            text = { Text(uiText(language, "Share selected media files", "分享已選媒體檔案")) },
+                            leadingIcon = { Icon(Icons.Rounded.Share, null) },
+                            onClick = { selectionMenu = false; shareSelectedConfirm = true },
+                        )
                     }
                 }
             }
@@ -298,13 +313,22 @@ fun LibraryScreen(
                         .inspectElement("PLAYLIST_BUTTON", "Selects or manages a playlist")) {
                         Icon(Icons.AutoMirrored.Rounded.QueueMusic, null)
                         Spacer(Modifier.width(8.dp))
-                        Text(activePlaylist?.name ?: uiText(language, "All songs", "所有歌曲"), maxLines = 1)
+                        Text(when {
+                            favouritesActive -> uiText(language, "Favorites", "我的最愛")
+                            activePlaylist != null -> activePlaylist.name
+                            else -> uiText(language, "All songs", "所有歌曲")
+                        }, maxLines = 1)
                     }
                     DropdownMenu(playlistMenuOpen, { playlistMenuOpen = false }) {
                         DropdownMenuItem(
                             text = { Text(uiText(language, "All songs", "所有歌曲")) },
                             onClick = { playlistMenuOpen = false; onSelectPlaylist(null) },
                             leadingIcon = { Icon(Icons.AutoMirrored.Rounded.QueueMusic, null) },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(uiText(language, "Favorites", "我的最愛")) },
+                            onClick = { playlistMenuOpen = false; onSelectPlaylist(com.local.listentomusic.data.FAVOURITES_PLAYLIST_ID) },
+                            leadingIcon = { Icon(Icons.Rounded.Favorite, null) },
                         )
                         preferences.playlists.forEach { playlist ->
                             DropdownMenuItem(
@@ -322,6 +346,14 @@ fun LibraryScreen(
                             text = { Text(uiText(language, "Create playlist", "建立播放清單")) },
                             onClick = { playlistMenuOpen = false; createSeedPath = null; createPlaylistOpen = true },
                             leadingIcon = { Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, null) },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(if (activePlaylist == null)
+                                uiText(language, "Share current Library list", "分享目前音樂庫清單")
+                            else uiText(language, "Share playlist", "分享播放清單")) },
+                            leadingIcon = { Icon(Icons.Rounded.Share, null) },
+                            enabled = state.files.isNotEmpty(),
+                            onClick = { playlistMenuOpen = false; onShareCurrentList() },
                         )
                         activePlaylist?.let { pl ->
                             DropdownMenuItem(
@@ -395,7 +427,8 @@ fun LibraryScreen(
                     MessageState(
                         if (state.query.isBlank()) uiText(language, "No media files yet", "尚未找到媒體檔案") else uiText(language, "No matches", "沒有相符項目"),
                         if (state.query.isBlank()) {
-                            if (activePlaylist != null) uiText(language, "This playlist is empty. Add songs with the ⋮ button.", "此播放清單是空的。使用 ⋮ 按鈕加入歌曲。")
+                            if (favouritesActive) uiText(language, "No favorites yet. Add them with the ⋮ button.", "尚未有我的最愛。使用 ⋮ 按鈕加入歌曲。")
+                            else if (activePlaylist != null) uiText(language, "This playlist is empty. Add songs with the ⋮ button.", "此播放清單是空的。使用 ⋮ 按鈕加入歌曲。")
                             else uiText(language, "No supported media was found under:\n${state.targetPath}", "在以下位置找不到支援的媒體：\n${state.targetPath}")
                         } else uiText(language, "Try a different search.", "請嘗試其他搜尋字詞。"),
                         uiText(language, "Scan again", "重新掃描"),
@@ -420,7 +453,7 @@ fun LibraryScreen(
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize().inspectElement("LIBRARY_LIST", "Virtualized ordered media rows"),
-                        contentPadding = PaddingValues(bottom = 2.dp),
+                        contentPadding = PaddingValues(bottom = if (currentPath == null) 2.dp else 58.dp),
                     ) {
                         itemsIndexed(
                             state.files,
@@ -432,7 +465,7 @@ fun LibraryScreen(
                                 isCurrent = if (selected.isNotEmpty()) item.path in selected else item.path == currentPath,
                                 index = index,
                                 itemCount = state.files.size,
-                                dragEnabled = selected.isEmpty() && activePlaylist?.rule == null && state.query.isBlank() && (activePlaylist != null || state.sortMode == SortMode.CUSTOM),
+                                dragEnabled = !favouritesActive && selected.isEmpty() && activePlaylist?.rule == null && state.query.isBlank() && (activePlaylist != null || state.sortMode == SortMode.CUSTOM),
                                 onMove = onMoveItem,
                                 onLoadThumbnail = onLoadThumbnail,
                                 rowSize = preferences.libraryRowSize,
@@ -524,6 +557,19 @@ fun LibraryScreen(
         text = { OutlinedTextField(selectionName, { selectionName = it.take(60) }, singleLine = true) },
         confirmButton = { TextButton(enabled = selectionName.isNotBlank(), onClick = { onCreateSelected(selectionName, selected); selected = emptyList(); selectionName = ""; selectionNameDialog = false }) { Text(uiText(language, "Create", "建立")) } },
         dismissButton = { TextButton(onClick = { selectionNameDialog = false }) { Text(uiText(language, "Cancel", "取消")) } })
+    if (shareSelectedConfirm) {
+        val files = state.files.filter { it.path in selected }
+        val total = files.sumOf { it.sizeBytes.coerceAtLeast(0L) }
+        AlertDialog(
+            onDismissRequest = { shareSelectedConfirm = false },
+            title = { Text(uiText(language, "Share original media files?", "分享原始媒體檔案？")) },
+            text = { Text(shareBatchMessage(language, files.size, formatBytes(total))) },
+            confirmButton = { TextButton(enabled = files.isNotEmpty(), onClick = {
+                shareSelectedConfirm = false; onShareSelectedFiles(files)
+            }) { Text(uiText(language, "Share files", "分享檔案")) } },
+            dismissButton = { TextButton(onClick = { shareSelectedConfirm = false }) { Text(uiText(language, "Cancel", "取消")) } },
+        )
+    }
     if (createPlaylistOpen) CreatePlaylistDialog(
         language = language,
         name = playlistName,
@@ -548,6 +594,15 @@ fun LibraryScreen(
             text = {
                 Column {
                     TextButton(onClick = { songListFile = null; onEditDisplay(file) }) { Text(uiText(language, "Local title & cover", "本機標題與封面")) }
+                    val favourite = file.path in preferences.favouritePaths
+                    TextButton(onClick = { onToggleFavourite(file.path); songListFile = null }) {
+                        Icon(if (favourite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, null)
+                        Text("  ${uiText(language, if (favourite) "Remove from Favorites" else "Add to Favorites", if (favourite) "從我的最愛移除" else "加入我的最愛")}")
+                    }
+                    TextButton(onClick = { songListFile = null; onShareMedia(file) }) {
+                        Icon(Icons.Rounded.Share, null)
+                        Text("  ${uiText(language, "Share media file", "分享媒體檔案")}")
+                    }
                     TextButton(onClick = { selected = (selected + file.path).distinct(); songListFile = null }) { Text(uiText(language, "Select multiple", "選取多首")) }
                     TextButton(onClick = { songListFile = null; onCreateRule() }) { Text(uiText(language, "Rule-based playlist", "規則播放清單")) }
                     if (activePlaylist != null && activePlaylist.rule == null && file.path in activePlaylist.paths) {
@@ -810,6 +865,15 @@ private fun formatBytes(bytes: Long): String = when {
     bytes >= 1_048_576 -> "%.1f MB".format(bytes / 1_048_576.0)
     bytes >= 1024 -> "%.1f KB".format(bytes / 1024.0)
     else -> "$bytes B"
+}
+
+private fun shareBatchMessage(language: AppLanguage, count: Int, size: String): String = when (language) {
+    AppLanguage.TRADITIONAL_CHINESE -> "$count 個檔案 • $size。接收應用程式可能拒絕過大的批次。"
+    AppLanguage.CANTONESE -> "$count 個檔案 • $size。一次過太多檔，對面個 App 可能唔收。"
+    AppLanguage.JAPANESE -> "$count ファイル • $size。大量のファイルは受信先アプリで拒否される場合があります。"
+    AppLanguage.GERMAN -> "$count Dateien • $size. Empfangende Apps können sehr große Stapel ablehnen."
+    AppLanguage.FRENCH -> "$count fichiers • $size. Les applications de destination peuvent refuser un lot très volumineux."
+    AppLanguage.ENGLISH -> "$count files • $size. Receiving apps may reject a very large batch."
 }
 
 private val LibraryRowSize.thumbnailWidth get() = when (this) { LibraryRowSize.SMALL -> MiniWindowMetrics.WIDTH_DP.dp; LibraryRowSize.MEDIUM -> 120.dp; LibraryRowSize.LARGE -> 148.dp }

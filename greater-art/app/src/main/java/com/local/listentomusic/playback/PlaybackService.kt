@@ -39,6 +39,7 @@ class PlaybackService : MediaLibraryService() {
     private lateinit var preferences: AppPreferences
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var saveJob: Job? = null
+    private var speedBeforeTemporaryHold: Float? = null
     private var retriedPath: String? = null
     private var gainEnabled = false
     private var enhancer: android.media.audiofx.LoudnessEnhancer? = null
@@ -111,6 +112,21 @@ class PlaybackService : MediaLibraryService() {
         ParallelPlayback.removeCommand = ::removeLayer
         ParallelPlayback.toggleCommand = { id -> layers.firstOrNull { it.id == id }?.player?.let { if (it.playWhenReady) it.pause() else it.play() } }
         ParallelPlayback.volumeCommand = { id, level -> layers.firstOrNull { it.id == id }?.level = level; applyMixLevels(); publishLayers() }
+        TemporaryPlaybackSpeed.beginCommand = {
+            val current = player.playbackParameters.speed
+            if (!player.isPlaying || current >= 2f || speedBeforeTemporaryHold != null) false
+            else {
+                speedBeforeTemporaryHold = current
+                player.playbackParameters = androidx.media3.common.PlaybackParameters(2f)
+                true
+            }
+        }
+        TemporaryPlaybackSpeed.endCommand = {
+            speedBeforeTemporaryHold?.let { previous ->
+                player.playbackParameters = androidx.media3.common.PlaybackParameters(previous)
+                speedBeforeTemporaryHold = null
+            }
+        }
         audioManager.registerAudioDeviceCallback(audioDeviceCallback, Handler(mainLooper))
         val saved = runBlocking(Dispatchers.IO) {
             runCatching { preferences.current() }.getOrDefault(UserPreferences())
@@ -203,6 +219,8 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        TemporaryPlaybackSpeed.end()
+        TemporaryPlaybackSpeed.detach()
         ParallelPlayback.detach()
         layers.toList().forEach { layer -> removeSession(layer.session); layer.session.release(); layer.player.release() }
         layers.clear()
@@ -215,7 +233,7 @@ class PlaybackService : MediaLibraryService() {
             preferences.savePlayback(
                 path = player.currentMediaItem?.mediaId?.takeIf { it.isNotBlank() },
                 positionMs = player.currentPosition,
-                speed = player.playbackParameters.speed,
+                speed = speedBeforeTemporaryHold ?: player.playbackParameters.speed,
                 repeatMode = player.repeatMode,
             )
         }
@@ -370,7 +388,7 @@ class PlaybackService : MediaLibraryService() {
         if (!::player.isInitialized) return
         val path = player.currentMediaItem?.mediaId?.takeIf { it.isNotBlank() }
         val position = player.currentPosition
-        val speed = player.playbackParameters.speed
+        val speed = speedBeforeTemporaryHold ?: player.playbackParameters.speed
         val repeat = player.repeatMode
         serviceScope.launch(Dispatchers.IO) {
             preferences.savePlayback(path, position, speed, repeat)

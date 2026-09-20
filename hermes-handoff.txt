@@ -2,9 +2,9 @@ HERMES SESSION HANDOFF — 2026-09-20
 
 PROJECT
 - Path: greater-art/
-- Version: 1.12.1 (code 82)
-- APK: releases/GreaterArt-1.12.1.apk
-- SHA-256: 4713ad2eb43cebb3c0c115300f26aeba163247cafee7e057e8bdeaf047609f7a
+- Version: 1.12.2 (code 83)
+- APK: releases/GreaterArt-1.12.2.apk
+- SHA-256: 09a15cadecb06bfbf3c562fd163db8b8aea76a2fabe296ee42a09806ce8fd0f5
 - Package: com.local.listentomusic
 - Signing certificate: 9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf
 
@@ -17,21 +17,22 @@ CURRENT USER JOURNEY
 6. Leaving the app from Now Playing starts the configured floating mode; Mini is default.
 7. Tapping the floating window returns directly to Now Playing.
 
-1.12.1 CHANGES
-- Compact Library player, liquid-metal search focus, actual app mark on splash/scan.
-- Wide mini window remains 103×56dp; square artwork/video uses 56×56dp.
-- No invisible content gutter; saved drag position and physical bottom reach retained.
-- Close target raised another three physical pixels; overlap adds a strong red tint.
-- Optional black-disc audio presentation, disabled by default.
-- Optional offline play history, disabled by default, excluded from backups, capped at
-  500 entries, and removable with the confirmed Burn history action.
-- Inspector cycles all tagged elements under a touch.
-- One restrained side-only double-tap seek cue; center remains inert.
-- New standalone user and technical phone films at repository root and an aligned site.
+1.12.2 CHANGES
+- Fixed the Library dead band above the bottom player: content draws behind it and the
+  final row gets only a scroll-end safety inset.
+- Preserved one PlayerView across media changes and made surface/frame diagnostics
+  generation-aware, fixing a confirmed false READY_VIDEO_NO_FRAME path.
+- Added 700 ms hold-for-temporary-2× on the foreground video with exact speed restore.
+- Added local Favorites and current-queue search without rebuilding playback order.
+- Added exact original-file Sharesheet sharing, explicit multi-file sharing, and
+  portable relative-path M3U8 sharing for Library, playlist and queue.
+- Waveform UI now shows decoded peaks with playback coloring and a precise playhead;
+  it does not synthesize fake equalizer activity.
+- Architecture-only future notes are in greater-art/docs/LOCAL-FUTURES-1.12.2.md.
 
 VERIFICATION
 - testDebugUnitTest lintDebug assembleDebug --offline --no-daemon --max-workers=2: PASS
-- 96 tests; 0 failures/errors
+- 99 tests; 0 failures/errors
 - Lint: 0 errors, 18 warnings, 1 hint
 - APK signature and 16 KiB zip alignment: PASS
 - Manifest: no INTERNET permission

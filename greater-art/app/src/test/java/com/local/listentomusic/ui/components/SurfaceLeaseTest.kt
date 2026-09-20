@@ -57,6 +57,17 @@ class SurfaceLeaseTest {
         assertTrue(state.warnings("NOW_PLAYING", false, 4000).isEmpty())
         assertEquals(listOf("SURFACE_OWNER_MISMATCH", "READY_VIDEO_NO_FRAME", "FIRST_FRAME_TIMEOUT"), state.warnings("NOW_PLAYING", true, 4000))
     }
+    @Test fun identicalAttachIsDiagnosticNoOp() {
+        val first = SurfaceLease().attach("NOW_PLAYING", 7, 100, 9, "first")
+        val second = first.attach("NOW_PLAYING", 7, 200, 9, "recompose")
+        assertEquals(first.generation, second.generation)
+        assertEquals(first.sinceMs, second.sinceMs)
+        assertEquals(1, second.noOpAttaches)
+    }
+    @Test fun controllerFirstFramePreventsFalseBlackFrameWarning() {
+        val state = SurfaceLease().attach("NOW_PLAYING", 1, 100)
+        assertTrue(state.warnings("NOW_PLAYING", true, 4000, controllerMediaFirstFrame = true).isEmpty())
+    }
     @Test fun ambientIgnoresBlackVideoBorders() {
         val bordered = IntArray(100) { if (it < 90) 0xFF000000.toInt() else 0xFFFF0000.toInt() }
         assertEquals(artworkGradientColors(intArrayOf(0xFFFF0000.toInt()), false), artworkGradientColors(bordered, false))

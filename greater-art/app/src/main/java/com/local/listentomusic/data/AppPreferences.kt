@@ -17,6 +17,8 @@ import java.util.UUID
 
 private val Context.dataStore by preferencesDataStore(name = "listen_to_music_preferences")
 
+const val FAVOURITES_PLAYLIST_ID = "__greater_art_favourites__"
+
 data class UserPreferences(
     val graphOptions: com.local.listentomusic.graph.GraphOptions = com.local.listentomusic.graph.GraphOptions(),
     val sortMode: SortMode = SortMode.NAME_ASC,
@@ -53,6 +55,7 @@ data class UserPreferences(
     val replayGainEnabled: Boolean = false,
     val blackDiscMode: Boolean = false,
     val playHistoryEnabled: Boolean = false,
+    val favouritePaths: List<String> = emptyList(),
     val excludedFolders: List<String> = emptyList(),
     val jokeAdsEnabled: Boolean = false,
 )
@@ -125,6 +128,7 @@ class AppPreferences(private val context: Context) {
         val blackDiscMode = booleanPreferencesKey("black_disc_mode")
         val playHistoryEnabled = booleanPreferencesKey("play_history_enabled")
         val playHistory = stringPreferencesKey("play_history_v1")
+        val favouritePaths = stringPreferencesKey("favourite_paths_v1")
         val excludedFolders = stringPreferencesKey("excluded_folders")
         val jokeAdsEnabled = booleanPreferencesKey("joke_ads_enabled")
     }
@@ -190,6 +194,7 @@ class AppPreferences(private val context: Context) {
             replayGainEnabled = prefs[Keys.replayGainEnabled] ?: false,
             blackDiscMode = prefs[Keys.blackDiscMode] ?: false,
             playHistoryEnabled = prefs[Keys.playHistoryEnabled] ?: false,
+            favouritePaths = decodeOrder(prefs[Keys.favouritePaths].orEmpty()),
             excludedFolders = decodeOrder(prefs[Keys.excludedFolders].orEmpty()),
             jokeAdsEnabled = prefs[Keys.jokeAdsEnabled] ?: false,
         )
@@ -205,7 +210,7 @@ class AppPreferences(private val context: Context) {
     // document grants, diagnostics or joke toggle cross a backup boundary.
     private val backupStrings = listOf(Keys.graphOptions, Keys.sortMode, Keys.customOrder, Keys.libraryRowSize,
         Keys.themeMode, Keys.floatingWindowMode, Keys.appLanguage, Keys.appFont,
-        Keys.playlists, Keys.activePlaylistId, Keys.excludedFolders)
+        Keys.playlists, Keys.activePlaylistId, Keys.excludedFolders, Keys.favouritePaths)
     private val backupBooleans = listOf(Keys.showThumbnails, Keys.showFileDetails,
         Keys.preloadThumbnails, Keys.resumePlayback, Keys.autoPictureInPicture,
         Keys.editableQueue, Keys.showSleepControl, Keys.showAbRepeat, Keys.extendedSearch,
@@ -332,6 +337,11 @@ class AppPreferences(private val context: Context) {
     suspend fun setReplayGainEnabled(value: Boolean) = edit { it[Keys.replayGainEnabled] = value }
     suspend fun setBlackDiscMode(value: Boolean) = edit { it[Keys.blackDiscMode] = value }
     suspend fun setPlayHistoryEnabled(value: Boolean) = edit { it[Keys.playHistoryEnabled] = value }
+    suspend fun toggleFavourite(path: String) = edit { prefs ->
+        val values = decodeOrder(prefs[Keys.favouritePaths].orEmpty()).toMutableList()
+        if (!values.remove(path)) values.add(path)
+        prefs[Keys.favouritePaths] = values.distinct().joinToString("\n") { encode(it) }
+    }
 
     suspend fun recordPlayed(path: String, atEpochMs: Long = System.currentTimeMillis()) {
         if (path.isBlank()) return

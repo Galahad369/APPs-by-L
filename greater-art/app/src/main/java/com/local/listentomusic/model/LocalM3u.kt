@@ -1,5 +1,7 @@
 package com.local.listentomusic.model
 
+import java.io.File
+
 /** Standard paths remain usable by other players; VLC options preserve optional CUE clipping. */
 internal fun exportM3u(files: List<MediaFile>): String = buildString {
     appendLine("#EXTM3U")
@@ -10,6 +12,26 @@ internal fun exportM3u(files: List<MediaFile>): String = buildString {
             file.clipEndMs?.let { appendLine("#EXTVLCOPT:stop-time=${it / 1000.0}") }
         }
         appendLine(file.sourcePath)
+    }
+}
+
+/** Portable share form: paths inside Download are relative instead of private absolute paths. */
+internal fun exportPortableM3u(files: List<MediaFile>, root: File): String {
+    val canonicalRoot = root.canonicalFile
+    return buildString {
+        appendLine("#EXTM3U")
+        files.forEach { file ->
+            appendLine("#EXTINF:${if (file.durationMs > 0) file.durationMs / 1000 else -1},${file.name.replace('\n', ' ').replace('\r', ' ')}")
+            if (file.path != file.sourcePath) {
+                appendLine("#EXTVLCOPT:start-time=${file.clipStartMs / 1000.0}")
+                file.clipEndMs?.let { appendLine("#EXTVLCOPT:stop-time=${it / 1000.0}") }
+            }
+            val source = File(file.sourcePath).canonicalFile
+            val portable = source.relativeToOrNull(canonicalRoot)?.invariantSeparatorsPath
+                ?.takeIf { it.isNotBlank() && !it.startsWith("../") }
+                ?: source.name
+            appendLine(portable)
+        }
     }
 }
 

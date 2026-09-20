@@ -260,7 +260,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val searchChanged = userPreferences.extendedSearch != it.extendedSearch
                 val libraryChanged = userPreferences.sortMode != it.sortMode || userPreferences.customOrder != it.customOrder ||
                     userPreferences.playlists != it.playlists || userPreferences.activePlaylistId != it.activePlaylistId ||
-                    userPreferences.localOverrides != it.localOverrides || searchChanged
+                    userPreferences.localOverrides != it.localOverrides ||
+                    userPreferences.favouritePaths != it.favouritePaths || searchChanged
                 userPreferences = it
                 _settings.value = it
                 if (!it.showAbRepeat) com.local.listentomusic.playback.PracticeLoop.clear()
@@ -478,6 +479,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _controller.value?.let(::publishPlayback)
     }
 
+    fun beginTemporaryDoubleSpeed(): Boolean =
+        com.local.listentomusic.playback.TemporaryPlaybackSpeed.begin()
+
+    fun endTemporaryDoubleSpeed() =
+        com.local.listentomusic.playback.TemporaryPlaybackSpeed.end()
+
     fun setPlaybackCycle(mode: Int, random: Boolean) {
         _controller.value?.let {
             it.shuffleModeEnabled = random
@@ -547,6 +554,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setReplayGainEnabled(value: Boolean) = updatePreference { preferences.setReplayGainEnabled(value) }
     fun setBlackDiscMode(value: Boolean) = updatePreference { preferences.setBlackDiscMode(value) }
     fun setPlayHistoryEnabled(value: Boolean) = updatePreference { preferences.setPlayHistoryEnabled(value) }
+    fun toggleFavourite(path: String) = updatePreference { preferences.toggleFavourite(path) }
     fun clearPlayHistory() = updatePreference { preferences.clearPlayHistory() }
     fun setJokeAdsEnabled(value: Boolean) = updatePreference { preferences.setJokeAdsEnabled(value) }
     fun setFolderExcluded(folder: String, excluded: Boolean) = updatePreference {
@@ -670,6 +678,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         player.setMediaItems(queue.map(MediaFile::toMediaItem), 0, 0L)
         player.playWhenReady = true
         player.prepare()
+    }
+
+    fun filesForPlaylist(id: String): List<MediaFile> {
+        val playlist = userPreferences.playlists.firstOrNull { it.id == id } ?: return emptyList()
+        val decorated = scannedFiles.map { file -> userPreferences.localOverrides[file.path]?.let { override ->
+            file.copy(name = override.title.ifBlank { file.name }, coverUri = override.coverUri)
+        } ?: file }
+        val byPath = decorated.associateBy(MediaFile::path)
+        return playlist.rule?.let { rule -> decorated.filter { rule.matches(it, MediaScanner.targetFolder().path) } }
+            ?: playlist.paths.mapNotNull(byPath::get)
     }
     fun renamePlaylist(id: String, name: String) {
         if (name.isBlank()) return
@@ -947,7 +965,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             SortMode.DATE_DESC -> decorated.sortedWith(compareByDescending<MediaFile> { it.modifiedMs }.then(names))
             SortMode.DATE_ASC -> decorated.sortedWith(compareBy<MediaFile> { it.modifiedMs }.then(names))
         }
-        val ordered = prefs.activePlaylistId
+        val ordered = if (prefs.activePlaylistId == com.local.listentomusic.data.FAVOURITES_PLAYLIST_ID) {
+            sortedLibrary.filter { it.path in prefs.favouritePaths }
+        } else prefs.activePlaylistId
             ?.let { id -> prefs.playlists.firstOrNull { it.id == id } }
             ?.let { playlist ->
                 val byPath = decorated.associateBy(MediaFile::path)

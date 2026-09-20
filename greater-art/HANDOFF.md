@@ -1,8 +1,8 @@
 # HANDOFF — Greater Art Android Media Player
 
 **Project:** `greater-art/` in the repository checkout
-**Current version:** `1.12.1` (code 82)
-**Latest APK:** `releases/GreaterArt-1.12.1.apk` (verification below)
+**Current version:** `1.12.2` (code 83)
+**Latest APK:** `releases/GreaterArt-1.12.2.apk` (verification below)
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
@@ -20,6 +20,44 @@
   explicitly authorizes it; never infer that permission from this handoff.
 
 ## Current State
+
+### September 20 — 1.12.2 surface continuity, offline sharing and Library dead-band fix
+
+- Diagnosed `READY_VIDEO_NO_FRAME` / `FIRST_FRAME_TIMEOUT` as an unnecessary
+  PlayerView recreation plus first-frame attribution race: the old view received the
+  new media's first-frame callback, then a path-keyed Compose block created a new
+  generation. Now Playing now retains one PlayerView per controller, surface leases
+  track player/view identity and transition reasons, and the independent controller
+  frame signal prevents that false diagnostic. This is not presented as proof against
+  all device-specific black frames; see `docs/SURFACE_DEBUG_1.12.2.md`.
+- Holding a playing foreground video for 700 ms temporarily switches to 2× with
+  haptic and overlay feedback. Release/cancel restores the exact previous speed and
+  the temporary value is never persisted. The middle double-tap zone remains inert.
+- Added exact-file sharing through a non-exported FileProvider, explicit multi-file
+  sharing, and portable relative-path M3U8 sharing for the current Library, named
+  playlists and current queue. Media files are neither copied nor loaded into RAM;
+  list exports are bounded 24-hour cache files. No absolute paths are written to M3U8.
+- Added local Favorites, queue-only search that preserves playback order, and a
+  truthful decoded waveform presentation without decorative fake equalizer motion.
+- Removed the screenshot-reported Library dead band: the Library no longer consumes
+  the outer mini-player Scaffold inset. Rows draw behind the player, while a small
+  LazyColumn end inset lets the last row scroll fully above it. Favorites also has a
+  correct empty state and no non-functional reorder affordance.
+- Future offline-only designs (Nodes Related, optional history portability, explicit
+  on-device voice/captions, desktop transfer) are documented without enabling network,
+  cloud, accounts, telemetry or silent exports in `docs/LOCAL-FUTURES-1.12.2.md`.
+- Verification: `testDebugUnitTest lintDebug assembleDebug --offline --no-daemon
+  --max-workers=2` passed: 99 tests, 0 failures/errors; lint 0 errors, 18 warnings and
+  1 hint. Package `com.local.listentomusic`, version 1.12.2/code 83, min SDK 26,
+  target 37, no INTERNET permission. Pinned signing certificate unchanged; APK v2
+  signature and 16 KiB zip alignment verified.
+- Artifact: `releases/GreaterArt-1.12.2.apk`, 26,711,353 bytes, SHA-256
+  `09a15cadecb06bfbf3c562fd163db8b8aea76a2fabe296ee42a09806ce8fd0f5`.
+- Device boundary: no Android device/emulator was connected. Surface output, 700 ms
+  hold cancellation, Sharesheet receivers and the exact mini-player overlap geometry
+  still require a real-device smoke test.
+- Repository strategy: work remains local on `main`; no branch merge loop, commit,
+  tag, push or remote release was performed in this session.
 
 ### September 20 — 1.12.1 library-first journey, opt-in history and public demos
 

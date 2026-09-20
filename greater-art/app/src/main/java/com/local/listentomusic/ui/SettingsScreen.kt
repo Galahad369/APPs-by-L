@@ -21,6 +21,7 @@ import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PrivacyTip
 import androidx.compose.material.icons.rounded.RestartAlt
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -107,6 +108,7 @@ fun SettingsScreen(
     onPlayPlaylist: (String) -> Unit,
     onRenamePlaylist: (String, String) -> Unit,
     onDeletePlaylist: (String) -> Unit,
+    onSharePlaylist: (LocalPlaylist) -> Unit,
     onSpeed: (Float) -> Unit,
     onPlaybackCycle: (Int, Boolean) -> Unit,
     onClearThumbnailCache: () -> Unit,
@@ -365,6 +367,9 @@ fun SettingsScreen(
                                     onClick = { onPlayPlaylist(playlist.id) },
                                     enabled = playlist.paths.isNotEmpty(),
                                 ) { Icon(Icons.Rounded.PlayArrow, uiText(language, "Play", "播放")) }
+                                IconButton(onClick = { onSharePlaylist(playlist) }, enabled = playlist.paths.isNotEmpty() || playlist.rule != null) {
+                                    Icon(Icons.Rounded.Share, uiText(language, "Share playlist", "分享播放清單"))
+                                }
                                 IconButton(onClick = { playlistName = playlist.name; editPlaylist = playlist }) { Icon(Icons.Rounded.Edit, uiText(language, "Rename", "重新命名")) }
                                 IconButton(onClick = { deletePlaylist = playlist }) { Icon(Icons.Rounded.Delete, uiText(language, "Delete", "刪除")) }
                             }

@@ -275,7 +275,10 @@ fun GreaterArtApp(
                         preferences = settings,
                         playHistory = playHistory,
                         currentPath = playback.currentPath,
-                        contentPadding = padding,
+                        // The outer Scaffold's bottom inset is the mini-player height.
+                        // Applying it to the whole Library created a permanent dead band.
+                        // The list now draws behind the player and keeps only a scroll-end inset.
+                        contentPadding = PaddingValues(0.dp),
                         onGrantStorageAccess = onGrantStorageAccess,
                         onRefresh = viewModel::rescan,
                         onPlayHistoryEnabled = viewModel::setPlayHistoryEnabled,
@@ -291,6 +294,26 @@ fun GreaterArtApp(
                         onRemoveFromPlaylist = viewModel::removeFromActivePlaylist,
                         onDeletePlaylist = viewModel::deletePlaylist,
                         onDeleteFile = viewModel::deleteMediaFile,
+                        onShareMedia = { file ->
+                            AndroidShare.media(context, file, uiText(settings.appLanguage, "Share media file", "分享媒體檔案")).onFailure {
+                                android.widget.Toast.makeText(context, uiText(settings.appLanguage, "Could not share this file", "無法分享此檔案"), android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        },
+                        onShareCurrentList = {
+                            navigationScope.launch {
+                                val label = settings.playlists.firstOrNull { it.id == settings.activePlaylistId }?.name
+                                    ?: uiText(settings.appLanguage, "Current Library list", "目前音樂庫清單")
+                                AndroidShare.list(context, label, library.files, uiText(settings.appLanguage, "Share current Library list", "分享目前音樂庫清單")).onFailure {
+                                    android.widget.Toast.makeText(context, uiText(settings.appLanguage, "Could not share this list", "無法分享此清單"), android.widget.Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        },
+                        onShareSelectedFiles = { files ->
+                            AndroidShare.mediaFiles(context, files, uiText(settings.appLanguage, "Share files", "分享檔案")).onFailure {
+                                android.widget.Toast.makeText(context, uiText(settings.appLanguage, "Could not share these files", "無法分享這些檔案"), android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        },
+                        onToggleFavourite = viewModel::toggleFavourite,
                         onLoadThumbnail = viewModel::loadThumbnail,
                         onPreloadAhead = viewModel::preloadThumbnailsStartingAt,
                         onOpenSettings = { screen = Screen.SETTINGS },
@@ -354,6 +377,13 @@ fun GreaterArtApp(
                     onPlayPlaylist = viewModel::playPlaylist,
                     onRenamePlaylist = viewModel::renamePlaylist,
                     onDeletePlaylist = viewModel::deletePlaylist,
+                    onSharePlaylist = { playlist ->
+                        navigationScope.launch {
+                            AndroidShare.list(context, playlist.name, viewModel.filesForPlaylist(playlist.id), uiText(settings.appLanguage, "Share playlist", "分享播放清單")).onFailure {
+                                android.widget.Toast.makeText(context, uiText(settings.appLanguage, "Could not share this list", "無法分享此清單"), android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    },
                     onSpeed = viewModel::setSpeed,
                     onPlaybackCycle = viewModel::setPlaybackCycle,
                     onClearThumbnailCache = viewModel::clearThumbnailCache,
@@ -392,7 +422,17 @@ fun GreaterArtApp(
                     viewModel::togglePlayPause, viewModel::previous, viewModel::next, viewModel::seekTo,
                     viewModel::setSpeed, viewModel::cycleRepeatMode, viewModel::setSleepTimer, sleepTimer,
                     settings.seekOffsetMs, viewModel::seekBy, viewModel::playQueueItem, viewModel::loadThumbnail,
-                    viewModel::loadWaveform, viewModel::moveQueueItem, viewModel::removeQueueItem)
+                    viewModel::loadWaveform, viewModel::moveQueueItem, viewModel::removeQueueItem,
+                    viewModel::beginTemporaryDoubleSpeed, viewModel::endTemporaryDoubleSpeed,
+                    playback.currentPath in settings.favouritePaths, viewModel::toggleFavourite,
+                    {
+                        navigationScope.launch {
+                            AndroidShare.list(context, uiText(settings.appLanguage, "Current queue", "目前播放佇列"), queue,
+                                uiText(settings.appLanguage, "Share current queue", "分享目前播放佇列")).onFailure {
+                                android.widget.Toast.makeText(context, uiText(settings.appLanguage, "Could not share this list", "無法分享此清單"), android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    })
             }
             val undoMessage by viewModel.undoMessage.collectAsStateWithLifecycle()
             undoMessage?.let { message ->
@@ -419,6 +459,7 @@ fun GreaterArtApp(
                     com.local.listentomusic.ui.components.VideoSurfaceOwner.expectedOwner,
                     playback.isVideo && playback.isPlaying && controller?.playbackState == androidx.media3.common.Player.STATE_READY &&
                         (playerOpen || screen == Screen.LIBRARY), android.os.SystemClock.elapsedRealtime(),
+                    playback.videoFrameRendered,
                 ) + listOfNotNull(if (playback.errorMessage != null) "PLAYBACK_ERROR" else null,
                     if (waveformDiagnostics.error != null) "WAVEFORM_ERROR" else null)
                 val warning = warnings.isNotEmpty()

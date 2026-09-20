@@ -14,6 +14,7 @@ object VideoSurfaceOwner {
     private var foreground = false
     private var nowPlaying = false
     private var pip = false
+    private var noOpReconciles = 0
     internal val state = MutableStateFlow(SurfaceLease())
     val expectedOwner: String get() = expectedSurfaceOwner(foreground, nowPlaying, pip)
     fun setActivityForeground(value: Boolean) {
@@ -47,9 +48,13 @@ object VideoSurfaceOwner {
             }
             return
         }
-        if (previous === target && target.player === player) return
+        if (previous === target && target.player === player) {
+            noOpReconciles++
+            return
+        }
         val previousOwner = state.value.owner
-        state.value = state.value.attach(candidate.owner, System.identityHashCode(target), SystemClock.elapsedRealtime())
+        state.value = state.value.attach(candidate.owner, System.identityHashCode(target), SystemClock.elapsedRealtime(),
+            System.identityHashCode(player), "expected-owner-change:$previousOwner->${candidate.owner}")
         // Media3 requires NEW before OLD for one Player. Different controllers have
         // independent surface caches, so clear the old controller first in that case.
         if (previous?.player === player) PlayerView.switchTargetView(player, previous, target)
@@ -58,9 +63,11 @@ object VideoSurfaceOwner {
         log("attach previousOwner=$previousOwner", target)
     }
     fun detach(view: PlayerView) {
-        candidates.entries.removeAll { it.value.view.get() === view }
+        val wasRegistered = candidates.entries.removeAll { it.value.view.get() === view }
         val stale = active.get() !== view
-        state.value = state.value.detach(System.identityHashCode(view), SystemClock.elapsedRealtime())
+        if (!stale || wasRegistered) {
+            state.value = state.value.detach(System.identityHashCode(view), SystemClock.elapsedRealtime())
+        }
         log("release requestedOwner=${view.tag} stale=$stale ignored=$stale", view)
         if (stale) return // No setter and no MediaController surface-clear command.
         view.player = null
@@ -81,8 +88,8 @@ object VideoSurfaceOwner {
         log("firstFrame output=${System.identityHashCode(output)} attribution=renderer-time accepted=${match && eventMs >= state.value.sinceMs}", active.get())
     }
     fun describe(): String = state.value.let {
-        "owner=${it.owner} expected=$expectedOwner generation=${it.generation} activeFirstFrame=${it.firstFrame} mediaFirstFrame=${it.mediaFirstFrame}\n" +
-            "ownerFrames=${it.framesByOwner} lastFrameOwner=${it.lastFrameOwner} lastFrameGeneration=${it.lastFrameGeneration} staleDetachesIgnored=${it.staleDetaches}\n" +
+        "owner=${it.owner} expected=$expectedOwner generation=${it.generation} view=${it.view} player=${it.player} activeFirstFrame=${it.firstFrame} mediaFirstFrame=${it.mediaFirstFrame}\n" +
+            "transition=${it.transitionReason} noOpReconciles=$noOpReconciles ownerFrames=${it.framesByOwner} lastFrameOwner=${it.lastFrameOwner} lastFrameGeneration=${it.lastFrameGeneration} staleDetachesIgnored=${it.staleDetaches}\n" +
             "decoder=${it.decoder} codecError=${it.codecError ?: "none"} droppedFrames=${it.droppedFrames}"
     }
     private fun log(event: String, view: PlayerView?) {

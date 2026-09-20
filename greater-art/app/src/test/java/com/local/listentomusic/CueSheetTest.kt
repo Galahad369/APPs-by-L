@@ -57,4 +57,19 @@ class CueSheetTest {
         assertEquals(1000L, entry.start)
         assertEquals(5000L, entry.end)
     }
+    @Test fun portableM3uDoesNotLeakAbsoluteDownloadPath() {
+        val root = java.io.File("C:/storage/Download")
+        val file = MediaFile(
+            path = "C:/storage/Download/Music/song.flac",
+            name = "song.flac",
+            durationMs = 2_000,
+            sizeBytes = 10,
+            modifiedMs = 1,
+            kind = MediaKind.AUDIO,
+            sourcePath = "C:/storage/Download/Music/song.flac",
+        )
+        val exported = exportPortableM3u(listOf(file), root)
+        assertTrue(exported.contains("Music/song.flac"))
+        assertFalse(exported.contains("C:/storage/Download"))
+    }
 }

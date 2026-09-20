@@ -6,11 +6,18 @@ ads, analytics, accounts, telemetry, or network access.
 
 ## Features
 
-- v1.12.1 changes the playback journey: tapping a Library row starts playback in
+- v1.12.2 keeps the playback journey library-first: tapping a Library row starts playback in
   place, while tapping the live Library mini-player deliberately opens Now Playing.
-  The bottom player is shorter, uses a square preview for square artwork/video and
-  hands its initial bounds to the external floating player without resetting later
-  remembered positions.
+  The list now draws behind that player instead of reserving a permanent blank band;
+  only its scroll-end inset keeps the final row reachable.
+- Hold an actively playing video for 700 ms for temporary 2× playback. Releasing
+  restores the exact prior speed without changing the saved preference. Queue search,
+  local Favorites, original-file sharing, multi-file sharing and portable M3U8 list
+  sharing are available without adding network access.
+- Video surface ownership now keeps the same PlayerView through media transitions and
+  cross-checks Media3's current-media first-frame signal. This removes the unnecessary
+  surface recreation behind misleading `READY_VIDEO_NO_FRAME` warnings; see
+  [the 1.12.2 surface note](docs/SURFACE_DEBUG_1.12.2.md).
 - The mini-window preserves the established visible `103×56dp` widescreen footprint,
   switches to `56×56dp` for square art/video, reaches screen edges without a hidden
   gutter, shows embedded audio artwork, and applies a strong transparent red tint
@@ -196,7 +203,7 @@ $env:GRADLE_USER_HOME = Join-Path $env:USERPROFILE '.gradle'
 Current release artifact:
 
 ```text
-releases/GreaterArt-1.12.1.apk
+releases/GreaterArt-1.12.2.apk
 ```
 
 Versioned APKs are never overwritten. Builds remain signed by the pinned personal
@@ -287,14 +294,14 @@ against maintained open-source Android players.
 
 ## Current Verification Boundary
 
-For 1.12.1 (code 82): 96 unit tests passed; lint reports 0 errors, 18 warnings and 1 hint; the debug
+For 1.12.2 (code 83): 99 unit tests passed; lint reports 0 errors, 18 warnings and 1 hint; the debug
 build and APK signature verification passed. The application ID/signing certificate
 are unchanged and the packaged manifest has no INTERNET permission. No Android device
 was connected for this review build.
 
-APK: `releases/GreaterArt-1.12.1.apk` (26,024,921 bytes)
+APK: `releases/GreaterArt-1.12.2.apk` (26,711,353 bytes)
 
-SHA-256: `4713ad2eb43cebb3c0c115300f26aeba163247cafee7e057e8bdeaf047609f7a`.
+SHA-256: `09a15cadecb06bfbf3c562fd163db8b8aea76a2fabe296ee42a09806ce8fd0f5`.
 
 The 1.9 series includes regression checks for mixer headroom, languages, natural
 sorting, playlist rules, CUE/M3U boundaries and local lyric parsing. Build checks do
