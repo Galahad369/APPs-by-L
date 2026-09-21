@@ -156,7 +156,7 @@ class NowPlayingOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
                         isPictureInPicture = false,
                         onVideoBoundsChanged = {},
                         onPictureInPicture = ::shrinkToMini,
-                        onHome = ::stopSelf,
+                        onHome = ::returnToLibrary,
                         onClose = ::stopSelf,
                         onTogglePlay = viewModel::togglePlayPause,
                         onPrevious = viewModel::previous,
@@ -249,6 +249,20 @@ class NowPlayingOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
         launchedFromMini = launchedFromMini ||
             intent?.getBooleanExtra(EXTRA_FROM_MINI_WINDOW, false) == true
         return START_NOT_STICKY
+    }
+
+    private fun returnToLibrary() {
+        runCatching {
+            startActivity(
+                Intent(this, com.local.listentomusic.MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                        Intent.FLAG_ACTIVITY_NO_ANIMATION
+                },
+            )
+        }
+        stopSelf()
     }
 
     private fun shrinkToMini() {
