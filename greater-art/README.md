@@ -4,12 +4,23 @@ Greater Art is a native Kotlin/Jetpack Compose player for local music and video.
 
 ## Current release
 
-- Version: **1.12.5**
-- Version code: **86**
+- Version: **1.12.7**
+- Version code: **88**
 - Application ID: `com.local.listentomusic`
-- APK: `releases/GreaterArt-1.12.5.apk`
-- APK SHA-256: `5f876dea74951e0cb44b05029cff6bd4c06431b7289f3ee3d1971474a524af4c`
+- APK: `releases/GreaterArt-1.12.7.apk`
+- APK SHA-256: `ba584647e7f742ddf16ad1f736f610ca532b18e63dbeebaaff26928ba79923a4`
 - Signing certificate SHA-256: `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
+- v1.12.7 keeps Now Playing in a focusable system overlay. Its single Share button
+  offers the current original media file or an M3U8 export of the queue; a
+  transient internal Activity lets Android's share sheet receive input above the
+  overlay. The queue header now keeps Search without a duplicate Share control.
+  Library rows reserve a stable artwork/title alignment slot and respond subtly
+  to press and active-track changes. Developer Mode shows a short status first,
+  with the full report behind Technical details. The overlay's presentation-only
+  ViewModel no longer triggers a second library scan, thumbnail/waveform warmup,
+  or duplicate play-history recording.
+- v1.12.6 moves Now Playing into a system overlay rather than an in-Activity
+  sheet. Mini Window can expand directly back to that overlay.
 - v1.12.5 makes the Now Playing ↔ Mini Window surface handoff symmetric and
   readiness-gated. The working source surface stays alive until the destination owns
   the player and renders its first frame; audio transitions do not wait on a video
@@ -132,7 +143,7 @@ $env:GRADLE_USER_HOME = Join-Path $env:USERPROFILE '.gradle'
 Current release artifact:
 
 ```text
-releases/GreaterArt-1.12.5.apk
+releases/GreaterArt-1.12.7.apk
 ```
 
 Versioned APKs are never overwritten. Builds remain signed by the pinned personal
@@ -160,11 +171,13 @@ app/src/main/java/com/local/listentomusic/
 ├── playback/
 │   ├── PlaybackService.kt
 │   ├── ParallelPlayback.kt
-│   └── MiniWindowOverlayService.kt
+│   ├── MiniWindowOverlayService.kt
+│   └── NowPlayingOverlayService.kt
 └── ui/
     ├── GreaterArtApp.kt
     ├── LibraryScreen.kt
     ├── NowPlayingScreen.kt
+    ├── ShareProxyActivity.kt
     ├── SettingsScreen.kt
     └── components/
 ```
@@ -182,14 +195,14 @@ app/src/main/java/com/local/listentomusic/
 
 ## Verification boundary
 
-For 1.12.5 (code 86): 105 unit tests passed; lint reports 0 errors, 18 warnings and 1 hint;
+For 1.12.7 (code 88): 105 unit tests passed; lint reports 0 errors, 18 warnings and 1 hint;
 the debug build, APK v2 signature and 16 KiB alignment checks passed. The application
 ID and pinned signing certificate are unchanged, and the packaged manifest has no
 INTERNET permission. No Android device was connected for this review build.
 
-APK: `releases/GreaterArt-1.12.5.apk` (26,074,638 bytes)
+APK: `releases/GreaterArt-1.12.7.apk` (26,852,621 bytes)
 
-SHA-256: `5f876dea74951e0cb44b05029cff6bd4c06431b7289f3ee3d1971474a524af4c`.
+SHA-256: `ba584647e7f742ddf16ad1f736f610ca532b18e63dbeebaaff26928ba79923a4`.
 
 Real-device checks remain required for visible surface output, overlay geometry, Sharesheet receivers, Bluetooth behavior, hold-to-2× cancellation, and device-specific performance.
 

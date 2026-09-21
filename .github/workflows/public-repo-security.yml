@@ -78,19 +78,11 @@ jobs:
           build-mode: manual
           queries: security-extended
 
-      - name: Make wrappers executable
-        run: chmod +x greater-art/gradlew offline-toolbox/gradlew useless-calculator/gradlew
+      - name: Make wrapper executable
+        run: chmod +x greater-art/gradlew
 
       - name: Build Greater Art for CodeQL
         working-directory: greater-art
-        run: ./gradlew assembleDebug --no-daemon
-
-      - name: Build LocalKit for CodeQL
-        working-directory: offline-toolbox
-        run: ./gradlew assembleDebug --no-daemon
-
-      - name: Build Useless Calculator for CodeQL
-        working-directory: useless-calculator
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Analyze Kotlin and Java

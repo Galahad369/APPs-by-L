@@ -3,14 +3,19 @@ package com.local.listentomusic.playback
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
 import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.OnBackPressedDispatcherOwner
 import androidx.activity.setViewTreeOnBackPressedDispatcherOwner
@@ -41,9 +46,11 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.local.listentomusic.MainViewModel
 import com.local.listentomusic.R
 import com.local.listentomusic.ui.AndroidShare
+import com.local.listentomusic.ui.ShareProxyActivity
 import com.local.listentomusic.ui.NowPlayingScreen
 import com.local.listentomusic.ui.theme.GreaterArtTheme
 import com.local.listentomusic.ui.uiText
+import com.local.listentomusic.model.mediaFileFromSession
 import com.local.listentomusic.ui.components.VideoSurfaceOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -76,6 +83,13 @@ class NowPlayingOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
     private var composeView: ComposeView? = null
     private var windowParams: WindowManager.LayoutParams? = null
     private var launchedFromMini = false
+    private var sharing = false
+    private var originalWindowFlags = 0
+    private val shareFinished = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == ShareProxyActivity.ACTION_FINISHED) restoreAfterShare()
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -95,6 +109,11 @@ class NowPlayingOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
             this,
             ViewModelProvider.AndroidViewModelFactory.getInstance(application),
         )[MainViewModel::class.java]
+        viewModel.useSessionPresentationOnly()
+        ContextCompat.registerReceiver(
+            this, shareFinished, IntentFilter(ShareProxyActivity.ACTION_FINISHED),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
 
         VideoSurfaceOwner.beginHandoff("NOW_PLAYING")
         VideoSurfaceOwner.setSystemOverlayVisible(OVERLAY_TOKEN, "NOW_PLAYING", true)
@@ -180,22 +199,21 @@ class NowPlayingOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
                         onShareCurrentMedia = {
                             val current = queue.firstOrNull { it.path == playback.currentPath }
                                 ?: library.files.firstOrNull { it.path == playback.currentPath }
-                            if (current != null) {
-                                AndroidShare.media(
-                                    this@NowPlayingOverlayService,
-                                    current,
-                                    uiText(settings.appLanguage, "Share media file", "分享媒體檔案"),
-                                )
-                            }
+                                ?: controller?.currentMediaItem?.let(::mediaFileFromSession)
+                            if (current == null) shareError(settings.appLanguage)
+                            else AndroidShare.mediaChooser(
+                                this@NowPlayingOverlayService, current,
+                                uiText(settings.appLanguage, "Share media file", "分享媒體檔案"),
+                            ).onSuccess(::launchShare).onFailure { shareError(settings.appLanguage) }
                         },
                         onShareQueue = {
                             scope.launch {
-                                AndroidShare.list(
+                                AndroidShare.listChooser(
                                     this@NowPlayingOverlayService,
                                     uiText(settings.appLanguage, "Current queue", "目前播放佇列"),
                                     queue,
                                     uiText(settings.appLanguage, "Share current queue", "分享目前播放佇列"),
-                                )
+                                ).onSuccess(::launchShare).onFailure { shareError(settings.appLanguage) }
                             }
                         },
                     )
@@ -265,6 +283,44 @@ class NowPlayingOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
         stopSelf()
     }
 
+    private fun launchShare(chooser: Intent) {
+        if (sharing) return
+        val view = composeView ?: return
+        val params = windowParams ?: return
+        sharing = true
+        originalWindowFlags = params.flags
+        runCatching {
+            // A TYPE_APPLICATION_OVERLAY otherwise sits above Android's chooser and
+            // makes sharing appear broken. Keep the player/session alive underneath.
+            view.visibility = View.INVISIBLE
+            params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            windowManager?.updateViewLayout(view, params)
+            startActivity(Intent(this, ShareProxyActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+                putExtra(ShareProxyActivity.EXTRA_CHOOSER, chooser)
+            })
+        }.onFailure {
+            restoreAfterShare()
+            shareError(viewModel.settings.value.appLanguage)
+        }
+    }
+
+    private fun restoreAfterShare() {
+        if (!sharing) return
+        sharing = false
+        val view = composeView ?: return
+        windowParams?.let { params ->
+            params.flags = originalWindowFlags
+            runCatching { windowManager?.updateViewLayout(view, params) }
+        }
+        view.visibility = View.VISIBLE
+    }
+
+    private fun shareError(language: com.local.listentomusic.data.AppLanguage) {
+        Toast.makeText(this, uiText(language, "Could not open sharing", "無法開啟分享"), Toast.LENGTH_LONG).show()
+    }
+
     private fun shrinkToMini() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) return
         VideoSurfaceOwner.beginHandoff("MINI_WINDOW")
@@ -315,6 +371,7 @@ class NowPlayingOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
             .build()
 
     override fun onDestroy() {
+        runCatching { unregisterReceiver(shareFinished) }
         lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
         composeView?.let { runCatching { windowManager?.removeViewImmediate(it) } }
         composeView = null

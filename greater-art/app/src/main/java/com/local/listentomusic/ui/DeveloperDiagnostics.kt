@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -52,7 +53,14 @@ internal fun DeveloperDiagnostics(
     val context = LocalContext.current
     var open by remember { mutableStateOf(false) }
     var showRegions by remember { mutableStateOf(false) }
+    var showAdvanced by remember { mutableStateOf(false) }
     val accent = if (warning) Color(0xFFFF5C68) else Color(0xFF75EBD4)
+    val summary = remember(report) {
+        report.lineSequence().filter {
+            it.startsWith("screen=") || it.startsWith("playing=") ||
+                it.startsWith("playerState=") || it.startsWith("warnings=")
+        }.toList()
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (showRegions) {
@@ -102,13 +110,14 @@ internal fun DeveloperDiagnostics(
             properties = DialogProperties(usePlatformDefaultWidth = false),
         ) {
             Surface(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
                 color = Color(0xFF080C0D),
                 contentColor = Color.White,
+                shape = RoundedCornerShape(18.dp),
             ) {
                 Column(
-                    modifier = Modifier.statusBarsPadding().padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -116,53 +125,50 @@ internal fun DeveloperDiagnostics(
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Column {
-                            Text("SYSTEM INSPECTOR", style = MaterialTheme.typography.titleLarge)
-                            Text("LOCAL ONLY · LIVE STATE", color = accent, style = MaterialTheme.typography.labelSmall)
+                            Text("Inspector", style = MaterialTheme.typography.titleLarge)
+                            Text(if (warning) "Needs attention" else "Running locally", color = accent, style = MaterialTheme.typography.labelSmall)
                         }
                         TextButton(onClick = { open = false }) { Text("CLOSE") }
                     }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text("SHOW REGION IDS", fontWeight = FontWeight.SemiBold)
-                            Text("Labels the major visible UI zones.", style = MaterialTheme.typography.bodySmall)
-                        }
-                        Switch(checked = showRegions, onCheckedChange = { showRegions = it })
+                    summary.forEach { line ->
+                        Text(line, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
                     }
                     Button(
                         onClick = { open = false; inspector.arm() },
                         modifier = Modifier.fillMaxWidth(),
-                    ) { Text("PICK ELEMENT ON SCREEN") }
+                    ) { Text("Pick an element") }
                     inspector.selected?.let { selected ->
-                        Text("LAST PICK · ${selected.label} · ${selected.bounds.width.toInt()}×${selected.bounds.height.toInt()} px",
+                        Text("${selected.label} · ${selected.bounds.width.toInt()}×${selected.bounds.height.toInt()} px",
                             fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.labelSmall, color = accent)
                     }
-                    Surface(
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                        color = Color(0xFF141A1C),
-                        contentColor = Color.White,
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.24f)),
-                        shape = RoundedCornerShape(12.dp),
-                    ) {
-                        LazyColumn(Modifier.fillMaxSize().padding(14.dp)) {
-                            item {
-                                SelectionContainer {
-                                    Text(report, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = { showAdvanced = !showAdvanced; if (!showAdvanced) showRegions = false }) {
+                        Text(if (showAdvanced) "Hide technical details" else "Technical details")
+                    }
+                    if (showAdvanced) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text("Show region IDs", style = MaterialTheme.typography.bodySmall)
+                            Switch(checked = showRegions, onCheckedChange = { showRegions = it })
+                        }
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Color(0xFF141A1C),
+                            contentColor = Color.White,
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.24f)),
+                            shape = RoundedCornerShape(12.dp),
+                        ) {
+                            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 330.dp).padding(14.dp)) {
+                                item {
+                                    SelectionContainer {
+                                        Text(report, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+                                    }
                                 }
-                            }
-                            item {
-                                Text(
-                                    "\nACTIVE REGIONS",
-                                    color = accent,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
-                            items(regions) { region ->
-                                Text("• $region", fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+                                items(regions) { region ->
+                                    Text("• $region", fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+                                }
                             }
                         }
                     }
@@ -177,7 +183,7 @@ internal fun DeveloperDiagnostics(
                                 ?.setPrimaryClip(ClipData.newPlainText("Greater Art bug report", payload))
                         },
                         modifier = Modifier.fillMaxWidth(),
-                    ) { Text("COPY BUG REPORT") }
+                    ) { Text("Copy bug report") }
                 }
             }
         }

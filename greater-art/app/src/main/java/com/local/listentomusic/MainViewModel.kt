@@ -120,6 +120,16 @@ data class PlaybackUiState(
 }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
+    private var presentationOnly = false
+    /** A floating presentation reads the session queue; it must not rescan Download. */
+    fun useSessionPresentationOnly() {
+        presentationOnly = true
+        scanJob?.cancel()
+        thumbnailWarmupJob?.cancel()
+        thumbnailAheadJob?.cancel()
+        waveformWarmupJob?.cancel()
+        waveformAheadJob?.cancel()
+    }
     private val preferences = AppPreferences(application)
     private val thumbnailRepository = ThumbnailRepository(application)
     private val waveformRepository = WaveformRepository(application)
@@ -219,7 +229,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         override fun onEvents(player: Player, events: Player.Events) {
             publishPlayback(player)
             if (events.contains(Player.EVENT_TIMELINE_CHANGED) || events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION)) syncPlaybackQueue()
-            if (player.isPlaying && (events.contains(Player.EVENT_IS_PLAYING_CHANGED) ||
+            if (!presentationOnly && player.isPlaying && (events.contains(Player.EVENT_IS_PLAYING_CHANGED) ||
                     events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION))) {
                 player.currentMediaItem?.mediaId?.takeIf(String::isNotBlank)?.let { path ->
                     viewModelScope.launch { preferences.recordPlayed(path) }
@@ -266,9 +276,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _settings.value = it
                 if (!it.showAbRepeat) com.local.listentomusic.playback.PracticeLoop.clear()
                 _controller.value?.let(::publishPlayback)
-                if (libraryChanged) applySortingAndFilter()
-                if (searchChanged) refreshMetadata()
-                if (firstPreferences) rescan()
+                if (!presentationOnly) {
+                    if (libraryChanged) applySortingAndFilter()
+                    if (searchChanged) refreshMetadata()
+                    if (firstPreferences) rescan()
+                }
             }
         }
         connectController()

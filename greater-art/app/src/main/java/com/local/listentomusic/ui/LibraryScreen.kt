@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -485,7 +486,8 @@ fun LibraryScreen(
                                 moreDescription = uiText(language, "Song list", "歌曲清單"),
                             )
                             HorizontalDivider(
-                                Modifier.padding(start = if (preferences.showThumbnails) preferences.libraryRowSize.thumbnailWidth + 28.dp else 14.dp),
+                                Modifier.padding(start = 26.dp + if (preferences.showThumbnails)
+                                    preferences.libraryRowSize.thumbnailWidth + preferences.libraryRowSize.textSpacing else 0.dp),
                                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
                             )
                         }
@@ -753,6 +755,24 @@ private fun MediaFileRow(
     val thumbnail by produceState<Bitmap?>(null, file.path, "${file.sizeBytes}:${file.modifiedMs}:$showThumbnails:${file.coverUri}") {
         value = if (showThumbnails) onLoadThumbnail(file) else null
     }
+    val pressSource = remember { MutableInteractionSource() }
+    val pressed by pressSource.collectIsPressedAsState()
+    val rowColor by animateColorAsState(
+        if (isCurrent) MaterialTheme.colorScheme.primaryContainer
+        else Color.Transparent,
+        animationSpec = androidx.compose.animation.core.tween(190),
+        label = "library-row-active",
+    )
+    val rowScale by animateFloatAsState(
+        if (pressed) 0.992f else 1f,
+        animationSpec = androidx.compose.animation.core.tween(120),
+        label = "library-row-press",
+    )
+    val accentAlpha by animateFloatAsState(
+        if (isCurrent) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(190),
+        label = "library-row-accent",
+    )
     val dragModifier = if (dragEnabled) Modifier.pointerInput(index, itemCount) {
         val threshold = 54.dp.toPx()
         detectDragGesturesAfterLongPress(
@@ -773,14 +793,21 @@ private fun MediaFileRow(
     Row(
         Modifier.fillMaxWidth()
             .inspectElement("LIBRARY_MEDIA_ROW", file.name)
-            .background(if (isCurrent) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-            .clickable(onClick = onPlay).then(dragModifier)
+            .graphicsLayer { scaleX = rowScale; scaleY = rowScale }
+            .clip(RoundedCornerShape(10.dp))
+            .background(rowColor)
+            .clickable(interactionSource = pressSource, indication = null, onClick = onPlay)
+            .then(dragModifier)
             .padding(horizontal = 14.dp, vertical = rowSize.verticalPadding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (isCurrent) {
-            Box(Modifier.width(3.dp).height(rowSize.accentHeight).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.secondary))
-            Spacer(Modifier.width(9.dp))
+        // Reserve the same 12 dp for every row so artwork and titles never jump
+        // sideways when the active song changes.
+        Box(Modifier.width(12.dp), contentAlignment = Alignment.CenterStart) {
+            Box(Modifier.width(3.dp).height(rowSize.accentHeight)
+                .graphicsLayer { alpha = accentAlpha }
+                .clip(RoundedCornerShape(4.dp))
+                .background(MaterialTheme.colorScheme.secondary))
         }
         if (showThumbnails) {
             MediaThumbnail(file, thumbnail, rowSize)
@@ -813,7 +840,7 @@ private fun MediaFileRow(
             }
         }
         if (dragEnabled) Icon(Icons.Rounded.DragHandle, "Reorder", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        IconButton(onClick = onMore, modifier = Modifier.size(36.dp).inspectElement("MEDIA_MORE_BUTTON", "Actions for ${file.name}")) { Icon(Icons.Rounded.MoreVert, moreDescription) }
+        IconButton(onClick = onMore, modifier = Modifier.size(40.dp).inspectElement("MEDIA_MORE_BUTTON", "Actions for ${file.name}")) { Icon(Icons.Rounded.MoreVert, moreDescription) }
     }
 }
 

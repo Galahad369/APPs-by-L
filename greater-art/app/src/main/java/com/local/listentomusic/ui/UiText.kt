@@ -45,6 +45,8 @@ private val cantonese = mapOf(
     "Share Favorites" to "分享心水歌",
     "No favorites yet. Add them with the ⋮ button." to "仲未有心水歌，用 ⋮ 按鈕加落去。",
     "Share media file" to "分享原檔", "Share playlist" to "分享歌單", "Share current queue" to "分享而家個播放隊列",
+    "Share" to "分享", "Current media file" to "而家播緊嗰個檔", "Queue as M3U8" to "播放隊列（M3U8）",
+    "Could not open sharing" to "開唔到分享",
     "Share current Library list" to "分享而家個歌庫清單", "Search current queue" to "搵而家個播放隊列",
     "Share selected media files" to "分享揀咗嘅原檔", "Share original media files?" to "分享原始媒體檔？",
     "Share files" to "分享檔案", "Could not share these files" to "分享唔到呢啲檔案",
@@ -239,6 +241,10 @@ No favorites yet. Add them with the ⋮ button.|まだお気に入りはあり�
 Add to Favorites|お気に入りに追加|Zu Favoriten hinzufügen|Ajouter aux favoris
 Remove from Favorites|お気に入りから削除|Aus Favoriten entfernen|Retirer des favoris
 Share media file|メディアファイルを共有|Mediendatei teilen|Partager le fichier multimédia
+Share|共有|Teilen|Partager
+Current media file|現在のメディアファイル|Aktuelle Mediendatei|Fichier multimédia actuel
+Queue as M3U8|キューをM3U8として共有|Warteschlange als M3U8|File au format M3U8
+Could not open sharing|共有を開けませんでした|Teilen konnte nicht geöffnet werden|Impossible d’ouvrir le partage
 Share playlist|プレイリストを共有|Wiedergabeliste teilen|Partager la playlist
 Share current queue|現在のキューを共有|Aktuelle Warteschlange teilen|Partager la file actuelle
 Share current Library list|現在のライブラリリストを共有|Aktuelle Bibliotheksliste teilen|Partager la liste actuelle

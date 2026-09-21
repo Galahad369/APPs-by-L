@@ -78,6 +78,11 @@
             android:name=".playback.NowPlayingOverlayService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+        <activity
+            android:name=".ui.ShareProxyActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true" />
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

@@ -16,9 +16,8 @@ If private reporting is unavailable and a real credential is exposed, revoke or 
 
 ## Repository guarantees and limits
 
-- The Android apps intentionally contain no analytics or advertising SDKs.
+- Greater Art intentionally contains no analytics or advertising SDKs.
 - Greater Art intentionally declares no Internet permission.
-- Useless Calculator is offline satire and does not read or transmit data granted by its permission prompts.
 - Automated checks scan for known credential formats, sensitive filenames, local user paths, vulnerable code patterns, and dependency risks.
 - Automated scanning reduces risk but cannot prove that arbitrary source or binary data is harmless.
 

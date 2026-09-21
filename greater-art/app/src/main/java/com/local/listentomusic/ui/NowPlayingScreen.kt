@@ -622,6 +622,8 @@ private fun AudioPlayer(
                 isFavourite = isFavourite,
                 onToggleFavourite = onToggleFavourite,
                 onShareCurrentMedia = onShareCurrentMedia,
+                onShareQueue = onShareQueue,
+                canShareQueue = queue.isNotEmpty(),
                 headline = true,
             )
             if (playback.showAbRepeat || playback.showSleepControl) {
@@ -643,7 +645,6 @@ private fun AudioPlayer(
                 onLoadThumbnail = onLoadThumbnail,
                 onMoveQueueItem = onMoveQueueItem,
                 onRemoveQueueItem = onRemoveQueueItem,
-                onShareQueue = onShareQueue,
                 modifier = Modifier.fillMaxWidth().weight(1f),
             )
             WaveformTimeline(playback, waveform, onSeek, language, waveformLoading, artwork)
@@ -745,6 +746,8 @@ private fun SecondaryControls(
             isFavourite = isFavourite,
             onToggleFavourite = onToggleFavourite,
             onShareCurrentMedia = onShareCurrentMedia,
+            onShareQueue = onShareQueue,
+            canShareQueue = queue.isNotEmpty(),
             headline = false,
         )
         if (playback.showAbRepeat || playback.showSleepControl) {
@@ -766,7 +769,6 @@ private fun SecondaryControls(
             onLoadThumbnail = onLoadThumbnail,
             onMoveQueueItem = onMoveQueueItem,
             onRemoveQueueItem = onRemoveQueueItem,
-            onShareQueue = onShareQueue,
             modifier = Modifier.fillMaxWidth().weight(1f),
         )
         Timeline(playback, onSeek)
@@ -788,7 +790,6 @@ private fun NowPlayingQueue(
     onLoadThumbnail: suspend (MediaFile) -> Bitmap?,
     onMoveQueueItem: (Int, Int) -> Unit,
     onRemoveQueueItem: (Int) -> Unit,
-    onShareQueue: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var searchOpen by rememberSaveable { mutableStateOf(false) }
@@ -841,9 +842,6 @@ private fun NowPlayingQueue(
                 )
                 IconButton(onClick = { searchOpen = true }, modifier = Modifier.inspectElement("QUEUE_SEARCH_BUTTON", "Searches the current queue without changing its order")) {
                     Icon(Icons.Rounded.Search, uiText(language, "Search current queue", "搜尋目前播放佇列"))
-                }
-                IconButton(onClick = onShareQueue, enabled = queue.isNotEmpty(), modifier = Modifier.inspectElement("SHARE_QUEUE_BUTTON", "Shares the ordered queue as M3U8")) {
-                    Icon(Icons.Rounded.Share, uiText(language, "Share current queue", "分享目前播放佇列"))
                 }
             }
         }
@@ -1276,6 +1274,8 @@ private fun CurrentMediaHeader(
     isFavourite: Boolean,
     onToggleFavourite: () -> Unit,
     onShareCurrentMedia: () -> Unit,
+    onShareQueue: () -> Unit,
+    canShareQueue: Boolean,
     headline: Boolean,
 ) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -1298,11 +1298,26 @@ private fun CurrentMediaHeader(
                 tint = if (isFavourite) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outline,
             )
         }
-        IconButton(
-            onClick = onShareCurrentMedia,
-            modifier = Modifier.inspectElement("SHARE_CURRENT_MEDIA_BUTTON", "Shares the current original media file"),
-        ) {
-            Icon(Icons.Rounded.Share, uiText(playback.appLanguage, "Share media file", "分享媒體檔案"))
+        var shareMenuOpen by remember { mutableStateOf(false) }
+        Box {
+            IconButton(
+                onClick = { shareMenuOpen = true },
+                modifier = Modifier.inspectElement("SHARE_BUTTON", "Choose the current file or an M3U8 queue"),
+            ) {
+                Icon(Icons.Rounded.Share, uiText(playback.appLanguage, "Share", "分享"))
+            }
+            DropdownMenu(shareMenuOpen, { shareMenuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text(uiText(playback.appLanguage, "Current media file", "目前媒體檔案")) },
+                    enabled = playback.currentPath != null,
+                    onClick = { shareMenuOpen = false; onShareCurrentMedia() },
+                )
+                DropdownMenuItem(
+                    text = { Text(uiText(playback.appLanguage, "Queue as M3U8", "將播放佇列分享為 M3U8")) },
+                    enabled = canShareQueue,
+                    onClick = { shareMenuOpen = false; onShareQueue() },
+                )
+            }
         }
     }
 }

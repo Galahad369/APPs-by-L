@@ -14,7 +14,7 @@ import kotlinx.coroutines.withContext
 internal object AndroidShare {
     private const val LIST_CACHE_MAX_AGE_MS = 24L * 60L * 60L * 1_000L
 
-    fun media(context: Context, media: MediaFile, chooserTitle: String): Result<Unit> = runCatching {
+    fun mediaChooser(context: Context, media: MediaFile, chooserTitle: String): Result<Intent> = runCatching {
         val source = File(media.sourcePath).canonicalFile
         require(source.isFile && source.canRead() && MediaScanner.isInsideTarget(source))
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", source)
@@ -25,10 +25,14 @@ internal object AndroidShare {
             clipData = android.content.ClipData.newUri(context.contentResolver, source.name, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.startActivity(Intent.createChooser(intent, chooserTitle).apply {
-            if (context !is android.app.Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        })
+        Intent.createChooser(intent, chooserTitle)
     }
+
+    fun media(context: Context, media: MediaFile, chooserTitle: String): Result<Unit> =
+        mediaChooser(context, media, chooserTitle).mapCatching { chooser ->
+            if (context !is android.app.Activity) chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(chooser)
+        }
 
     fun mediaFiles(context: Context, media: List<MediaFile>, chooserTitle: String): Result<Unit> = runCatching {
         require(media.isNotEmpty())
@@ -51,10 +55,12 @@ internal object AndroidShare {
             }
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.startActivity(Intent.createChooser(intent, chooserTitle))
+        context.startActivity(Intent.createChooser(intent, chooserTitle).apply {
+            if (context !is android.app.Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        })
     }
 
-    suspend fun list(context: Context, label: String, files: List<MediaFile>, chooserTitle: String): Result<Unit> {
+    suspend fun listChooser(context: Context, label: String, files: List<MediaFile>, chooserTitle: String): Result<Intent> {
         val exported = withContext(Dispatchers.IO) {
             runCatching {
                 require(files.isNotEmpty())
@@ -75,11 +81,15 @@ internal object AndroidShare {
                 clipData = android.content.ClipData.newUri(context.contentResolver, file.name, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            context.startActivity(Intent.createChooser(intent, chooserTitle).apply {
-                if (context !is android.app.Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            })
+            Intent.createChooser(intent, chooserTitle)
         }
     }
+
+    suspend fun list(context: Context, label: String, files: List<MediaFile>, chooserTitle: String): Result<Unit> =
+        listChooser(context, label, files, chooserTitle).mapCatching { chooser ->
+            if (context !is android.app.Activity) chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(chooser)
+        }
 
     private fun mimeFor(file: File): String {
         val extension = file.extension.lowercase()

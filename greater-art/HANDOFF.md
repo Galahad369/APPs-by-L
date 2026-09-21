@@ -3,22 +3,52 @@
 This file describes the **current repository state only**. Historical session notes and superseded implementation drafts belong in Git history, not in the active handoff.
 
 **Project:** `greater-art/` in the repository checkout
-**Current version:** `1.12.6 (code 87)`
-**Latest APK:** `releases/GreaterArt-1.12.6.apk` (verification below)
+**Current version:** `1.12.7 (code 88)`
+**Latest APK:** `releases/GreaterArt-1.12.7.apk` (verification below)
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 ## Repository state
 
 - Project: `greater-art/`
-- Version: **1.12.6**
-- Version code: **87**
+- Version: **1.12.7**
+- Version code: **88**
 - Application ID: `com.local.listentomusic`
-- APK: `releases/GreaterArt-1.12.6.apk`
-- APK SHA-256: `c90f763f133de8f8144fa9554bef8cddefafe96dd453ca4da8b253e8d470d0e3`
+- APK: `releases/GreaterArt-1.12.7.apk`
+- APK SHA-256: `ba584647e7f742ddf16ad1f736f610ca532b18e63dbeebaaff26928ba79923a4`
 - Signing certificate SHA-256: `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 `app/build.gradle.kts` is the version source of truth. Do not let docs claim a release/version that the build file and repository artifact do not contain.
+
+### September 21 — 1.12.7 overlay sharing and Greater Art-only repo
+
+- Merged system Now Playing overlay source was present on `main`, but its two
+  Share controls were visually redundant and service-launched share sheets sat
+  behind the focusable `TYPE_APPLICATION_OVERLAY`. Current-file Share and
+  queue M3U8 export now live in one menu. A non-exported translucent
+  `ShareProxyActivity` temporarily hides/disarms the overlay while Android's
+  chooser is active, then restores it without re-preparing playback.
+- Root cause of avoidable overlay entry work: its new `MainViewModel` also
+  performed a full Download scan, thumbnail/waveform warmup, and play-history
+  write even though it only presents the existing Media3 session. The
+  presentation-only path skips those jobs and uses the session queue.
+- Library row artwork/title placement no longer changes when a track becomes
+  active. Press and active state use short, low-cost animations. Developer Mode
+  opens to a compact summary; technical data remains one tap away.
+- Removed tracked LocalKit and calculator source/APKs and their CI/Dependabot,
+  issue-template, README and landing-page links. Ignored local files (including
+  machine-only signing/build data) were not purged. Old commits remain in Git
+  history; deletion from `main` is not a history rewrite.
+- Verification: 105 unit tests passed; lint 0 errors, 18 warnings, 1 hint;
+  `assembleDebug` passed. APK package `com.local.listentomusic`, version
+  1.12.7/code 88, no packaged INTERNET permission, pinned certificate
+  `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`,
+  APK v2 signature and 16 KiB zip alignment verified. Public-repo audit passed.
+- Artifact: `releases/GreaterArt-1.12.7.apk`, 26,852,621 bytes,
+  SHA-256 `ba584647e7f742ddf16ad1f736f610ca532b18e63dbeebaaff26928ba79923a4`.
+- Device boundary: no phone/emulator connected. Sharesheet focus/return and
+  overlay video-surface continuity need a real-device check before calling
+  them visually proven.
 
 ### September 21 — 1.12.6 splash logo scaling fix + version bump
 
