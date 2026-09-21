@@ -15,12 +15,12 @@ object VideoSurfaceOwner {
     private var nowPlaying = false
     private var pip = false
     private var handoffTarget: String? = null
-    private val systemOverlayTokens = mutableSetOf<String>()
+    private val systemOverlayOwners = linkedMapOf<String, String>()
     private var noOpReconciles = 0
     internal val state = MutableStateFlow(SurfaceLease())
     val expectedOwner: String
-        get() = if (systemOverlayTokens.isNotEmpty()) "MINI_WINDOW"
-        else handoffTarget ?: expectedSurfaceOwner(foreground, nowPlaying, pip)
+        get() = handoffTarget ?: systemOverlayOwners.values.lastOrNull()
+            ?: expectedSurfaceOwner(foreground, nowPlaying, pip)
     fun setActivityForeground(value: Boolean) {
         if (foreground != value) { foreground = value; log("foreground=$value expected=$expectedOwner", active.get()) }
         reconcile()
@@ -31,10 +31,15 @@ object VideoSurfaceOwner {
         if (changed) log("presentationRequested=$expectedOwner", active.get())
         reconcile()
     }
-    fun setSystemOverlayVisible(token: String, visible: Boolean) {
-        val changed = if (visible) systemOverlayTokens.add(token) else systemOverlayTokens.remove(token)
+    fun setSystemOverlayVisible(token: String, owner: String, visible: Boolean) {
+        val changed = if (visible) {
+            val previous = systemOverlayOwners.put(token, owner)
+            previous != owner
+        } else {
+            systemOverlayOwners.remove(token) != null
+        }
         if (changed) {
-            log("systemOverlay=$visible token=$token expected=$expectedOwner", active.get())
+            log("systemOverlay=$visible token=$token owner=$owner expected=$expectedOwner", active.get())
             reconcile()
         }
     }
