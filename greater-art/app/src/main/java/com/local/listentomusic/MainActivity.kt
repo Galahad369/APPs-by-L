@@ -140,6 +140,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
+        // A system-level Now Playing window is already the active external
+        // presentation. Do not spawn a second Mini Window underneath it.
+        if (com.local.listentomusic.ui.components.VideoSurfaceOwner.systemOverlayActive) return
         val playback = viewModel.playback.value
         val settings = viewModel.settings.value
         if (
