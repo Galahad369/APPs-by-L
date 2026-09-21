@@ -46,6 +46,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.net.toUri
+import androidx.core.content.ContextCompat
+import com.local.listentomusic.playback.NowPlayingOverlayService
 import com.local.listentomusic.MainViewModel
 import com.local.listentomusic.ui.components.AppBackground
 import com.local.listentomusic.ui.components.MiniPlayer
@@ -142,12 +144,36 @@ fun GreaterArtApp(
     val libraryPager = rememberPagerState(initialPage = 0, pageCount = { 2 })
     val navigationScope = rememberCoroutineScope()
     LaunchedEffect(libraryPager.currentPage) { if (libraryPager.currentPage == 1) viewModel.requestGraph() }
-    var playerOpen by rememberSaveable { mutableStateOf(openPlayerRequest > 0) }
     var editDisplay by remember { mutableStateOf<com.local.listentomusic.model.MediaFile?>(null) }
     var createRule by remember { mutableStateOf(false) }
-    var sheetState by remember { mutableStateOf(androidx.compose.animation.core.MutableTransitionState(openPlayerRequest > 0)) }
-    val playerPresentationRequested = playerOpen || openPlayerRequest > 0
-    sheetState.targetState = playerPresentationRequested
+    var pendingNowPlayingOpen by remember { mutableStateOf(false) }
+    val overlayPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) {
+        if (pendingNowPlayingOpen && Settings.canDrawOverlays(context)) {
+            ContextCompat.startForegroundService(
+                context,
+                Intent(context, NowPlayingOverlayService::class.java),
+            )
+        }
+        pendingNowPlayingOpen = false
+    }
+    val openNowPlayingOverlay: () -> Unit = {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context)) {
+            ContextCompat.startForegroundService(
+                context,
+                Intent(context, NowPlayingOverlayService::class.java),
+            )
+        } else {
+            pendingNowPlayingOpen = true
+            overlayPermissionLauncher.launch(
+                Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    "package:${context.packageName}".toUri(),
+                ),
+            )
+        }
+    }
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
         val observer = object : androidx.lifecycle.DefaultLifecycleObserver {
@@ -162,22 +188,15 @@ fun GreaterArtApp(
 
     LaunchedEffect(openPlayerRequest) {
         if (openPlayerRequest > 0) {
-            // MainActivity already refreshes the live MediaSession on resume. Do not
-            // make the Mini Window return wait on duplicate queue/session work before
-            // declaring Now Playing visible.
-            playerOpen = true
-            sheetState = androidx.compose.animation.core.MutableTransitionState(true)
+            openNowPlayingOverlay()
             onOpenPlayerRequestConsumed(openPlayerRequest)
         }
     }
 
-    LaunchedEffect(playerPresentationRequested) {
-        onPlayerScreenChanged(playerPresentationRequested)
-    }
+    LaunchedEffect(Unit) { onPlayerScreenChanged(false) }
 
-    BackHandler(enabled = screen != Screen.LIBRARY || playerOpen || libraryPager.currentPage == 1) {
-        if (playerOpen) playerOpen = false
-        else if (screen != Screen.LIBRARY) screen = Screen.LIBRARY
+    BackHandler(enabled = screen != Screen.LIBRARY || libraryPager.currentPage == 1) {
+        if (screen != Screen.LIBRARY) screen = Screen.LIBRARY
         else navigationScope.launch { libraryPager.animateScrollToPage(0) }
     }
 
@@ -190,7 +209,8 @@ fun GreaterArtApp(
         val lightPalette = MaterialTheme.colorScheme.background.luminance() > 0.5f
         androidx.compose.runtime.SideEffect {
             com.local.listentomusic.ui.components.VideoSurfaceOwner.setPresentation(
-                playerPresentationRequested || sheetState.currentState || sheetState.targetState, isPictureInPicture,
+                nowPlayingVisible = false,
+                pictureInPicture = isPictureInPicture,
             )
         }
         LaunchedEffect(lightPalette) {
@@ -206,7 +226,7 @@ fun GreaterArtApp(
             // Stable ownership across navigation: prepare once, pause when covered,
             // and resume immediately when Library or Settings reveals the wallpaper.
             AppBackground(preferences = settings, currentPath = playback.currentPath, isVideo = playback.isVideo, controller = controller,
-                visible = !(sheetState.currentState || sheetState.targetState))
+                visible = true)
             Surface(
                 modifier = Modifier.fillMaxSize(),
                 // A light palette needs an opaque-enough base over black/custom media.
@@ -250,11 +270,10 @@ fun GreaterArtApp(
                                 playback = playback,
                                 artwork = artwork,
                                 controller = controller,
-                                videoPreviewActive = playback.isVideo &&
-                                    !(sheetState.currentState || sheetState.targetState),
+                                videoPreviewActive = playback.isVideo,
                                 language = settings.appLanguage,
                                 onPreviewBoundsChanged = onMiniWindowSourceBoundsChanged,
-                                onOpen = { playerOpen = true },
+                                onOpen = openNowPlayingOverlay,
                                 onTogglePlay = viewModel::togglePlayPause,
                                 onPrevious = viewModel::previous,
                                 onNext = viewModel::next,
@@ -269,7 +288,7 @@ fun GreaterArtApp(
                         val error by viewModel.graphError.collectAsStateWithLifecycle()
                         NodesScreen(graph, loading, error, playback.currentPath, padding,
                             { navigationScope.launch { libraryPager.animateScrollToPage(0) } }, viewModel::requestGraph,
-                            { viewModel.playGraphNode(it); playerOpen = true }, settings.graphOptions, viewModel::setGraphOptions, settings.appLanguage)
+                            { viewModel.playGraphNode(it); openNowPlayingOverlay() }, settings.graphOptions, viewModel::setGraphOptions, settings.appLanguage)
                     } else {
                     LibraryScreen(
                         appName = appName,
@@ -418,41 +437,6 @@ fun GreaterArtApp(
                 )
             }
             }
-            PlayerOverlay(
-                sheetState,
-                isPictureInPicture,
-                { playerOpen = false },
-                instantReveal = openPlayerRequest > 0,
-            ) {
-                NowPlayingScreen(playback, artwork, queue, lyrics, settings.showFileDetails, settings.editableQueue,
-                    settings.blackDiscMode,
-                    settings.appLanguage, controller, PaddingValues(0.dp), isPictureInPicture,
-                    onVideoBoundsChanged, onEnterPictureInPicture,
-                    { screen = Screen.LIBRARY; playerOpen = false; navigationScope.launch { libraryPager.scrollToPage(0) } }, { playerOpen = false },
-                    viewModel::togglePlayPause, viewModel::previous, viewModel::next, viewModel::seekTo,
-                    viewModel::setSpeed, viewModel::cycleRepeatMode, viewModel::setSleepTimer, sleepTimer,
-                    settings.seekOffsetMs, viewModel::seekBy, viewModel::playQueueItem, viewModel::loadThumbnail,
-                    viewModel::loadWaveform, viewModel::moveQueueItem, viewModel::removeQueueItem,
-                    viewModel::beginTemporaryDoubleSpeed, viewModel::endTemporaryDoubleSpeed,
-                    playback.currentPath in settings.favouritePaths, viewModel::toggleFavourite,
-                    {
-                        val current = queue.firstOrNull { it.path == playback.currentPath }
-                            ?: library.files.firstOrNull { it.path == playback.currentPath }
-                        if (current != null) {
-                            AndroidShare.media(context, current, uiText(settings.appLanguage, "Share media file", "分享媒體檔案")).onFailure {
-                                android.widget.Toast.makeText(context, uiText(settings.appLanguage, "Could not share this file", "無法分享此檔案"), android.widget.Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    },
-                    {
-                        navigationScope.launch {
-                            AndroidShare.list(context, uiText(settings.appLanguage, "Current queue", "目前播放佇列"), queue,
-                                uiText(settings.appLanguage, "Share current queue", "分享目前播放佇列")).onFailure {
-                                android.widget.Toast.makeText(context, uiText(settings.appLanguage, "Could not share this list", "無法分享此清單"), android.widget.Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    })
-            }
             val undoMessage by viewModel.undoMessage.collectAsStateWithLifecycle()
             undoMessage?.let { message ->
                 androidx.compose.material3.Snackbar(modifier = Modifier.align(Alignment.BottomCenter), action = {
@@ -477,7 +461,7 @@ fun GreaterArtApp(
                 val warnings = surface.warnings(
                     com.local.listentomusic.ui.components.VideoSurfaceOwner.expectedOwner,
                     playback.isVideo && playback.isPlaying && controller?.playbackState == androidx.media3.common.Player.STATE_READY &&
-                        (playerOpen || screen == Screen.LIBRARY), android.os.SystemClock.elapsedRealtime(),
+                        (com.local.listentomusic.ui.components.VideoSurfaceOwner.systemOverlayActive || screen == Screen.LIBRARY), android.os.SystemClock.elapsedRealtime(),
                     playback.videoFrameRendered,
                 ) + listOfNotNull(if (playback.errorMessage != null) "PLAYBACK_ERROR" else null,
                     if (waveformDiagnostics.error != null) "WAVEFORM_ERROR" else null)
@@ -485,7 +469,7 @@ fun GreaterArtApp(
                 DeveloperDiagnostics(
                     report = buildString {
                         appendLine("version=${com.local.listentomusic.BuildConfig.VERSION_NAME}")
-                        appendLine("screen=${if (playerOpen) Screen.NOW_PLAYING.name else if (screen == Screen.LIBRARY && libraryPager.currentPage == 1) "NODES" else screen.name} playerOverlay=$playerOpen")
+                        appendLine("screen=${if (com.local.listentomusic.ui.components.VideoSurfaceOwner.systemOverlayActive) Screen.NOW_PLAYING.name else if (screen == Screen.LIBRARY && libraryPager.currentPage == 1) "NODES" else screen.name} systemPlayerOverlay=${com.local.listentomusic.ui.components.VideoSurfaceOwner.systemOverlayActive}")
                         appendLine("media=${playback.currentPath?.let { com.local.listentomusic.model.sourceMediaPath(it).substringAfterLast('.') } ?: "none"} (paths omitted)")
                         appendLine("playing=${playback.isPlaying} video=${playback.isVideo}")
                         appendLine("position=${playback.positionMs} duration=${playback.durationMs}")
