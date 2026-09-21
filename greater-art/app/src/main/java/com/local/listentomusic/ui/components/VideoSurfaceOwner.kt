@@ -21,6 +21,7 @@ object VideoSurfaceOwner {
     val expectedOwner: String
         get() = handoffTarget ?: systemOverlayOwners.values.lastOrNull()
             ?: expectedSurfaceOwner(foreground, nowPlaying, pip)
+    val systemOverlayActive: Boolean get() = systemOverlayOwners.isNotEmpty()
     fun setActivityForeground(value: Boolean) {
         if (foreground != value) { foreground = value; log("foreground=$value expected=$expectedOwner", active.get()) }
         reconcile()
