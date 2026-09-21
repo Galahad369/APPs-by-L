@@ -29,12 +29,12 @@ import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
-import androidx.lifecycle.ViewTreeLifecycleOwner
-import androidx.lifecycle.ViewTreeViewModelStoreOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
-import androidx.savedstate.ViewTreeSavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.local.listentomusic.MainViewModel
 import com.local.listentomusic.R
 import com.local.listentomusic.ui.AndroidShare
@@ -99,9 +99,9 @@ class NowPlayingOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
         val view = ComposeView(this).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
         }
-        ViewTreeLifecycleOwner.set(view, this)
-        ViewTreeViewModelStoreOwner.set(view, this)
-        ViewTreeSavedStateRegistryOwner.set(view, this)
+        view.setViewTreeLifecycleOwner(this)
+        view.setViewTreeViewModelStoreOwner(this)
+        view.setViewTreeSavedStateRegistryOwner(this)
         composeView = view
 
         view.setContent {
