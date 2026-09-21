@@ -118,6 +118,11 @@ class MiniWindowOverlayService : Service() {
     override fun onCreate() {
         super.onCreate()
         com.local.listentomusic.ui.components.VideoSurfaceOwner.serviceEvent("start")
+        com.local.listentomusic.ui.components.VideoSurfaceOwner.setSystemOverlayVisible(
+            "mini_window_overlay",
+            "MINI_WINDOW",
+            true,
+        )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             stopSelf()
             return
@@ -213,18 +218,21 @@ class MiniWindowOverlayService : Service() {
     }
 
     private fun openApp() {
-        // Tapping the mini window returns to the full player, not the library.
+        // Mini Window and full Now Playing are two system-overlay presentations of
+        // the same playback session. Expand directly without routing through Activity.
         if (openingApp) return
         openingApp = true
+        com.local.listentomusic.ui.components.VideoSurfaceOwner.beginHandoff("NOW_PLAYING")
         try {
-            startActivity(Intent(this, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NO_ANIMATION
-                putExtra(EXTRA_OPEN_PLAYER, true)
-            })
-            // The resumed Activity removes this overlay. Keep it until launch succeeds.
+            ContextCompat.startForegroundService(
+                this,
+                Intent(this, NowPlayingOverlayService::class.java).apply {
+                    putExtra(NowPlayingOverlayService.EXTRA_FROM_MINI_WINDOW, true)
+                },
+            )
             root?.postDelayed({ openingApp = false }, 1000)
         } catch (t: Throwable) {
+            com.local.listentomusic.ui.components.VideoSurfaceOwner.finishHandoff("NOW_PLAYING")
             openingApp = false
         }
     }
@@ -598,6 +606,11 @@ class MiniWindowOverlayService : Service() {
     override fun onDestroy() {
         scope.cancel()
         com.local.listentomusic.ui.components.VideoSurfaceOwner.serviceEvent("stop")
+        com.local.listentomusic.ui.components.VideoSurfaceOwner.setSystemOverlayVisible(
+            "mini_window_overlay",
+            "MINI_WINDOW",
+            false,
+        )
         root?.removeCallbacks(dragFrame)
         root?.let { runCatching { wm?.removeViewImmediate(it) } }
         crossView?.let { runCatching { wm?.removeViewImmediate(it) } }
