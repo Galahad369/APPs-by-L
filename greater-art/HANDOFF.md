@@ -3,22 +3,31 @@
 This file describes the **current repository state only**. Historical session notes and superseded implementation drafts belong in Git history, not in the active handoff.
 
 **Project:** `greater-art/` in the repository checkout
-**Current version:** `1.12.5 (code 86)`
-**Latest APK:** `releases/GreaterArt-1.12.5.apk` (verification below)
+**Current version:** `1.12.6 (code 87)`
+**Latest APK:** `releases/GreaterArt-1.12.6.apk` (verification below)
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 ## Repository state
 
 - Project: `greater-art/`
-- Version: **1.12.5**
-- Version code: **86**
+- Version: **1.12.6**
+- Version code: **87**
 - Application ID: `com.local.listentomusic`
-- APK: `releases/GreaterArt-1.12.5.apk`
-- APK SHA-256: `5f876dea74951e0cb44b05029cff6bd4c06431b7289f3ee3d1971474a524af4c`
+- APK: `releases/GreaterArt-1.12.6.apk`
+- APK SHA-256: `c90f763f133de8f8144fa9554bef8cddefafe96dd453ca4da8b253e8d470d0e3`
 - Signing certificate SHA-256: `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 `app/build.gradle.kts` is the version source of truth. Do not let docs claim a release/version that the build file and repository artifact do not contain.
+
+### September 21 — 1.12.6 splash logo scaling fix + version bump
+
+- PR #38 merged: Fixed Android splash logo scaling in `res/values-v31/themes.xml` (windowSplashScreenAnimatedIcon uses proper drawable).
+- Version bumped to 1.12.6 (code 87) for the rebuilt artifact.
+- Verification: `testDebugUnitTest lintDebug assembleDebug --offline` succeeded (105 unit tests, 0 failures/errors; lint 0 errors, 18 warnings and 1 hint; debug assemble, APK v2 signature and 16 KiB alignment passed).
+- Package is `com.local.listentomusic` 1.12.6/code 87; no packaged INTERNET permission; pinned signing certificate unchanged.
+- Artifact: `releases/GreaterArt-1.12.6.apk`, 26,074,638 bytes, SHA-256 `c90f763f133de8f8144fa9554bef8cddefafe96dd453ca4da8b253e8d470d0e3`.
+- Device boundary: no Android device/emulator was connected.
 
 ### September 21 — 1.12.5 symmetric surface handoff and release recovery
 
