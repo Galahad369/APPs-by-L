@@ -107,9 +107,12 @@ class MainActivity : ComponentActivity() {
         // A Mini Window tap is a direct continuation of Now Playing. During that
         // handoff, keep the working overlay alive until the Now Playing surface is
         // registered instead of destroying it on Activity resume.
-        if (!returningFromMiniWindow) {
+        if (
+            !returningFromMiniWindow &&
+            !com.local.listentomusic.ui.components.VideoSurfaceOwner.systemOverlayActive
+        ) {
             stopService(Intent(this, MiniWindowOverlayService::class.java))
-        } else if (playerScreenVisible) {
+        } else if (returningFromMiniWindow && playerScreenVisible) {
             // If a transient pause interrupted the handoff, resume waiting for the
             // NOW_PLAYING surface instead of leaving the overlay stuck indefinitely.
             completeMiniWindowReturn()
