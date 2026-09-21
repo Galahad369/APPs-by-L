@@ -2,6 +2,7 @@ package com.local.listentomusic.playback
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.animation.ValueAnimator
 import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -14,7 +15,9 @@ import android.os.IBinder
 import android.provider.Settings
 import android.view.Gravity
 import android.view.View
+import android.view.WindowInsets
 import android.view.WindowManager
+import android.view.animation.DecelerateInterpolator
 import android.widget.Toast
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.OnBackPressedDispatcherOwner
@@ -60,6 +63,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.roundToInt
 
 /**
  * Focusable system-level Now Playing surface.
@@ -75,7 +79,7 @@ class NowPlayingOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
     override val lifecycle: Lifecycle get() = lifecycleRegistry
     override val viewModelStore = ViewModelStore()
     override val savedStateRegistry: SavedStateRegistry get() = savedStateController.savedStateRegistry
-    override val onBackPressedDispatcher = OnBackPressedDispatcher { stopSelf() }
+    override val onBackPressedDispatcher = OnBackPressedDispatcher { dismissOverlay() }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private lateinit var viewModel: MainViewModel
@@ -85,6 +89,7 @@ class NowPlayingOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
     private var launchedFromMini = false
     private var sharing = false
     private var originalWindowFlags = 0
+    private var windowAnimator: ValueAnimator? = null
     private val shareFinished = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == ShareProxyActivity.ACTION_FINISHED) restoreAfterShare()
@@ -176,7 +181,7 @@ class NowPlayingOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
                         onVideoBoundsChanged = {},
                         onPictureInPicture = ::shrinkToMini,
                         onHome = ::returnToLibrary,
-                        onClose = ::stopSelf,
+                        onClose = ::dismissOverlay,
                         onTogglePlay = viewModel::togglePlayPause,
                         onPrevious = viewModel::previous,
                         onNext = viewModel::next,
@@ -221,21 +226,40 @@ class NowPlayingOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
             }
         }
 
-        val bounds = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            windowManager?.currentWindowMetrics?.bounds
+        val metrics = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            windowManager?.currentWindowMetrics
         } else null
-        val width = bounds?.width() ?: resources.displayMetrics.widthPixels
-        val height = bounds?.height() ?: resources.displayMetrics.heightPixels
+        val bounds = metrics?.bounds
+        val rawWidth = bounds?.width() ?: resources.displayMetrics.widthPixels
+        val rawHeight = bounds?.height() ?: resources.displayMetrics.heightPixels
+        val systemInsets = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && metrics != null) {
+            metrics.windowInsets.getInsetsIgnoringVisibility(
+                WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout(),
+            )
+        } else null
+        val availableWidth = (rawWidth - (systemInsets?.left ?: 0) - (systemInsets?.right ?: 0))
+            .coerceAtLeast(1)
+        val availableHeight = (rawHeight - (systemInsets?.top ?: 0) - (systemInsets?.bottom ?: 0))
+            .coerceAtLeast(1)
+        // Floating, but intentionally close to Yee's efficient use of phone space:
+        // media + queue get room while transport controls stay permanently visible.
+        val targetWidth = minOf((availableWidth * 0.96f).roundToInt(), dp(620))
+            .coerceAtMost(availableWidth)
+        val targetHeight = minOf((availableHeight * 0.90f).roundToInt(), dp(860))
+            .coerceAtMost(availableHeight)
         windowParams = WindowManager.LayoutParams(
-            minOf((width - dp(16)).coerceAtLeast(dp(280)), dp(720)),
-            minOf((height - dp(32)).coerceAtLeast(dp(420)), dp(1000)),
+            targetWidth,
+            targetHeight,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                 WindowManager.LayoutParams.FLAG_DIM_BEHIND,
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.CENTER
-            dimAmount = 0.34f
+            // Start transparent. The source presentation stays visible until this
+            // overlay has real playback state and, for video, a rendered frame.
+            alpha = 0f
+            dimAmount = 0f
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
         }
 
@@ -248,7 +272,12 @@ class NowPlayingOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
         lifecycleRegistry.currentState = Lifecycle.State.RESUMED
 
         scope.launch {
-            val playback = viewModel.playback.filter { it.connected }.first()
+            // Never expose the empty "Nothing playing" intermediate state. Keep the
+            // source visible until the session has media and the destination video
+            // surface has produced a frame.
+            val playback = viewModel.playback
+                .filter { it.connected && it.currentPath != null }
+                .first()
             if (playback.isVideo) {
                 withTimeoutOrNull(HANDOFF_TIMEOUT_MS) {
                     VideoSurfaceOwner.state.first {
@@ -257,8 +286,10 @@ class NowPlayingOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
                 }
             }
             VideoSurfaceOwner.finishHandoff("NOW_PLAYING")
-            if (launchedFromMini) {
-                stopService(Intent(this@NowPlayingOverlayService, MiniWindowOverlayService::class.java))
+            revealOverlay {
+                if (launchedFromMini) {
+                    stopService(Intent(this@NowPlayingOverlayService, MiniWindowOverlayService::class.java))
+                }
             }
         }
     }
@@ -280,7 +311,60 @@ class NowPlayingOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
                 },
             )
         }
-        stopSelf()
+        dismissOverlay()
+    }
+
+    private fun revealOverlay(afterReveal: () -> Unit = {}) {
+        animateWindow(
+            from = windowParams?.alpha ?: 0f,
+            to = 1f,
+            durationMs = 150L,
+            after = afterReveal,
+        )
+    }
+
+    private fun dismissOverlay(afterDismiss: () -> Unit = { stopSelf() }) {
+        animateWindow(
+            from = windowParams?.alpha ?: 1f,
+            to = 0f,
+            durationMs = 110L,
+            after = afterDismiss,
+        )
+    }
+
+    private fun animateWindow(
+        from: Float,
+        to: Float,
+        durationMs: Long,
+        after: () -> Unit,
+    ) {
+        val view = composeView
+        val params = windowParams
+        if (view == null || params == null || !view.isAttachedToWindow) {
+            after()
+            return
+        }
+        windowAnimator?.cancel()
+        windowAnimator = ValueAnimator.ofFloat(from, to).apply {
+            duration = durationMs
+            interpolator = DecelerateInterpolator()
+            addUpdateListener { animator ->
+                val progress = animator.animatedValue as Float
+                params.alpha = progress
+                params.dimAmount = TARGET_DIM_AMOUNT * progress
+                runCatching { windowManager?.updateViewLayout(view, params) }
+            }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                private var cancelled = false
+                override fun onAnimationCancel(animation: android.animation.Animator) {
+                    cancelled = true
+                }
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    if (!cancelled) after()
+                }
+            })
+            start()
+        }
     }
 
     private fun launchShare(chooser: Intent) {
@@ -344,7 +428,7 @@ class NowPlayingOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
                 }
             }
             VideoSurfaceOwner.finishHandoff("MINI_WINDOW")
-            stopSelf()
+            dismissOverlay()
         }
     }
 
@@ -371,6 +455,8 @@ class NowPlayingOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
             .build()
 
     override fun onDestroy() {
+        windowAnimator?.cancel()
+        windowAnimator = null
         runCatching { unregisterReceiver(shareFinished) }
         lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
         composeView?.let { runCatching { windowManager?.removeViewImmediate(it) } }
@@ -394,5 +480,6 @@ class NowPlayingOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
         private const val CHANNEL_ID = "greater_art_playback"
         private const val NOTIFICATION_ID = 3
         private const val HANDOFF_TIMEOUT_MS = 1_500L
+        private const val TARGET_DIM_AMOUNT = 0.14f
     }
 }
