@@ -217,7 +217,7 @@ fun NowPlayingScreen(
                 .background(backdrop),
         ) {
         val landscape = maxWidth > maxHeight
-        val portraitVideoHeight = minOf(maxWidth / playback.videoAspectRatio.coerceIn(0.75f, 2.25f), maxHeight * 0.40f)
+        val portraitVideoHeight = minOf(maxWidth / playback.videoAspectRatio.coerceIn(0.75f, 2.25f), maxHeight * 0.34f)
         val immersiveVideo = playback.isVideo && (fullscreen || landscape)
         FullscreenEffect(enabled = fullscreen || (playback.isVideo && landscape))
         BackHandler(enabled = fullscreen) { fullscreen = false }
@@ -360,7 +360,16 @@ private fun VideoPlayerStage(
     var seekPosition by remember { mutableFloatStateOf(0f) }
     val hasDuration = playback.durationMs > 0L
     val maximum = if (hasDuration) playback.durationMs.toFloat() else 1f
-    val position = if (seeking) seekPosition else if (hasDuration) playback.positionMs.toFloat() else 0f
+    val targetPosition = if (hasDuration) playback.positionMs.toFloat() else 0f
+    val animatedPosition by animateFloatAsState(
+        targetValue = targetPosition,
+        animationSpec = tween(
+            durationMillis = if (playback.isPlaying && !seeking) 450 else 0,
+            easing = LinearEasing,
+        ),
+        label = "timeline-position",
+    )
+    val position = if (seeking) seekPosition else animatedPosition
     val haptics = LocalHapticFeedback.current
     var temporaryDoubleSpeed by remember { mutableStateOf(false) }
 
@@ -815,7 +824,7 @@ private fun NowPlayingQueue(
         initialFirstVisibleItemIndex = currentIndex.coerceAtLeast(0),
     )
     LaunchedEffect(currentPath, currentIndex) {
-        if (currentIndex >= 0 && !listState.isScrollInProgress) listState.scrollToItem(currentIndex)
+        if (currentIndex >= 0 && !listState.isScrollInProgress) listState.animateScrollToItem(currentIndex)
     }
     Column(modifier.inspectElement("NOW_PLAYING_QUEUE", "Ordered playback queue and optional synchronized lyrics")) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -879,7 +888,7 @@ private fun NowPlayingQueue(
                                 else Color.Transparent,
                             )
                             .clickable { onPlay(file) }
-                            .padding(horizontal = 7.dp, vertical = 6.dp),
+                            .padding(horizontal = 7.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         QueueThumbnail(file = file, onLoadThumbnail = onLoadThumbnail)
@@ -997,7 +1006,7 @@ internal fun QueueThumbnail(
         value = onLoadThumbnail(file)
     }
     Box(
-        modifier = Modifier.size(44.dp).clip(RoundedCornerShape(9.dp))
+        modifier = Modifier.size(40.dp).clip(RoundedCornerShape(9.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f)),
         contentAlignment = Alignment.Center,
     ) {
@@ -1283,7 +1292,7 @@ private fun CurrentMediaHeader(
             com.local.listentomusic.model.mediaTitle(playback.title, playback.currentPath),
             style = if (headline) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleMedium,
             fontWeight = if (headline) FontWeight.Bold else FontWeight.SemiBold,
-            maxLines = 2,
+            maxLines = if (headline) 2 else 1,
             overflow = TextOverflow.Ellipsis,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f).padding(start = if (headline) 0.dp else 2.dp, end = 4.dp),
@@ -1437,8 +1446,8 @@ private fun NowPlayingTopBar(
     val background = if (overlay) Color.Black.copy(alpha = 0.34f)
         else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f)
     Row(
-        modifier = modifier.fillMaxWidth().height(54.dp).background(background)
-            .padding(horizontal = 6.dp),
+        modifier = modifier.fillMaxWidth().height(50.dp).background(background)
+            .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onPictureInPicture, modifier = Modifier.inspectElement("FLOATING_PLAYER_BUTTON", "Opens the selected floating-player mode")) {
