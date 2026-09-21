@@ -15,9 +15,13 @@ object VideoSurfaceOwner {
     private var nowPlaying = false
     private var pip = false
     private var handoffTarget: String? = null
+    private val systemOverlayOwners = linkedMapOf<String, String>()
     private var noOpReconciles = 0
     internal val state = MutableStateFlow(SurfaceLease())
-    val expectedOwner: String get() = handoffTarget ?: expectedSurfaceOwner(foreground, nowPlaying, pip)
+    val expectedOwner: String
+        get() = handoffTarget ?: systemOverlayOwners.values.lastOrNull()
+            ?: expectedSurfaceOwner(foreground, nowPlaying, pip)
+    val systemOverlayActive: Boolean get() = systemOverlayOwners.isNotEmpty()
     fun setActivityForeground(value: Boolean) {
         if (foreground != value) { foreground = value; log("foreground=$value expected=$expectedOwner", active.get()) }
         reconcile()
@@ -27,6 +31,18 @@ object VideoSurfaceOwner {
         nowPlaying = nowPlayingVisible; pip = pictureInPicture
         if (changed) log("presentationRequested=$expectedOwner", active.get())
         reconcile()
+    }
+    fun setSystemOverlayVisible(token: String, owner: String, visible: Boolean) {
+        val changed = if (visible) {
+            val previous = systemOverlayOwners.put(token, owner)
+            previous != owner
+        } else {
+            systemOverlayOwners.remove(token) != null
+        }
+        if (changed) {
+            log("systemOverlay=$visible token=$token owner=$owner expected=$expectedOwner", active.get())
+            reconcile()
+        }
     }
     fun beginHandoff(targetOwner: String) {
         if (handoffTarget == targetOwner) return

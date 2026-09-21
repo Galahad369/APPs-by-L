@@ -25,7 +25,9 @@ internal object AndroidShare {
             clipData = android.content.ClipData.newUri(context.contentResolver, source.name, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.startActivity(Intent.createChooser(intent, chooserTitle))
+        context.startActivity(Intent.createChooser(intent, chooserTitle).apply {
+            if (context !is android.app.Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        })
     }
 
     fun mediaFiles(context: Context, media: List<MediaFile>, chooserTitle: String): Result<Unit> = runCatching {
@@ -73,7 +75,9 @@ internal object AndroidShare {
                 clipData = android.content.ClipData.newUri(context.contentResolver, file.name, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            context.startActivity(Intent.createChooser(intent, chooserTitle))
+            context.startActivity(Intent.createChooser(intent, chooserTitle).apply {
+                if (context !is android.app.Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            })
         }
     }
 
