@@ -212,7 +212,7 @@ fun NowPlayingScreen(
         artwork, MaterialTheme.colorScheme.background.luminance() > .5f,
     )
     BoxWithConstraints(
-            modifier = Modifier.fillMaxSize().padding(contentPadding)
+            modifier = Modifier.fillMaxSize().padding(PaddingValues(horizontal = 0.dp, vertical = contentPadding.calculateTopPadding()))
                 .inspectElement("NOW_PLAYING_SCREEN", "Current artwork or video, queue, timeline, and transport controls")
                 .background(backdrop),
         ) {

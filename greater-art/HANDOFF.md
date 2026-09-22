@@ -3,8 +3,8 @@
 This file describes the **current repository state only**. Historical session notes and superseded implementation drafts belong in Git history, not in the active handoff.
 
 **Project:** `greater-art/` in the repository checkout
-**Current version:** `1.12.9 (code 89)`
-**Latest APK:** `releases/GreaterArt-1.12.9.apk` (verification below)
+**Current version:** `1.13.1 (code 90)`
+**Latest APK:** `releases/GreaterArt-1.13.1.apk` (pending verification) (verification below)
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
@@ -14,7 +14,7 @@ This file describes the **current repository state only**. Historical session no
 - Version: **1.12.9**
 - Version code: **89**
 - Application ID: `com.local.listentomusic`
-- APK: `releases/GreaterArt-1.12.9.apk`
+- APK: `releases/GreaterArt-1.13.1.apk` (pending verification)
 - APK SHA-256: `1e43a9a8215af2f0e504a772bfd6e6b7252091578ab677b68529ee0c7126fba5`
 - Signing certificate SHA-256: `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
