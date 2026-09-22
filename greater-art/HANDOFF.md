@@ -3,19 +3,19 @@
 This file describes the **current repository state only**. Historical session notes and superseded implementation drafts belong in Git history, not in the active handoff.
 
 **Project:** `greater-art/` in the repository checkout
-**Current version:** `1.12.7 (code 88)`
-**Latest APK:** `releases/GreaterArt-1.12.7.apk` (verification below)
+**Current version:** `1.12.9 (code 89)`
+**Latest APK:** `releases/GreaterArt-1.12.9.apk` (verification below)
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 ## Repository state
 
 - Project: `greater-art/`
-- Version: **1.12.7**
-- Version code: **88**
+- Version: **1.12.9**
+- Version code: **89**
 - Application ID: `com.local.listentomusic`
-- APK: `releases/GreaterArt-1.12.7.apk`
-- APK SHA-256: `ba584647e7f742ddf16ad1f736f610ca532b18e63dbeebaaff26928ba79923a4`
+- APK: `releases/GreaterArt-1.12.9.apk`
+- APK SHA-256: `1e43a9a8215af2f0e504a772bfd6e6b7252091578ab677b68529ee0c7126fba5`
 - Signing certificate SHA-256: `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 `app/build.gradle.kts` is the version source of truth. Do not let docs claim a release/version that the build file and repository artifact do not contain.
