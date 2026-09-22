@@ -3,22 +3,71 @@
 This file describes the **current repository state only**. Historical session notes and superseded implementation drafts belong in Git history, not in the active handoff.
 
 **Project:** `greater-art/` in the repository checkout
-**Current version:** `1.13.1 (code 90)`
-**Latest APK:** `releases/GreaterArt-1.13.1.apk` (pending verification) (verification below)
+**Current version:** `1.13.3 (code 92)`
+**Latest APK:** `releases/GreaterArt-1.13.3.apk` (verification below)
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 ## Repository state
 
 - Project: `greater-art/`
-- Version: **1.12.9**
-- Version code: **89**
+- Version: **1.13.3**
+- Version code: **92**
 - Application ID: `com.local.listentomusic`
-- APK: `releases/GreaterArt-1.13.1.apk` (pending verification)
-- APK SHA-256: `1e43a9a8215af2f0e504a772bfd6e6b7252091578ab677b68529ee0c7126fba5`
+- APK: `releases/GreaterArt-1.13.3.apk`
+- APK SHA-256: `ed8af19a527013b501437a7d85f53b1c26fd091179a5efd4e03bf27b8ed4b090`
 - Signing certificate SHA-256: `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 `app/build.gradle.kts` is the version source of truth. Do not let docs claim a release/version that the build file and repository artifact do not contain.
+
+### September 22 — 1.13.2 local Yee-flow adjustments
+
+- Started from the current local Hermes commit `85d4fe1`, not an earlier session's
+  uncommitted implementation. Its Gradle version was already 1.13.2/code 91 while
+  docs advertised several older versions. Current docs and artifact now agree.
+  No commit, push or history rewrite was performed here.
+- Yellow-gap cause: the service reserved percentage margins, and the reused
+  Activity player applied status/navigation padding again. The service now fills
+  the safe frame, with square bottom corners; `systemOverlay` suppresses the
+  redundant Compose insets. Activity/PiP padding behavior is preserved. Rotation
+  lets WindowManager fit the new usable frame. System navigation remains usable.
+- Restored a top grab handle. Drag moves the existing window, short release/cancel
+  returns it in 180 ms, and a 72 dp downward pull slides it away and returns to
+  Library without stopping playback. Temporary out-of-bounds placement is enabled
+  only while pulling and removed after snap-back; Mini geometry was not changed.
+- Android Home/Recents now requests the existing Mini handoff. The service receives
+  the protected system-dialog-close broadcast and filters `homekey`/`recentapps`;
+  `MainActivity.onUserLeaveHint` provides the Activity-host fallback. Neither path
+  launches Library/Home itself. The player's own Home and pull-down still return
+  to Library. Duplicate shrink/close/share requests are guarded. No new permission,
+  Accessibility service, usage-access polling, or playback re-prepare was added.
+  Android documents receiving this [system broadcast](https://developer.android.com/about/versions/12/reference/broadcast-intents-31);
+  sending it is restricted, and this app does not send it. OEM reason/gesture
+  delivery must still be confirmed on the user's Samsung phone.
+- Library media rows and artwork now have square corners with standard press
+  feedback. Header/search/share/favorite/repeat/speed icons are larger within
+  unchanged button bounds. Existing queue, sharing, lyrics, waveform, A–B and sleep
+  functions remain; no resolution/FPS/bitrate restriction or new decoder was added.
+- DEV is now direct: tap to pick an element; long-press to view/copy the report.
+  Removed the intermediate setup dialog and region-toggle controls. The same
+  inspector is available inside the system player, using readable fixed colors.
+  Disabled Dev Mode no longer registers element bounds. A hidden duplicate video
+  seek animation was removed to avoid invisible frame-rate recomposition.
+- Verification: `testDebugUnitTest lintDebug assembleDebug --offline` passed;
+  112 JVM tests, zero failures/errors; lint 0 errors, 19 warnings, 1 hint.
+  APK version 1.13.2/code 91, pinned v2 certificate, no INTERNET permission and
+  16 KiB zip alignment verified. `releases/GreaterArt-1.13.2.apk` is 26,107,478 bytes,
+  SHA-256 `ed8af19a527013b501437a7d85f53b1c26fd091179a5efd4e03bf27b8ed4b090`.
+  Previous 1.13.1 APK retained SHA-256
+  `ec417d425968d47b453bb69290897cf9685e10d413bef118d03786fbadf35c30`.
+- Security audit: no credential/workstation-path/sensitive-file finding, but the
+  existing reachable Git history has non-noreply author email identities. Do not
+  treat the full audit as passing or publish without reviewing that privacy finding.
+  No email address is reproduced here and history has not been rewritten.
+- Device boundary: no attached phone or emulator. Test Android Home (button and
+  gesture) from Library-hosted and launcher-hosted Now Playing, Mini return, short
+  and full pull-down, rotation, keyboard search, both Share choices, and Dev picking.
+  JVM tests verify bounds/reason filtering/thresholds, not actual window animation.
 
 ### September 21 — 1.12.7 overlay sharing and Greater Art-only repo
 

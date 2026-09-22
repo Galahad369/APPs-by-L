@@ -42,6 +42,11 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
+    private val backgroundPlayer = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == ACTION_BACKGROUND_PLAYER) moveTaskToBack(true)
+        }
+    }
     private val viewModel: MainViewModel by viewModels()
     private var isPictureInPicture by mutableStateOf(false)
     private var openPlayerRequest by mutableIntStateOf(0)
@@ -55,6 +60,16 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ContextCompat.registerReceiver(this, backgroundPlayer, android.content.IntentFilter(ACTION_BACKGROUND_PLAYER),
+            ContextCompat.RECEIVER_NOT_EXPORTED)
+        onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (viewModel.playback.value.hasMedia && startMiniWindowIfAllowed(backgroundWhenReady = true)) return
+                isEnabled = false
+                onBackPressedDispatcher.onBackPressed()
+                isEnabled = true
+            }
+        })
         openPlayerRequest = savedInstanceState?.getInt(STATE_OPEN_PLAYER_REQUEST) ?: 0
         WindowCompat.setDecorFitsSystemWindows(window, false)
         // Keep the display awake only while this Activity is visible. Android still
@@ -109,7 +124,7 @@ class MainActivity : ComponentActivity() {
         // registered instead of destroying it on Activity resume.
         if (
             !returningFromMiniWindow &&
-            !com.local.listentomusic.ui.components.VideoSurfaceOwner.systemOverlayActive
+            !com.local.listentomusic.ui.components.VideoSurfaceOwner.expandedOverlayActive
         ) {
             stopService(Intent(this, MiniWindowOverlayService::class.java))
         } else if (returningFromMiniWindow && playerScreenVisible) {
@@ -135,6 +150,21 @@ class MainActivity : ComponentActivity() {
         super.onPause()
     }
 
+    override fun onStart() {
+        super.onStart()
+        com.local.listentomusic.playback.PlayerWindowVisibility.library(true)
+    }
+
+    override fun onStop() {
+        com.local.listentomusic.playback.PlayerWindowVisibility.library(false)
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        runCatching { unregisterReceiver(backgroundPlayer) }
+        super.onDestroy()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -145,7 +175,13 @@ class MainActivity : ComponentActivity() {
         super.onUserLeaveHint()
         // A system-level Now Playing window is already the active external
         // presentation. Do not spawn a second Mini Window underneath it.
-        if (com.local.listentomusic.ui.components.VideoSurfaceOwner.systemOverlayActive) return
+        if (com.local.listentomusic.ui.components.VideoSurfaceOwner.systemOverlayActive) {
+            if (com.local.listentomusic.ui.components.VideoSurfaceOwner.expectedOwner == "NOW_PLAYING") {
+                startService(Intent(this, com.local.listentomusic.playback.NowPlayingOverlayService::class.java)
+                    .setAction(com.local.listentomusic.playback.NowPlayingOverlayService.ACTION_SHRINK))
+            }
+            return
+        }
         val playback = viewModel.playback.value
         val settings = viewModel.settings.value
         if (
@@ -338,6 +374,7 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
+        const val ACTION_BACKGROUND_PLAYER = "com.local.listentomusic.BACKGROUND_PLAYER_TASK"
         private const val STATE_OPEN_PLAYER_REQUEST = "open_player_request"
     }
 }

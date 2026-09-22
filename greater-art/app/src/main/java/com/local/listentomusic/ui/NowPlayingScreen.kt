@@ -151,6 +151,9 @@ import kotlin.math.roundToInt
 
 internal val playbackSpeeds = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f)
 internal const val HOLD_2X_ACTIVATION_MS = 700L
+private val LocalSystemPlayer = androidx.compose.runtime.compositionLocalOf { false }
+@Composable private fun playerStatusInsets() = if (LocalSystemPlayer.current) WindowInsets(0) else WindowInsets.statusBars
+@Composable private fun playerNavigationInsets() = if (LocalSystemPlayer.current) WindowInsets(0) else WindowInsets.navigationBars
 
 /** Side seek zones only. The middle 30% is deliberately inert on double tap. */
 internal fun doubleTapSeekDelta(x: Float, width: Float, seekOffsetMs: Long): Long? = when {
@@ -198,14 +201,16 @@ fun NowPlayingScreen(
     onToggleFavourite: (String) -> Unit,
     onShareCurrentMedia: () -> Unit,
     onShareQueue: () -> Unit,
+    systemOverlay: Boolean = false,
 ) {
+    androidx.compose.runtime.CompositionLocalProvider(LocalSystemPlayer provides systemOverlay) {
     var fullscreen by rememberSaveable { mutableStateOf(false) }
 
     if (isPictureInPicture && playback.isVideo) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             VideoSurface(playback.currentPath, controller, onVideoBoundsChanged, Modifier.fillMaxSize())
         }
-        return
+        return@CompositionLocalProvider
     }
 
     val backdrop = com.local.listentomusic.ui.components.artworkBackdrop(
@@ -229,7 +234,7 @@ fun NowPlayingScreen(
                 // Portrait playback: gutters use the theme so light mode does not
                 // turn the whole page into a black slab. The video stage itself
                 // keeps its black backdrop below for letterboxing the frame.
-                Color.Transparent to WindowInsets.statusBars
+                Color.Transparent to playerStatusInsets()
             }
             val videoPageModifier = Modifier.fillMaxSize().background(pageBg)
                 .windowInsetsPadding(pageInsets)
@@ -333,6 +338,7 @@ fun NowPlayingScreen(
         }
     }
 }
+}
 
 @Composable
 private fun VideoPlayerStage(
@@ -361,15 +367,11 @@ private fun VideoPlayerStage(
     val hasDuration = playback.durationMs > 0L
     val maximum = if (hasDuration) playback.durationMs.toFloat() else 1f
     val targetPosition = if (hasDuration) playback.positionMs.toFloat() else 0f
-    val animatedPosition by animateFloatAsState(
-        targetValue = targetPosition,
-        animationSpec = tween(
-            durationMillis = if (playback.isPlaying && !seeking) 450 else 0,
-            easing = LinearEasing,
-        ),
-        label = "timeline-position",
-    )
-    val position = if (seeking) seekPosition else animatedPosition
+    val position = if (seeking) seekPosition else if (immersive && controlsVisible) {
+        animateFloatAsState(targetPosition, tween(if (playback.isPlaying) 450 else 0, easing = LinearEasing),
+            label = "timeline-position").value
+    } else targetPosition
+    val currentPlayback by androidx.compose.runtime.rememberUpdatedState(playback)
     val haptics = LocalHapticFeedback.current
     var temporaryDoubleSpeed by remember { mutableStateOf(false) }
 
@@ -388,7 +390,7 @@ private fun VideoPlayerStage(
                     coroutineScope {
                         val activation = launch {
                             delay(HOLD_2X_ACTIVATION_MS)
-                            if (playback.isPlaying && onBeginTemporaryDoubleSpeed()) {
+                            if (currentPlayback.isPlaying && onBeginTemporaryDoubleSpeed()) {
                                 temporaryDoubleSpeed = true
                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                             }
@@ -456,13 +458,13 @@ private fun VideoPlayerStage(
                         overlay = true,
                         fullscreen = true,
                         modifier = Modifier.align(Alignment.TopCenter)
-                            .windowInsetsPadding(WindowInsets.statusBars),
+                            .windowInsetsPadding(playerStatusInsets()),
                     )
                 }
 
                 if (immersive) Row(
                     modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                        .windowInsetsPadding(WindowInsets.navigationBars).padding(bottom = 64.dp),
+                        .windowInsetsPadding(playerNavigationInsets()).padding(bottom = 64.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -489,7 +491,7 @@ private fun VideoPlayerStage(
 
                 val timelineModifier = if (immersive) {
                     Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .windowInsetsPadding(playerNavigationInsets())
                 } else {
                     Modifier.align(Alignment.BottomCenter).fillMaxWidth()
                 }
@@ -566,8 +568,8 @@ private fun AudioPlayer(
     val artworkScale = animateFloatAsState(if (artworkMotion) 1.004f + .008f * waveformEnvelope(waveform, playback.positionMs, playback.durationMs) else 1f,
         androidx.compose.animation.core.tween(480), label = "cover-envelope")
     BoxWithConstraints(
-        modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)
-            .windowInsetsPadding(WindowInsets.navigationBars),
+        modifier = Modifier.fillMaxSize().windowInsetsPadding(playerStatusInsets())
+            .windowInsetsPadding(playerNavigationInsets()),
     ) {
         val artSize = minOf(maxWidth * 0.72f, maxHeight * 0.30f)
         var seekFeedback by remember { mutableStateOf(0L to 0L) }
@@ -746,7 +748,7 @@ private fun SecondaryControls(
 ) {
     Column(
         modifier = modifier
-            .windowInsetsPadding(WindowInsets.navigationBars)
+            .windowInsetsPadding(playerNavigationInsets())
             .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 0.dp),
         horizontalAlignment = Alignment.Start,
     ) {
@@ -850,7 +852,7 @@ private fun NowPlayingQueue(
                     modifier = Modifier.weight(1f).padding(start = 7.dp),
                 )
                 IconButton(onClick = { searchOpen = true }, modifier = Modifier.inspectElement("QUEUE_SEARCH_BUTTON", "Searches the current queue without changing its order")) {
-                    Icon(Icons.Rounded.Search, uiText(language, "Search current queue", "搜尋目前播放佇列"))
+                    Icon(Icons.Rounded.Search, uiText(language, "Search current queue", "搜尋目前播放佇列"), Modifier.size(28.dp))
                 }
             }
         }
@@ -1233,7 +1235,7 @@ private fun PlayerBottomControls(
                     playback.shuffleEnabled -> Icons.Rounded.Shuffle
                     playback.repeatMode == Player.REPEAT_MODE_ONE -> Icons.Rounded.RepeatOne
                     else -> Icons.Rounded.Repeat
-                }, uiText(playback.appLanguage, "Repeat mode", "重複模式"), Modifier.size(20.dp), tint = accent)
+                }, uiText(playback.appLanguage, "Repeat mode", "重複模式"), Modifier.size(26.dp), tint = accent)
                 Text(cycleLabel, style = MaterialTheme.typography.labelSmall, maxLines = 1)
             }
         }
@@ -1305,6 +1307,7 @@ private fun CurrentMediaHeader(
                 if (isFavourite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                 uiText(playback.appLanguage, if (isFavourite) "Remove from Favorites" else "Add to Favorites", if (isFavourite) "從我的最愛移除" else "加入我的最愛"),
                 tint = if (isFavourite) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outline,
+                modifier = Modifier.size(28.dp),
             )
         }
         var shareMenuOpen by remember { mutableStateOf(false) }
@@ -1313,7 +1316,7 @@ private fun CurrentMediaHeader(
                 onClick = { shareMenuOpen = true },
                 modifier = Modifier.inspectElement("SHARE_BUTTON", "Choose the current file or an M3U8 queue"),
             ) {
-                Icon(Icons.Rounded.Share, uiText(playback.appLanguage, "Share", "分享"))
+                Icon(Icons.Rounded.Share, uiText(playback.appLanguage, "Share", "分享"), Modifier.size(28.dp))
             }
             DropdownMenu(shareMenuOpen, { shareMenuOpen = false }) {
                 DropdownMenuItem(
@@ -1372,7 +1375,7 @@ private fun SecondaryControlRow(
                     Icons.Rounded.Bedtime,
                     null,
                     tint = if (sleepTimer.active) activeColor else outline,
-                    modifier = Modifier.size(17.dp),
+                    modifier = Modifier.size(23.dp),
                 )
                 Spacer(Modifier.width(4.dp))
                 Text(sleepLabel, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
@@ -1455,10 +1458,11 @@ private fun NowPlayingTopBar(
                 Icons.Rounded.PictureInPictureAlt,
                 uiText(language, "Open floating player", "開啟浮動播放器"),
                 tint = foreground,
+                modifier = Modifier.size(30.dp),
             )
         }
         IconButton(onClick = onHome, modifier = Modifier.inspectElement("HOME_BUTTON", "Returns to Library")) {
-            Icon(Icons.Rounded.Home, uiText(language, "Home", "首頁"), tint = foreground)
+            Icon(Icons.Rounded.Home, uiText(language, "Home", "首頁"), Modifier.size(30.dp), tint = foreground)
         }
         Spacer(Modifier.weight(1f))
         IconButton(onClick = onFullscreen, modifier = Modifier.inspectElement("FULLSCREEN_BUTTON", if (fullscreen) "Exit fullscreen" else "Enter fullscreen")) {
@@ -1467,10 +1471,11 @@ private fun NowPlayingTopBar(
                 if (fullscreen) uiText(language, "Exit fullscreen", "離開全螢幕")
                     else uiText(language, "Fullscreen", "全螢幕"),
                 tint = foreground,
+                modifier = Modifier.size(30.dp),
             )
         }
         IconButton(onClick = onClose, modifier = Modifier.inspectElement("CLOSE_PLAYER_BUTTON", "Closes Now Playing without stopping playback")) {
-            Icon(Icons.Rounded.Close, uiText(language, "Close player", "關閉播放器"), tint = foreground)
+            Icon(Icons.Rounded.Close, uiText(language, "Close player", "關閉播放器"), Modifier.size(30.dp), tint = foreground)
         }
     }
 }

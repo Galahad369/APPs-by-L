@@ -22,6 +22,7 @@ object VideoSurfaceOwner {
         get() = handoffTarget ?: systemOverlayOwners.values.lastOrNull()
             ?: expectedSurfaceOwner(foreground, nowPlaying, pip)
     val systemOverlayActive: Boolean get() = systemOverlayOwners.isNotEmpty()
+    val expandedOverlayActive: Boolean get() = systemOverlayOwners.containsValue("NOW_PLAYING")
     fun setActivityForeground(value: Boolean) {
         if (foreground != value) { foreground = value; log("foreground=$value expected=$expectedOwner", active.get()) }
         reconcile()
@@ -40,6 +41,7 @@ object VideoSurfaceOwner {
             systemOverlayOwners.remove(token) != null
         }
         if (changed) {
+            com.local.listentomusic.playback.PlayerWindowVisibility.expanded(expandedOverlayActive)
             log("systemOverlay=$visible token=$token owner=$owner expected=$expectedOwner", active.get())
             reconcile()
         }

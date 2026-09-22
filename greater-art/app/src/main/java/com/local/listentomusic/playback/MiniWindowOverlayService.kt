@@ -137,8 +137,10 @@ class MiniWindowOverlayService : Service() {
                     WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                     WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                     PixelFormat.RGBA_8888,
-                ).apply {
+        ).apply {
             gravity = Gravity.TOP or Gravity.LEFT
+            alpha = if (PlayerWindowVisibility.detachedVisible.value) 1f else 0f
+            if (alpha == 0f) flags = flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
             if (Build.VERSION.SDK_INT >= 30) {
                 // Protect the status bar, but deliberately allow the user to drag over
                 // the navigation-bar area just like the older mini window.
@@ -159,6 +161,17 @@ class MiniWindowOverlayService : Service() {
             return
         }
         connect()
+        scope.launch {
+            PlayerWindowVisibility.detachedVisible.collect { visible ->
+                params?.let {
+                    it.alpha = if (visible) 1f else 0f
+                    it.flags = if (visible) it.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+                        else it.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                }
+                if (!visible) { dragging = false; crossView?.visibility = View.INVISIBLE }
+                updateRootLayout()
+            }
+        }
         val touch = View.OnTouchListener { view, event -> drag(view, event) }
         root?.setOnTouchListener(touch)
         root?.setOnClickListener { openApp() }

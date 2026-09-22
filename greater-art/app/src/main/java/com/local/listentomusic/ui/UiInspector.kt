@@ -104,7 +104,7 @@ internal fun UiInspectorHost(
     val inspectorAccent = Color(0xFF75EBD4)
     LaunchedEffect(enabled) { if (!enabled) state.clear() }
     BackHandler(enabled && state.armed) { state.cancel() }
-    CompositionLocalProvider(LocalUiInspector provides state) {
+    CompositionLocalProvider(LocalUiInspector provides if (enabled) state else null) {
         Box(Modifier.fillMaxSize()) {
             content()
             if (enabled && state.armed) {

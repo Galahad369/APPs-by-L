@@ -96,9 +96,8 @@ fun MiniPlayer(
     ) {
         LiquidMetalSurface(
             modifier = Modifier.fillMaxWidth()
-                .padding(horizontal = 10.dp)
-                .clip(RoundedCornerShape(20.dp)),
-            shape = RoundedCornerShape(20.dp),
+                .clip(androidx.compose.ui.graphics.RectangleShape),
+            shape = androidx.compose.ui.graphics.RectangleShape,
         ) {
             Box(modifier = Modifier.clickable(onClick = onOpen)) {
                 Row(
@@ -114,7 +113,7 @@ fun MiniPlayer(
                                     bounds.right.roundToInt(), bounds.bottom.roundToInt(),
                                 ))
                             }
-                            .clip(RoundedCornerShape(16.dp))
+                            .clip(androidx.compose.ui.graphics.RectangleShape)
                             .background(Color.Black),
                         contentAlignment = Alignment.Center,
                     ) {

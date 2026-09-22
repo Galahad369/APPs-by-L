@@ -49,6 +49,7 @@ internal fun DeveloperDiagnostics(
     warning: Boolean,
     inspector: UiInspectorState,
     modifier: Modifier = Modifier,
+    systemOverlay: Boolean = false,
 ) {
     val context = LocalContext.current
     var open by remember { mutableStateOf(false) }
@@ -105,9 +106,10 @@ internal fun DeveloperDiagnostics(
     }
 
     if (open) {
-        Dialog(
+        DiagnosticsDialog(
             onDismissRequest = { open = false },
             properties = DialogProperties(usePlatformDefaultWidth = false),
+            systemOverlay = systemOverlay,
         ) {
             Surface(
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -188,4 +190,20 @@ internal fun DeveloperDiagnostics(
             }
         }
     }
+}
+
+/** A Service has no Activity dialog token; keep the original report inside its window. */
+@Composable
+private fun DiagnosticsDialog(
+    onDismissRequest: () -> Unit,
+    properties: DialogProperties,
+    systemOverlay: Boolean,
+    content: @Composable () -> Unit,
+) {
+    if (systemOverlay) {
+        androidx.activity.compose.BackHandler { onDismissRequest() }
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .4f)), contentAlignment = Alignment.Center) {
+            content()
+        }
+    } else Dialog(onDismissRequest = onDismissRequest, properties = properties, content = content)
 }

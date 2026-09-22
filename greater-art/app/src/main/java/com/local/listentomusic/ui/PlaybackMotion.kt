@@ -81,7 +81,7 @@ internal fun AnimatedWaveformBars(peaks: FloatArray?, fraction: Float, active: C
 @Composable
 internal fun SpeedDialIcon(speed: Float, tint: Color) {
     val angle = animateFloatAsState(150f + ((speed - .25f) / 2.75f).coerceIn(0f,1f) * 240f, tween(220), label = "speed-needle")
-    Canvas(Modifier.size(21.dp).semantics { contentDescription = "Playback speed" }) {
+    Canvas(Modifier.size(27.dp).semantics { contentDescription = "Playback speed" }) {
         val c = Offset(size.width/2, size.height*.55f)
         val r = size.width*.39f
         drawArc(tint.copy(alpha=.5f), 150f, 240f, false, Offset(c.x-r,c.y-r), androidx.compose.ui.geometry.Size(r*2,r*2), style=Stroke(1.6.dp.toPx(), cap=StrokeCap.Round))

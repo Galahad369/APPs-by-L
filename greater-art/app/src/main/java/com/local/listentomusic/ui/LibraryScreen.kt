@@ -794,9 +794,9 @@ private fun MediaFileRow(
         Modifier.fillMaxWidth()
             .inspectElement("LIBRARY_MEDIA_ROW", file.name)
             .graphicsLayer { scaleX = rowScale; scaleY = rowScale }
-            .clip(RoundedCornerShape(10.dp))
+            .clip(androidx.compose.ui.graphics.RectangleShape)
             .background(rowColor)
-            .clickable(interactionSource = pressSource, indication = null, onClick = onPlay)
+            .clickable(interactionSource = pressSource, indication = androidx.compose.material3.ripple(), onClick = onPlay)
             .then(dragModifier)
             .padding(horizontal = 14.dp, vertical = rowSize.verticalPadding),
         verticalAlignment = Alignment.CenterVertically,
@@ -850,7 +850,7 @@ private val thumbnailBrush @androidx.compose.runtime.Composable get() =
 
 @Composable
 private fun MediaThumbnail(file: MediaFile, bitmap: Bitmap?, rowSize: LibraryRowSize) {
-    val shape = RoundedCornerShape(9.dp)
+    val shape = androidx.compose.ui.graphics.RectangleShape
     val density = LocalDensity.current
     val width = if (rowSize == LibraryRowSize.SMALL) with(density) { MiniWindowMetrics.widthPx(this.density).toDp() } else rowSize.thumbnailWidth
     val height = if (rowSize == LibraryRowSize.SMALL) with(density) { MiniWindowMetrics.heightPx(this.density).toDp() } else rowSize.thumbnailHeight
