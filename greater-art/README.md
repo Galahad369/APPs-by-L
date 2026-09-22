@@ -8,7 +8,7 @@ Greater Art is a native Kotlin/Jetpack Compose player for local music and video.
 - Version code: **92**
 - Application ID: `com.local.listentomusic`
 - APK: `releases/GreaterArt-1.13.3.apk`
-- APK SHA-256: `ed8af19a527013b501437a7d85f53b1c26fd091179a5efd4e03bf27b8ed4b090`
+- APK SHA-256: `1c3e1a386302f7cdb881c8c9a5a3aa4c336ecd637ec3a119198578fa414d9d4c`
 - Signing certificate SHA-256: `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 - v1.13.3 makes the Library mini-player edge-to-edge and rectangular, using the
   same preview dimensions as Mini Window. Detached Mini is hidden and untouchable
@@ -16,6 +16,8 @@ Greater Art is a native Kotlin/Jetpack Compose player for local music and video.
   expanded Now Playing hands playback to Mini; the player's Home/pull-down returns
   to Library instead. The original DEV button, report, copy, inspection and technical
   controls are restored, including diagnostics inside the expanded player.
+  Search sits beside Favourite and Share; the redundant Queue heading is removed,
+  leaving more room for the scrollable list without moving the fixed controls.
 - v1.13.2 fills the usable screen with Now Playing: no side/bottom percentage
   margins and no duplicate system-bar padding. The top grab handle follows a
   downward drag; a short pull springs back, a completed pull returns to Library

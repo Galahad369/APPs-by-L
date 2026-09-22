@@ -15,10 +15,38 @@ This file describes the **current repository state only**. Historical session no
 - Version code: **92**
 - Application ID: `com.local.listentomusic`
 - APK: `releases/GreaterArt-1.13.3.apk`
-- APK SHA-256: `ed8af19a527013b501437a7d85f53b1c26fd091179a5efd4e03bf27b8ed4b090`
+- APK SHA-256: `1c3e1a386302f7cdb881c8c9a5a3aa4c336ecd637ec3a119198578fa414d9d4c`
 - Signing certificate SHA-256: `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 `app/build.gradle.kts` is the version source of truth. Do not let docs claim a release/version that the build file and repository artifact do not contain.
+
+### September 23 — 1.13.3 local player visibility and DEV restoration
+
+- Library mini-player is rectangular and edge-to-edge, retaining the external
+  Mini's preview dimensions and the existing playback session.
+- Mini visibility now depends on both Library and expanded-player visibility.
+  A prepared handoff window is transparent and untouchable while either is visible.
+  Previously the generic system-overlay flag included Mini itself, preventing
+  cleanup on Library return. Use expanded-overlay state for that decision.
+- Leaving Library and closing/backing out of expanded Now Playing requests Mini.
+  The player's Home and pull-down still return to Library. No re-prepare, seek,
+  decoder replacement, resolution limit or FPS cap was introduced.
+- Restored the original DEV button and inspector dialog: report, Copy bug report,
+  Pick element, region IDs and technical details. The rejected tap/hold redesign
+  is superseded. In the service, the same panel renders inline rather than opening
+  an Activity-token dialog. Diagnostics are collected only when enabled.
+- Removed the Queue heading and moved Search beside Favourite/Share for both
+  audio and video. Search opens only on request; closing clears its filter.
+  Current-track scrolling uses the filtered index, not the original queue index.
+  Only the middle list is flexible; seek and transport remain fixed.
+- Verification: offline unit tests, lint and assemble passed. APK is 26,789,330
+  bytes, version 1.13.3/code 92, pinned certificate verified, 16 KiB zip alignment
+  verified, no INTERNET permission. Artifact: `releases/GreaterArt-1.13.3.apk`.
+  Earlier versioned APKs were not overwritten. This continuation did not commit
+  or push changes.
+- Device checks remain required: Android Home/Back from both presentations, Mini
+  return, DEV button/picking/report in Activity and overlay, small-screen layout
+  and keyboard search. Build success does not prove OEM window behavior.
 
 ### September 22 — 1.13.2 local Yee-flow adjustments
 

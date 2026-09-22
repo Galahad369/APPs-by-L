@@ -557,6 +557,7 @@ private fun AudioPlayer(
     onShareCurrentMedia: () -> Unit,
 ) {
     var waveformLoading by remember(playback.currentPath) { mutableStateOf(true) }
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
     val waveform by produceState<FloatArray?>(null, playback.currentPath) {
         value = null
         // Playback and artwork get the first frame; stale requests are cancelled by
@@ -636,6 +637,7 @@ private fun AudioPlayer(
                 onShareQueue = onShareQueue,
                 canShareQueue = queue.isNotEmpty(),
                 headline = true,
+                onSearch = { searchOpen = !searchOpen },
             )
             if (playback.showAbRepeat || playback.showSleepControl) {
                 Spacer(Modifier.height(4.dp))
@@ -644,6 +646,8 @@ private fun AudioPlayer(
             PlaybackError(playback.errorMessage)
             Spacer(Modifier.height(10.dp))
             NowPlayingQueue(
+                searchOpen = searchOpen,
+                onCloseSearch = { searchOpen = false },
                 queue = queue,
                 lyrics = lyrics,
                 showFileDetails = showFileDetails,
@@ -746,6 +750,7 @@ private fun SecondaryControls(
     onShareCurrentMedia: () -> Unit,
     modifier: Modifier,
 ) {
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
     Column(
         modifier = modifier
             .windowInsetsPadding(playerNavigationInsets())
@@ -760,6 +765,7 @@ private fun SecondaryControls(
             onShareQueue = onShareQueue,
             canShareQueue = queue.isNotEmpty(),
             headline = false,
+            onSearch = { searchOpen = !searchOpen },
         )
         if (playback.showAbRepeat || playback.showSleepControl) {
             Spacer(Modifier.height(4.dp))
@@ -768,6 +774,8 @@ private fun SecondaryControls(
         PlaybackError(playback.errorMessage)
         Spacer(Modifier.height(6.dp))
         NowPlayingQueue(
+            searchOpen = searchOpen,
+            onCloseSearch = { searchOpen = false },
             queue = queue,
             lyrics = lyrics,
             showFileDetails = showFileDetails,
@@ -789,6 +797,8 @@ private fun SecondaryControls(
 
 @Composable
 private fun NowPlayingQueue(
+    searchOpen: Boolean,
+    onCloseSearch: () -> Unit,
     queue: List<MediaFile>,
     currentPath: String?,
     language: AppLanguage,
@@ -803,7 +813,6 @@ private fun NowPlayingQueue(
     onRemoveQueueItem: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var searchOpen by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     val searchFocus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
@@ -811,8 +820,12 @@ private fun NowPlayingQueue(
         if (searchOpen) {
             searchFocus.requestFocus()
             keyboard?.show()
+        } else {
+            query = ""
+            keyboard?.hide()
         }
     }
+    BackHandler(enabled = searchOpen) { onCloseSearch() }
     val currentIndex = queue.indexOfFirst { it.path == currentPath }
     val visibleQueue = remember(queue, query) {
         val normalized = query.trim()
@@ -825,12 +838,12 @@ private fun NowPlayingQueue(
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = currentIndex.coerceAtLeast(0),
     )
-    LaunchedEffect(currentPath, currentIndex) {
-        if (currentIndex >= 0 && !listState.isScrollInProgress) listState.animateScrollToItem(currentIndex)
+    val visibleIndex = visibleQueue.indexOfFirst { it.value.path == currentPath }
+    LaunchedEffect(currentPath, visibleIndex) {
+        if (visibleIndex >= 0 && !listState.isScrollInProgress) listState.scrollToItem(visibleIndex)
     }
     Column(modifier.inspectElement("NOW_PLAYING_QUEUE", "Ordered playback queue and optional synchronized lyrics")) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            if (searchOpen) {
+        if (searchOpen) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
@@ -839,22 +852,11 @@ private fun NowPlayingQueue(
                     placeholder = { Text(uiText(language, "Search current queue", "搜尋目前播放佇列")) },
                     leadingIcon = { Icon(Icons.Rounded.Search, null) },
                     trailingIcon = {
-                        IconButton(onClick = { if (query.isNotEmpty()) query = "" else searchOpen = false }) {
+                        IconButton(onClick = { if (query.isNotEmpty()) query = "" else onCloseSearch() }) {
                             Icon(Icons.Rounded.Clear, uiText(language, "Clear", "清除"))
                         }
                     },
                 )
-            } else {
-                Text(
-                    uiText(language, "Queue", "播放佇列"),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f).padding(start = 7.dp),
-                )
-                IconButton(onClick = { searchOpen = true }, modifier = Modifier.inspectElement("QUEUE_SEARCH_BUTTON", "Searches the current queue without changing its order")) {
-                    Icon(Icons.Rounded.Search, uiText(language, "Search current queue", "搜尋目前播放佇列"), Modifier.size(28.dp))
-                }
-            }
         }
         if (lyrics != null) {
             SyncedLyricsPanel(
@@ -1288,6 +1290,7 @@ private fun CurrentMediaHeader(
     onShareQueue: () -> Unit,
     canShareQueue: Boolean,
     headline: Boolean,
+    onSearch: () -> Unit,
 ) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(
@@ -1311,6 +1314,9 @@ private fun CurrentMediaHeader(
             )
         }
         var shareMenuOpen by remember { mutableStateOf(false) }
+        IconButton(onClick = onSearch, modifier = Modifier.inspectElement("QUEUE_SEARCH_BUTTON", "Search the current list")) {
+            Icon(Icons.Rounded.Search, uiText(playback.appLanguage, "Search current queue", "搜尋目前播放佇列"), Modifier.size(28.dp))
+        }
         Box {
             IconButton(
                 onClick = { shareMenuOpen = true },
