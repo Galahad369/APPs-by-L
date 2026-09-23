@@ -14,7 +14,9 @@ internal fun shouldRetainPrimarySurfaceDuringHandoff(
 ): Boolean {
     if (expectedCandidateReady) return false
     return (currentOwner == "MINI_WINDOW" && expectedOwner == "NOW_PLAYING") ||
-        (currentOwner == "NOW_PLAYING" && expectedOwner == "MINI_WINDOW")
+        (currentOwner == "NOW_PLAYING" && expectedOwner == "MINI_WINDOW") ||
+        (currentOwner == "LIBRARY_MINI" && expectedOwner == "MINI_WINDOW") ||
+        (currentOwner == "MINI_WINDOW" && expectedOwner == "LIBRARY_MINI")
 }
 
 /** Platform-independent ownership state. Calls are serialized on main. */
@@ -42,7 +44,7 @@ internal data class SurfaceLease(
     else copy(owner = "NONE", view = 0, player = 0,
             generation = generation + 1, sinceMs = now, firstFrame = false,
             transitionReason = "detach")
-    fun mediaChanged(now: Long) = copy(generation = generation + 1, sinceMs = now,
+    fun mediaChanged(now: Long, repeated: Boolean = false) = if (repeated) this else copy(generation = generation + 1, sinceMs = now,
         firstFrame = false, mediaFirstFrame = false, framesByOwner = emptyMap(), mediaSinceMs = now,
         transitionReason = "media-changed", codecError = null, droppedFrames = 0)
     fun frame(eventMs: Long, outputMatches: Boolean): SurfaceLease {

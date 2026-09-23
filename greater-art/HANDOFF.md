@@ -3,22 +3,66 @@
 This file describes the **current repository state only**. Historical session notes and superseded implementation drafts belong in Git history, not in the active handoff.
 
 **Project:** `greater-art/` in the repository checkout
-**Current version:** `1.13.3 (code 92)`
-**Latest APK:** `releases/GreaterArt-1.13.3.apk` (verification below)
+**Current version:** `1.13.4 (code 93)`
+**Latest APK:** `releases/GreaterArt-1.13.4.apk` (verification below)
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 ## Repository state
 
 - Project: `greater-art/`
-- Version: **1.13.3**
-- Version code: **92**
+- Version: **1.13.4**
+- Version code: **93**
 - Application ID: `com.local.listentomusic`
-- APK: `releases/GreaterArt-1.13.3.apk`
-- APK SHA-256: `1c3e1a386302f7cdb881c8c9a5a3aa4c336ecd637ec3a119198578fa414d9d4c`
+- APK: `releases/GreaterArt-1.13.4.apk`
+- APK SHA-256: `9c519eafdd6e6b604f08946ae9b2cd2df2a0961f5acceaceb91576f2c908cac9`
 - Signing certificate SHA-256: `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 `app/build.gradle.kts` is the version source of truth. Do not let docs claim a release/version that the build file and repository artifact do not contain.
+
+### September 23 — 1.13.4 shared compact player (local)
+
+- Started from fetched `main`, commit `6a9897e`; local and remote were equal.
+  No commit, upload, branch deletion or release overwrite was performed.
+- `CompactPlayerView` now renders both Library and WindowManager compact players:
+  preview, title, previous/play/next and progress. `CompactPlayerMetrics` defines
+  61.5 dp content height (173 px at density 2.8125), excluding navigation insets.
+  Default Library rows use the same minimum height; larger text/details can grow.
+  Detached width is capped at 360 dp and display width, not the preview width.
+  Preview aspect is fitted rather than stretched; no media-quality cap is added.
+- Activity and external Mini now borrow the same `PlaybackConnection` lease.
+  Mini no longer creates/releases its own controller. Identical artwork bytes are
+  not decoded again for every player event. Native progress updates do not
+  recompose the Library list or run its old decorative metal animation.
+- First-frame diagnosis: repeat-one transitions unconditionally cleared both
+  surface and controller frame evidence, despite reusing the same renderer/output.
+  Repeat now preserves existing evidence; real media changes and surface transfers
+  still invalidate it. First-frame routing is active in release builds too (logs
+  remain debug-only), because handoff readiness must not depend on DEBUG.
+- Library/Mini candidates retain the source while a destination registers. Mini
+  reveal requires destination readiness plus both full presentations being hidden.
+  Audio waits for connection/state readiness. Timeout is failure cleanup, not a
+  successful reveal. Library launch coordinates override a previously dragged
+  location for this transition; detached launches can still use saved position.
+  A quick return to Library cancels any pending Home exit before it can move the
+  Activity behind the launcher later.
+- Android Home is controlled by Android: an app cannot defer the launcher or
+  guarantee its Activity surface survives after stop. Readiness-gated destination
+  reveal is implemented; a zero-gap Home transition is NOT claimed without device
+  evidence. Renderer timestamps are not screen-capture proof.
+- Library selected rows previously reused `isCurrent`, painting playback markers
+  on selections. Selection and current path are now separate. Only the current
+  item gets the twin green bars, without a fade leaving markers on older rows.
+  Press feedback is a short rightward nudge plus standard ripple, not scale wobble.
+- Required device checks: Samsung API 36 Home/return rapidly, audio, square/wide
+  video, drag-return-leave source position, light/dark/font settings, native compact
+  buttons, and diagnostics before/after repeat. No phone is attached.
+- Verification: offline `testDebugUnitTest lintDebug assembleDebug` passed, 117
+  JVM tests with zero failures, lint zero errors (21 warnings, one hint). APK
+  `releases/GreaterArt-1.13.4.apk` is 26,229,503 bytes; SHA-256
+  `9c519eafdd6e6b604f08946ae9b2cd2df2a0961f5acceaceb91576f2c908cac9`.
+  Version 1.13.4/code 93, pinned signing certificate, v2 signature, 16 KiB
+  zip alignment and no INTERNET permission were checked. Older APKs remain.
 
 ### September 23 — 1.13.3 local player visibility and DEV restoration
 

@@ -267,16 +267,11 @@ fun GreaterArtApp(
                     bottomBar = {
                         if (playback.hasMedia) {
                             MiniPlayer(
-                                playback = playback,
+                                settings = settings,
                                 artwork = artwork,
                                 controller = controller,
-                                videoPreviewActive = playback.isVideo,
-                                language = settings.appLanguage,
                                 onPreviewBoundsChanged = onMiniWindowSourceBoundsChanged,
                                 onOpen = openNowPlayingOverlay,
-                                onTogglePlay = viewModel::togglePlayPause,
-                                onPrevious = viewModel::previous,
-                                onNext = viewModel::next,
                             )
                         }
                     },

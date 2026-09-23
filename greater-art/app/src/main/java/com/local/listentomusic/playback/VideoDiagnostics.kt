@@ -10,11 +10,10 @@ import com.local.listentomusic.BuildConfig
 
 /** Debug-only, event-driven diagnostics. Never log filenames, URIs, or metadata. */
 internal fun ExoPlayer.installVideoDiagnostics(role: String) {
-    if (!BuildConfig.DEBUG) return
     val identity = "$role:${System.identityHashCode(this)}"
     val primary = role == "PRIMARY"
-    fun report(event: String) = Log.d("GreaterArtVideo", "$identity $event position=$currentPosition " +
-        if (primary) com.local.listentomusic.ui.components.VideoSurfaceOwner.describe() else "owner=$role")
+    fun report(event: String) { if (BuildConfig.DEBUG) Log.d("GreaterArtVideo", "$identity $event position=$currentPosition " +
+        if (primary) com.local.listentomusic.ui.components.VideoSurfaceOwner.describe() else "owner=$role") }
     report("created")
     addListener(object : Player.Listener {
         override fun onPlaybackStateChanged(state: Int) { report("state=$state") }
@@ -23,7 +22,7 @@ internal fun ExoPlayer.installVideoDiagnostics(role: String) {
         override fun onVideoSizeChanged(videoSize: VideoSize) { report("size=${videoSize.width}x${videoSize.height}") }
         override fun onRenderedFirstFrame() { report("firstFrame") }
         override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
-            if (primary) com.local.listentomusic.ui.components.VideoSurfaceOwner.mediaChanged()
+            if (primary) com.local.listentomusic.ui.components.VideoSurfaceOwner.mediaChanged(reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT)
             report("mediaTransition reason=$reason")
         }
         override fun onPlayerError(error: PlaybackException) { report("error=${error.errorCodeName}") }

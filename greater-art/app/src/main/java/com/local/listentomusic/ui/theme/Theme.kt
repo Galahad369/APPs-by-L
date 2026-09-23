@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.dp
 import com.local.listentomusic.data.AppFont
 import com.local.listentomusic.data.ThemeMode
 import com.local.listentomusic.R
-private val LightColors = lightColorScheme(
+internal val LightColors = lightColorScheme(
     primary = Color(0xFF176B5B),
     onPrimary = Color(0xFFF5FFFB),
     primaryContainer = Color(0xFFDDF8F1),
@@ -34,7 +34,7 @@ private val LightColors = lightColorScheme(
     outlineVariant = Color(0xFFD7DDD8),
 )
 
-private val DarkColors = darkColorScheme(
+internal val DarkColors = darkColorScheme(
     primary = Color(0xFF8BE9D3),
     onPrimary = Color(0xFF07130F),
     primaryContainer = Color(0xFF183A32),

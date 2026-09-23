@@ -31,7 +31,7 @@ class SurfaceLeaseTest {
     }
 
     @Test fun handoffHoldDoesNotApplyToUnrelatedDestinations() {
-        assertFalse(shouldRetainPrimarySurfaceDuringHandoff(
+        assertTrue(shouldRetainPrimarySurfaceDuringHandoff(
             currentOwner = "MINI_WINDOW",
             expectedOwner = "LIBRARY_MINI",
             expectedCandidateReady = false,

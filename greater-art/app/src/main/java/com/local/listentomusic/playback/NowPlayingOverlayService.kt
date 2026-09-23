@@ -484,13 +484,12 @@ class NowPlayingOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
         }
 
         scope.launch {
-            val video = viewModel.playback.value.isVideo
-            if (video) {
-                withTimeoutOrNull(HANDOFF_TIMEOUT_MS) {
-                    VideoSurfaceOwner.state.first {
-                        it.owner == "MINI_WINDOW" && it.firstFrame
-                    }
-                }
+            val ready = withTimeoutOrNull(2500L) { MiniWindowOverlayService.destinationReady.first { it } }
+            if (ready != true) {
+                shrinking = false
+                stopService(Intent(this@NowPlayingOverlayService, MiniWindowOverlayService::class.java))
+                VideoSurfaceOwner.finishHandoff("MINI_WINDOW")
+                return@launch
             }
             VideoSurfaceOwner.finishHandoff("MINI_WINDOW")
             sendBroadcast(Intent(com.local.listentomusic.MainActivity.ACTION_BACKGROUND_PLAYER).setPackage(packageName))

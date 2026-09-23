@@ -117,7 +117,7 @@ object VideoSurfaceOwner {
         active.clear()
         reconcile()
     }
-    fun mediaChanged() { state.value = state.value.mediaChanged(SystemClock.elapsedRealtime()) }
+    fun mediaChanged(repeated: Boolean = false) { state.value = state.value.mediaChanged(SystemClock.elapsedRealtime(), repeated) }
     fun serviceEvent(event: String) { log("MINI_WINDOW service=$event", active.get()) }
     fun decoder(name: String) { state.value = state.value.copy(decoder = name, codecError = null) }
     fun codecError(name: String) { state.value = state.value.copy(codecError = name) }

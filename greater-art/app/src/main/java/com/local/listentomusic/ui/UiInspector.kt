@@ -81,7 +81,7 @@ internal class UiInspectorState {
     }
 }
 
-private val LocalUiInspector = compositionLocalOf<UiInspectorState?> { null }
+internal val LocalUiInspector = compositionLocalOf<UiInspectorState?> { null }
 
 internal fun Modifier.inspectElement(label: String, detail: String = ""): Modifier = composed {
     val inspector = LocalUiInspector.current ?: return@composed this

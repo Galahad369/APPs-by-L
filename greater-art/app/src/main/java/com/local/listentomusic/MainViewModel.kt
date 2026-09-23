@@ -210,7 +210,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _playHistory = MutableStateFlow<List<PlayHistoryEntry>>(emptyList())
     val playHistory: StateFlow<List<PlayHistoryEntry>> = _playHistory.asStateFlow()
 
-    private var controllerFuture: ListenableFuture<MediaController>? = null
+    private var controllerLease: com.local.listentomusic.playback.SharedPlaybackResource.Lease<ListenableFuture<MediaController>>? = null
     private var tickerJob: Job? = null
         private var thumbnailWarmupJob: Job? = null
         private var thumbnailAheadJob: Job? = null
@@ -247,7 +247,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                    videoFrameRendered = false
+                    if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT) videoFrameRendered = false
                     // Sleep timer in "end of track" mode fires when the next item lands.
                     val timer = _sleepTimer.value
                     if (timer.active && timer.endOfTrack) cancelSleepTimer()
@@ -871,10 +871,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun connectController() {
         val context = getApplication<Application>()
-        val token = SessionToken(context, ComponentName(context, PlaybackService::class.java))
-        val future = MediaController.Builder(context, token).buildAsync()
-        controllerFuture = future
+        val lease = com.local.listentomusic.playback.PlaybackConnection.acquire(context)
+        controllerLease = lease
+        val future = lease.value
         future.addListener({
+            if (controllerLease !== lease) return@addListener
             runCatching { future.get() }.onSuccess { mediaController ->
                 _controller.value = mediaController
                 mediaController.addListener(playerListener)
@@ -1144,7 +1145,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         waveformWarmupJob?.cancel()
         sleepTimerJob?.cancel()
         _controller.value?.removeListener(playerListener)
-        controllerFuture?.let(MediaController::releaseFuture)
+        controllerLease?.close()
+        controllerLease = null
         _controller.value = null
         super.onCleared()
     }

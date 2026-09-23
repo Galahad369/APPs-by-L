@@ -472,7 +472,8 @@ fun LibraryScreen(
                         ) { index, item ->
                             MediaFileRow(
                                 file = item,
-                                isCurrent = if (selected.isNotEmpty()) item.path in selected else item.path == currentPath,
+                                isCurrent = item.path == currentPath,
+                                isSelected = item.path in selected,
                                 index = index,
                                 itemCount = state.files.size,
                                 dragEnabled = !favouritesActive && selected.isEmpty() && activePlaylist?.rule == null && state.query.isBlank() && (activePlaylist != null || state.sortMode == SortMode.CUSTOM),
@@ -739,6 +740,7 @@ private fun CreatePlaylistDialog(
 private fun MediaFileRow(
     file: MediaFile,
     isCurrent: Boolean,
+    isSelected: Boolean,
     index: Int,
     itemCount: Int,
     dragEnabled: Boolean,
@@ -758,20 +760,15 @@ private fun MediaFileRow(
     val pressSource = remember { MutableInteractionSource() }
     val pressed by pressSource.collectIsPressedAsState()
     val rowColor by animateColorAsState(
-        if (isCurrent) MaterialTheme.colorScheme.primaryContainer
+        if (isCurrent || isSelected) MaterialTheme.colorScheme.primaryContainer
         else Color.Transparent,
         animationSpec = androidx.compose.animation.core.tween(190),
         label = "library-row-active",
     )
-    val rowScale by animateFloatAsState(
-        if (pressed) 0.992f else 1f,
+    val tapOffset by animateFloatAsState(
+        if (pressed) 4f else 0f,
         animationSpec = androidx.compose.animation.core.tween(120),
         label = "library-row-press",
-    )
-    val accentAlpha by animateFloatAsState(
-        if (isCurrent) 1f else 0f,
-        animationSpec = androidx.compose.animation.core.tween(190),
-        label = "library-row-accent",
     )
     val dragModifier = if (dragEnabled) Modifier.pointerInput(index, itemCount) {
         val threshold = 54.dp.toPx()
@@ -793,21 +790,23 @@ private fun MediaFileRow(
     Row(
         Modifier.fillMaxWidth()
             .inspectElement("LIBRARY_MEDIA_ROW", file.name)
-            .graphicsLayer { scaleX = rowScale; scaleY = rowScale }
+            .graphicsLayer { translationX = tapOffset.dp.toPx() }
             .clip(androidx.compose.ui.graphics.RectangleShape)
             .background(rowColor)
             .clickable(interactionSource = pressSource, indication = androidx.compose.material3.ripple(), onClick = onPlay)
             .then(dragModifier)
+            .then(if (rowSize == LibraryRowSize.SMALL) Modifier.heightIn(min = com.local.listentomusic.model.CompactPlayerMetrics.HEIGHT_DP.dp) else Modifier)
             .padding(horizontal = 14.dp, vertical = rowSize.verticalPadding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Reserve the same 12 dp for every row so artwork and titles never jump
         // sideways when the active song changes.
         Box(Modifier.width(12.dp), contentAlignment = Alignment.CenterStart) {
-            Box(Modifier.width(3.dp).height(rowSize.accentHeight)
-                .graphicsLayer { alpha = accentAlpha }
-                .clip(RoundedCornerShape(4.dp))
-                .background(MaterialTheme.colorScheme.secondary))
+            if (isCurrent) Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                repeat(2) {
+                    Box(Modifier.width(2.dp).height(18.dp).background(MaterialTheme.colorScheme.secondary))
+                }
+            }
         }
         if (showThumbnails) {
             MediaThumbnail(file, thumbnail, rowSize)
@@ -914,7 +913,7 @@ private fun shareBatchMessage(language: AppLanguage, count: Int, size: String): 
 
 private val LibraryRowSize.thumbnailWidth get() = when (this) { LibraryRowSize.SMALL -> MiniWindowMetrics.WIDTH_DP.dp; LibraryRowSize.MEDIUM -> 120.dp; LibraryRowSize.LARGE -> 148.dp }
 private val LibraryRowSize.thumbnailHeight get() = when (this) { LibraryRowSize.SMALL -> MiniWindowMetrics.HEIGHT_DP.dp; LibraryRowSize.MEDIUM -> 70.dp; LibraryRowSize.LARGE -> 92.dp }
-private val LibraryRowSize.verticalPadding get() = when (this) { LibraryRowSize.SMALL -> 3.dp; LibraryRowSize.MEDIUM -> 6.dp; LibraryRowSize.LARGE -> 8.dp }
+private val LibraryRowSize.verticalPadding get() = when (this) { LibraryRowSize.SMALL -> 2.75.dp; LibraryRowSize.MEDIUM -> 6.dp; LibraryRowSize.LARGE -> 8.dp }
 private val LibraryRowSize.textSpacing get() = when (this) { LibraryRowSize.SMALL -> 10.dp; LibraryRowSize.MEDIUM -> 12.dp; LibraryRowSize.LARGE -> 14.dp }
 private val LibraryRowSize.accentHeight get() = when (this) { LibraryRowSize.SMALL -> 34.dp; LibraryRowSize.MEDIUM -> 46.dp; LibraryRowSize.LARGE -> 58.dp }
 private val LibraryRowSize.playIconSize get() = when (this) { LibraryRowSize.SMALL -> 14.dp; LibraryRowSize.MEDIUM -> 17.dp; LibraryRowSize.LARGE -> 20.dp }

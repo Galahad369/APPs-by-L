@@ -118,6 +118,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // A quick return wins over a pending Home-to-Mini exit. The destination
+        // may finish its first frame later; it must not background us again.
+        miniWindowExitJob?.cancel()
         com.local.listentomusic.ui.components.VideoSurfaceOwner.setActivityForeground(true)
         // A Mini Window tap is a direct continuation of Now Playing. During that
         // handoff, keep the working overlay alive until the Now Playing surface is
@@ -126,7 +129,17 @@ class MainActivity : ComponentActivity() {
             !returningFromMiniWindow &&
             !com.local.listentomusic.ui.components.VideoSurfaceOwner.expandedOverlayActive
         ) {
-            stopService(Intent(this, MiniWindowOverlayService::class.java))
+            if (com.local.listentomusic.ui.components.VideoSurfaceOwner.systemOverlayActive) {
+                com.local.listentomusic.ui.components.VideoSurfaceOwner.beginHandoff("LIBRARY_MINI")
+                miniWindowReturnJob?.cancel()
+                miniWindowReturnJob = lifecycleScope.launch {
+                    if (viewModel.playback.value.isVideo) withTimeoutOrNull(2500L) {
+                        com.local.listentomusic.ui.components.VideoSurfaceOwner.state.first { it.owner == "LIBRARY_MINI" && it.firstFrame }
+                    }
+                    stopService(Intent(this@MainActivity, MiniWindowOverlayService::class.java))
+                    com.local.listentomusic.ui.components.VideoSurfaceOwner.finishHandoff("LIBRARY_MINI")
+                }
+            }
         } else if (returningFromMiniWindow && playerScreenVisible) {
             // If a transient pause interrupted the handoff, resume waiting for the
             // NOW_PLAYING surface instead of leaving the overlay stuck indefinitely.
@@ -144,9 +157,7 @@ class MainActivity : ComponentActivity() {
     override fun onPause() {
         returnScan?.cancel()
         miniWindowReturnJob?.cancel()
-        miniWindowExitJob?.cancel()
         com.local.listentomusic.ui.components.VideoSurfaceOwner.setActivityForeground(false)
-        com.local.listentomusic.ui.components.VideoSurfaceOwner.finishHandoff("MINI_WINDOW")
         super.onPause()
     }
 
@@ -175,7 +186,7 @@ class MainActivity : ComponentActivity() {
         super.onUserLeaveHint()
         // A system-level Now Playing window is already the active external
         // presentation. Do not spawn a second Mini Window underneath it.
-        if (com.local.listentomusic.ui.components.VideoSurfaceOwner.systemOverlayActive) {
+        if (com.local.listentomusic.ui.components.VideoSurfaceOwner.expandedOverlayActive) {
             if (com.local.listentomusic.ui.components.VideoSurfaceOwner.expectedOwner == "NOW_PLAYING") {
                 startService(Intent(this, com.local.listentomusic.playback.NowPlayingOverlayService::class.java)
                     .setAction(com.local.listentomusic.playback.NowPlayingOverlayService.ACTION_SHRINK))
@@ -280,19 +291,14 @@ class MainActivity : ComponentActivity() {
 
     private fun completeMiniWindowExit(video: Boolean) {
         miniWindowExitJob?.cancel()
-        if (!video) {
-            com.local.listentomusic.ui.components.VideoSurfaceOwner.setActivityForeground(false)
-            com.local.listentomusic.ui.components.VideoSurfaceOwner.finishHandoff("MINI_WINDOW")
-            moveTaskToBack(true)
-            return
-        }
         miniWindowExitJob = lifecycleScope.launch {
             // Keep Now Playing visible until the Mini Window has both ownership and
             // a rendered frame. Timeout is failure cleanup, not normal sequencing.
-            withTimeoutOrNull(1_500L) {
-                com.local.listentomusic.ui.components.VideoSurfaceOwner.state.first {
-                    it.owner == "MINI_WINDOW" && it.firstFrame
-                }
+            val ready = withTimeoutOrNull(2500L) { MiniWindowOverlayService.destinationReady.first { it } }
+            if (ready != true) {
+                stopService(Intent(this@MainActivity, MiniWindowOverlayService::class.java))
+                com.local.listentomusic.ui.components.VideoSurfaceOwner.finishHandoff("MINI_WINDOW")
+                return@launch
             }
             com.local.listentomusic.ui.components.VideoSurfaceOwner.setActivityForeground(false)
             com.local.listentomusic.ui.components.VideoSurfaceOwner.finishHandoff("MINI_WINDOW")
