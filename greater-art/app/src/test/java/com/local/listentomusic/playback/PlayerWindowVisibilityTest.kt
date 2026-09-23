@@ -13,12 +13,14 @@ class PlayerWindowVisibilityTest {
     @Test fun switchingHostsNeverBrieflyShowsDetached() {
         PlayerWindowVisibility.library(true)
         PlayerWindowVisibility.expanded(true)
+        assertFalse(PlayerWindowVisibility.dockedVisible.value)
         PlayerWindowVisibility.library(false)
         assertFalse(PlayerWindowVisibility.detachedVisible.value)
         PlayerWindowVisibility.expanded(false)
         assertTrue(PlayerWindowVisibility.detachedVisible.value)
         PlayerWindowVisibility.library(true)
         assertFalse(PlayerWindowVisibility.detachedVisible.value)
+        assertTrue(PlayerWindowVisibility.dockedVisible.value)
         PlayerWindowVisibility.library(false)
     }
 }

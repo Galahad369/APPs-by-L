@@ -1,7 +1,6 @@
 package com.local.listentomusic.ui
 
 import android.content.Intent
-import android.graphics.Bitmap
 import android.graphics.Rect
 import android.os.Build
 import android.os.Environment
@@ -26,6 +25,9 @@ import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -50,7 +52,6 @@ import androidx.core.content.ContextCompat
 import com.local.listentomusic.playback.NowPlayingOverlayService
 import com.local.listentomusic.MainViewModel
 import com.local.listentomusic.ui.components.AppBackground
-import com.local.listentomusic.ui.components.MiniPlayer
 import com.local.listentomusic.data.AppBackgroundMode
 import com.local.listentomusic.data.BackgroundScaleMode
 import com.local.listentomusic.data.FloatingWindowMode
@@ -67,7 +68,7 @@ fun GreaterArtApp(
     isPictureInPicture: Boolean,
     onPlayerScreenChanged: (Boolean) -> Unit,
     onVideoBoundsChanged: (Rect) -> Unit,
-    onMiniWindowSourceBoundsChanged: (Rect) -> Unit,
+    onLibraryScreenChanged: (Boolean) -> Unit,
     onEnterPictureInPicture: () -> Unit,
     onGrantStorageAccess: () -> Unit,
 ) {
@@ -121,16 +122,6 @@ fun GreaterArtApp(
             )
         }
     }
-    val artworkSource = remember(queue, library.files, playback.currentPath) {
-        queue.firstOrNull { it.path == playback.currentPath } ?: library.files.firstOrNull { it.path == playback.currentPath }
-    }
-    // On session restore the path can arrive before the local index. Retry when its
-    // media record arrives instead of keeping the initial null artwork indefinitely.
-    val artwork by produceState<Bitmap?>(initialValue = null, key1 = playback.currentPath,
-        key2 = settings.localOverrides[playback.currentPath], key3 = artworkSource) {
-        value = null
-        value = viewModel.loadCurrentArtwork(playback.currentPath)
-    }
     val m3uImporter = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let(viewModel::importM3u)
     }
@@ -141,6 +132,7 @@ fun GreaterArtApp(
         value = viewModel.loadLyrics(playback.currentPath)
     }
     var screen by rememberSaveable { mutableStateOf(Screen.LIBRARY) }
+    LaunchedEffect(screen) { onLibraryScreenChanged(screen == Screen.LIBRARY) }
     val libraryPager = rememberPagerState(initialPage = 0, pageCount = { 2 })
     val navigationScope = rememberCoroutineScope()
     LaunchedEffect(libraryPager.currentPage) { if (libraryPager.currentPage == 1) viewModel.requestGraph() }
@@ -266,13 +258,7 @@ fun GreaterArtApp(
                     contentColor = MaterialTheme.colorScheme.onBackground,
                     bottomBar = {
                         if (playback.hasMedia) {
-                            MiniPlayer(
-                                settings = settings,
-                                artwork = artwork,
-                                controller = controller,
-                                onPreviewBoundsChanged = onMiniWindowSourceBoundsChanged,
-                                onOpen = openNowPlayingOverlay,
-                            )
+                            Spacer(Modifier.fillMaxWidth().height(com.local.listentomusic.model.CompactPlayerMetrics.HEIGHT_DP.dp))
                         }
                     },
                 ) { padding ->

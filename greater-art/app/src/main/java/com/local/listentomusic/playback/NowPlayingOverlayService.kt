@@ -341,11 +341,7 @@ class NowPlayingOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
             }
             if (closing || shrinking) return@launch
             VideoSurfaceOwner.finishHandoff("NOW_PLAYING")
-            revealOverlay {
-                if (launchedFromMini) {
-                    stopService(Intent(this@NowPlayingOverlayService, MiniWindowOverlayService::class.java))
-                }
-            }
+            revealOverlay {}
         }
     }
 
@@ -472,10 +468,13 @@ class NowPlayingOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) return
         shrinking = true
         VideoSurfaceOwner.beginHandoff("MINI_WINDOW")
+        MiniWindowOverlayService.destinationReady.value = false
         runCatching {
             ContextCompat.startForegroundService(
                 this,
-                Intent(this, MiniWindowOverlayService::class.java),
+                Intent(this, MiniWindowOverlayService::class.java)
+                    .setAction(MiniWindowOverlayService.ACTION_DETACH)
+                    .putExtra(MiniWindowOverlayService.EXTRA_FROM_EXPANDED, true),
             )
         }.onFailure {
             shrinking = false

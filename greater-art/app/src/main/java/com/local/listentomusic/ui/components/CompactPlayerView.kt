@@ -43,6 +43,7 @@ class CompactPlayerView(context: Context) : FrameLayout(context) {
     private var pauseLabel = "Pause"
     private var nextLabel = "Next"
     private var appearanceKey: List<Any>? = null
+    private var detached = false
     var onOpen: () -> Unit = {}
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) { refresh() }
@@ -142,6 +143,17 @@ class CompactPlayerView(context: Context) : FrameLayout(context) {
         lastArtwork = bitmap
         if (bitmap == null) artwork.setImageResource(R.drawable.ic_launcher_foreground) else artwork.setImageBitmap(bitmap)
     }
+    /** Resize the existing PlayerView in place; no player or surface is recreated. */
+    fun setDetached(value: Boolean) {
+        if (detached == value) return
+        detached = value
+        listOf(title, previous, toggle, next, progress).forEach {
+            it.visibility = if (value) View.GONE else View.VISIBLE
+        }
+        removeCallbacks(ticker)
+        if (!value && player != null) post(ticker)
+        refresh()
+    }
     fun bind(value: Player?, presentation: String) {
         owner = presentation
         video.tag = presentation
@@ -150,7 +162,7 @@ class CompactPlayerView(context: Context) : FrameLayout(context) {
             player = value
             value?.addListener(listener)
             removeCallbacks(ticker)
-            if (value != null) post(ticker)
+            if (value != null && !detached) post(ticker)
         }
         refresh()
     }
@@ -167,7 +179,8 @@ class CompactPlayerView(context: Context) : FrameLayout(context) {
         artwork.visibility = if (isVideo) View.GONE else View.VISIBLE
         val ratio = if (isVideo && p.videoSize.height > 0) p.videoSize.width.toFloat() * p.videoSize.pixelWidthHeightRatio / p.videoSize.height
             else lastArtwork?.let { it.width.toFloat() / it.height.coerceAtLeast(1) } ?: 1f
-        val width = dp(CompactPlayerMetrics.HEIGHT_DP * if (ratio in 0.9f..1.1f) 1f else 103f / 56f)
+        val width = if (detached) LayoutParams.MATCH_PARENT else
+            dp(CompactPlayerMetrics.HEIGHT_DP * if (ratio in 0.9f..1.1f) 1f else 103f / 56f)
         if (preview.layoutParams.width != width) { preview.layoutParams = preview.layoutParams.apply { this.width = width } }
         if (isVideo) VideoSurfaceOwner.attach(p, video, overlay = owner == "MINI_WINDOW")
         else VideoSurfaceOwner.detach(video)

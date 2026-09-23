@@ -3,22 +3,50 @@
 This file describes the **current repository state only**. Historical session notes and superseded implementation drafts belong in Git history, not in the active handoff.
 
 **Project:** `greater-art/` in the repository checkout
-**Current version:** `1.13.4 (code 93)`
-**Latest APK:** `releases/GreaterArt-1.13.4.apk` (verification below)
+**Current version:** `1.13.5 (code 94)`
+**Latest APK:** `releases/GreaterArt-1.13.5.apk` (verification below)
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 ## Repository state
 
 - Project: `greater-art/`
-- Version: **1.13.4**
-- Version code: **93**
+- Version: **1.13.5**
+- Version code: **94**
 - Application ID: `com.local.listentomusic`
-- APK: `releases/GreaterArt-1.13.4.apk`
-- APK SHA-256: `9c519eafdd6e6b604f08946ae9b2cd2df2a0961f5acceaceb91576f2c908cac9`
+- APK: `releases/GreaterArt-1.13.5.apk`
+- APK SHA-256: `cab5fd51d9e1b8897d9d4997fb5642a6b54fce9766e498ad9dcf3fcac8e65912`
 - Signing certificate SHA-256: `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 `app/build.gradle.kts` is the version source of truth. Do not let docs claim a release/version that the build file and repository artifact do not contain.
+
+### September 23 — 1.13.5 persistent dock/detach Mini (local)
+
+- Cause: Library previously owned a separate Compose compact player and stopped
+  the Mini overlay on return. Home then had to create/attach a different window,
+  causing a visible presentation handoff. The red-X quit path launched
+  `MainActivity` solely to remove its task, flashing Library before exit.
+- Fix: `MiniWindowOverlayService` now owns the single compact view and PlayerView
+  throughout Library and detached Mini. `DOCKED` is a fixed, full-width 61.5 dp
+  strip with controls; `DETACHED` resizes the same view to media-only 103×56 dp
+  (56×56 dp for square media) and enables drag. Library reserves its height,
+  but no longer renders a second player. Presentation visibility hides Mini
+  behind expanded Now Playing. The red X is 4 physical px higher; drop stops
+  playback, removes overlays, and removes the existing app task directly.
+- Prevention: Do not stop/recreate Mini on Library return; mode changes must not
+  reconnect the controller, recreate PlayerView, seek, prepare or cap video.
+  Expanded Now Playing still transfers surface ownership and waits for a frame.
+- Verification: offline `testDebugUnitTest lintDebug assembleDebug` passed, 117
+  JVM tests with zero failures; `releases/GreaterArt-1.13.5.apk` is 26,123,862
+  bytes with SHA-256
+  `cab5fd51d9e1b8897d9d4997fb5642a6b54fce9766e498ad9dcf3fcac8e65912`.
+  Version/code, pinned v2 signing certificate, 16 KiB alignment and absence of
+  INTERNET permission were checked. Version consistency passed. Public-repo
+  audit found no credential/path issues, but fails on an existing historical
+  non-noreply commit author email; do not rewrite history as part of this fix.
+  **Not device-verified:** no phone/emulator was attached. Test Library → Home →
+  Library rapidly with MP3, square/wide MP4, expanded Now Playing, and red-X
+  quit on Samsung API 36 before treating visual continuity as proven.
 
 ### September 23 — 1.13.4 shared compact player (local)
 
@@ -373,3 +401,88 @@ Then reproduce/instrument before applying architectural workarounds.
 ## Before changing documentation
 
 Check `app/build.gradle.kts` and the actual `releases/` tree first. Documentation must not get ahead of repository code/artifacts again.
+
+## Semantic Versioning Policy
+
+Greater Art versioning uses:
+
+MAJOR.MINOR.PATCH
+
+Examples: 1.13.6
+1  = MAJOR
+13 = MINOR
+6  = PATCH
+
+---
+
+- Current Version
+versionName = X.Y.Z
+versionCode = N
+
+Example:
+
+versionName = 1.13.6
+versionCode = 95
+
+Source of truth:
+greater-art/app/build.gradle.kts
+Before changing the version, always read the current value from the repository.
+Never assume the version from an old handoff, APK filename, or conversation.
+
+---
+
+PATCH — X.Y.Z → X.Y.(Z+1)
+Use PATCH for:
+
+bug fixes
+crash fixes
+UI polish
+animation improvements
+performance fixes
+incorrect sizing/positioning
+transition fixes
+device-specific fixes
+internal refactors with no major product change
+security fixes that preserve existing behavior
+
+- Examples:
+
+1.13.5 → 1.13.6
+1.13.6 → 1.13.7
+
+- Example changes:
+
+Fix Mini Window position
+Fix red-X quit behavior
+Fix black frame during player transition
+Fix Samsung overlay sizing
+
+---
+
+MINOR — X.Y.Z → X.(Y+1).0
+
+Use MINOR for a meaningful new feature or capability while Greater Art remains the same overall product generation.
+
+Examples:
+
+1.13.7 → 1.14.0
+1.14.4 → 1.15.0
+
+Examples of MINOR changes:
+
+new playback feature
+new Library mode
+new queue functionality
+new media-management capability
+new major Settings feature
+new user-visible workflow
+
+Reset PATCH to 0.
+
+- Correct:
+
+1.13.7 → 1.14.0
+
+- Not:
+
+1.13.7 → 1.14.8

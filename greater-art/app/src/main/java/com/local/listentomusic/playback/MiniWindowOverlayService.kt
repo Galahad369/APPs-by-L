@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.app.ActivityManager
 import android.content.ComponentName
 import android.content.Intent
 import android.content.res.Configuration
@@ -34,7 +35,6 @@ import androidx.media3.session.SessionToken
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.google.common.util.concurrent.ListenableFuture
-import com.local.listentomusic.MainActivity
 import com.local.listentomusic.R
 import com.local.listentomusic.model.MiniWindowMetrics
 import kotlinx.coroutines.CoroutineScope
@@ -43,6 +43,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
@@ -67,7 +68,7 @@ class MiniWindowOverlayService : Service() {
         private val crossSize = 25
         private val crossMargin = 11
         private val crossBaseAlpha = 1f
-        private val crossRaisePx = 14
+        private val crossRaisePx = 18
         private var crossActive: Boolean? = null
         private var framePending = false
         private var openingApp = false
@@ -83,11 +84,13 @@ class MiniWindowOverlayService : Service() {
     private var startX = 0
     private var startY = 0
     private var dragging = false
+    private var docked = false
 
     // views
     private var dangerTint: View? = null
     private var videoView: PlayerView? = null
     private var artworkGeneration = 0
+    private var artworkAspect = 1f
 
     // drag-to-close drop target (red cross at screen bottom-center)
     private var crossView: FrameLayout? = null
@@ -98,10 +101,10 @@ class MiniWindowOverlayService : Service() {
         internal val destinationReady = MutableStateFlow(false)
         // Reuse the media channel so Android accepts the foreground promotion.
         private const val CHANNEL_ID = "greater_art_playback"
-        const val EXTRA_STOP_APP = "stop_app"
         const val EXTRA_OPEN_PLAYER = "open_player"
-        const val EXTRA_START_X = "start_x"
-        const val EXTRA_START_Y = "start_y"
+        const val ACTION_DOCK = "com.local.listentomusic.player.DOCK"
+        const val ACTION_DETACH = "com.local.listentomusic.player.DETACH"
+        const val EXTRA_FROM_EXPANDED = "from_expanded"
         private const val POSITION_PREFS = "mini_window_position"
         private const val POSITION_X = "x"
         private const val POSITION_Y = "y"
@@ -122,6 +125,7 @@ class MiniWindowOverlayService : Service() {
             return
         }
         createChannel()
+                docked = PlayerWindowVisibility.libraryShowing.value
                 startForeground(2, buildNotification())
                 wm = getSystemService(WindowManager::class.java)
                 buildView()
@@ -145,7 +149,7 @@ class MiniWindowOverlayService : Service() {
             x = saved.getInt(POSITION_X, dp(12))
             y = saved.getInt(POSITION_Y, dp(300))
         }
-        clampPosition()
+        applyModeLayout()
         try {
             root?.let { wm?.addView(it, params!!) }
         } catch (t: Throwable) {
@@ -161,14 +165,11 @@ class MiniWindowOverlayService : Service() {
             }
         }
         scope.launch {
-            PlayerWindowVisibility.detachedVisible.collect { visible ->
-                params?.let {
-                    it.alpha = if (visible && ready) 1f else 0f
-                    it.flags = if (visible && ready) it.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
-                        else it.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-                }
-                if (!visible) { dragging = false; crossView?.visibility = View.INVISIBLE }
-                updateRootLayout()
+            combine(PlayerWindowVisibility.libraryShowing, PlayerWindowVisibility.detachedVisible,
+                PlayerWindowVisibility.dockedVisible) { library, detached, _ -> library to detached }
+                .collect { (library, detached) ->
+                if (docked != library && (library || detached)) switchMode(library)
+                updateVisibility()
             }
         }
         val touch = View.OnTouchListener { view, event -> drag(view, event) }
@@ -186,17 +187,18 @@ class MiniWindowOverlayService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        com.local.listentomusic.ui.components.VideoSurfaceOwner.beginHandoff("MINI_WINDOW")
-        val layout = params
-        val saved = getSharedPreferences(POSITION_PREFS, MODE_PRIVATE)
-        if (layout != null && intent?.hasExtra(EXTRA_START_X) == true) {
-            layout.x = intent.getIntExtra(EXTRA_START_X, layout.x)
-            layout.y = intent.getIntExtra(EXTRA_START_Y, layout.y)
-            clampPosition()
-            updateRootLayout()
-            savePosition()
+        val wasDocked = docked
+        when (intent?.action) {
+            ACTION_DOCK -> switchMode(true)
+            ACTION_DETACH -> switchMode(false)
         }
-        if (controller != null) awaitDestinationReady()
+        val handoffNeeded = intent?.getBooleanExtra(EXTRA_FROM_EXPANDED, false) == true || controller == null ||
+            com.local.listentomusic.ui.components.VideoSurfaceOwner.expectedOwner != "MINI_WINDOW"
+        if (handoffNeeded) {
+            com.local.listentomusic.ui.components.VideoSurfaceOwner.beginHandoff("MINI_WINDOW")
+        }
+        if (handoffNeeded) controller?.let { push(it); awaitDestinationReady() }
+        else if (controller != null && !wasDocked && docked && ready) updateVisibility()
         return START_NOT_STICKY
     }
 
@@ -250,13 +252,9 @@ class MiniWindowOverlayService : Service() {
         stopService(Intent(this, PlaybackService::class.java))
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
-        try {
-            startActivity(Intent(this, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                putExtra(EXTRA_STOP_APP, true)
-            })
-        } catch (t: Throwable) {
-            // Playback and the overlay are already stopped if the Activity cannot launch.
+        // Removing the existing task never launches Library as an intermediate screen.
+        runCatching {
+            getSystemService(ActivityManager::class.java).appTasks.forEach { it.finishAndRemoveTask() }
         }
     }
 
@@ -267,6 +265,7 @@ class MiniWindowOverlayService : Service() {
     private fun buildView() {
         root = object : FrameLayout(this) {
             override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
+                if (docked) return false
                 if (event.actionMasked == MotionEvent.ACTION_DOWN) drag(this, event)
                 if (event.actionMasked == MotionEvent.ACTION_MOVE &&
                     (abs(event.rawX - downX) > android.view.ViewConfiguration.get(context).scaledTouchSlop ||
@@ -278,6 +277,7 @@ class MiniWindowOverlayService : Service() {
             it.onOpen = { openApp() }
             root!!.addView(it, FrameLayout.LayoutParams(-1, -1))
             videoView = it.video
+            it.setDetached(!docked)
         }
         dangerTint = View(this).apply {
             setBackgroundColor(0x66FF3B30)
@@ -368,8 +368,7 @@ class MiniWindowOverlayService : Service() {
             ready = true
             destinationReady.value = true
             params?.let {
-                it.alpha = if (PlayerWindowVisibility.detachedVisible.value) 1f else 0f
-                if (it.alpha > 0f) it.flags = it.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+                updateVisibility()
             }
             updateRootLayout()
             com.local.listentomusic.ui.components.VideoSurfaceOwner.finishHandoff("MINI_WINDOW")
@@ -391,6 +390,7 @@ class MiniWindowOverlayService : Service() {
     }
 
     private fun drag(view: View, event: MotionEvent): Boolean {
+        if (docked) return false
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 gestureGeneration++
@@ -476,6 +476,7 @@ class MiniWindowOverlayService : Service() {
     }
 
     private fun clampPosition() {
+        if (docked) return
         val layout = params ?: return
         val bounds = if (Build.VERSION.SDK_INT >= 30) wm?.currentWindowMetrics?.bounds else null
         val metrics = resources.displayMetrics
@@ -524,12 +525,13 @@ class MiniWindowOverlayService : Service() {
             layout.y = dp(crossMargin) + crossRaisePx
             crossView?.let { view -> runCatching { wm?.updateViewLayout(view, layout) } }
         }
-        clampPosition()
+        applyModeLayout()
         updateRootLayout()
-        savePosition()
+        if (!docked) savePosition()
     }
 
     private fun savePosition() {
+        if (docked) return
         val layout = params ?: return
         getSharedPreferences(POSITION_PREFS, MODE_PRIVATE).edit {
             putInt(POSITION_X, layout.x)
@@ -539,11 +541,67 @@ class MiniWindowOverlayService : Service() {
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
-    private fun miniWidthPx() = com.local.listentomusic.model.CompactPlayerMetrics.widthPx(
-        resources.displayMetrics.density, if (Build.VERSION.SDK_INT >= 30)
-            wm?.currentWindowMetrics?.bounds?.width() ?: resources.displayMetrics.widthPixels
-        else resources.displayMetrics.widthPixels)
-    private fun miniHeightPx() = com.local.listentomusic.model.CompactPlayerMetrics.heightPx(resources.displayMetrics.density)
+    private fun miniWidthPx(): Int {
+        if (docked) return WindowManager.LayoutParams.MATCH_PARENT
+        val size = controller?.videoSize
+        val aspect = if (isVideo.value) {
+            if (size != null && size.height > 0) size.width.toFloat() * size.pixelWidthHeightRatio / size.height
+            else 16f / 9f
+        } else artworkAspect
+        return if (MiniWindowMetrics.isSquareAspect(aspect))
+            MiniWindowMetrics.squareWidthPx(resources.displayMetrics.density)
+        else MiniWindowMetrics.widthPx(resources.displayMetrics.density)
+    }
+    private fun miniHeightPx() = if (docked)
+        com.local.listentomusic.model.CompactPlayerMetrics.heightPx(resources.displayMetrics.density)
+    else com.local.listentomusic.model.MiniWindowMetrics.heightPx(resources.displayMetrics.density)
+
+    private fun switchMode(toDocked: Boolean) {
+        if (docked == toDocked) return
+        if (docked) savePosition()
+        docked = toDocked
+        dragging = false
+        crossView?.visibility = View.INVISIBLE
+        compact?.setDetached(!toDocked)
+        applyModeLayout()
+        updateRootLayout()
+        updateVisibility()
+    }
+
+    private fun applyModeLayout() {
+        val layout = params ?: return
+        layout.width = miniWidthPx()
+        layout.height = miniHeightPx()
+        layout.gravity = if (docked) Gravity.BOTTOM or Gravity.LEFT else Gravity.TOP or Gravity.LEFT
+        if (docked) {
+            layout.x = 0
+            layout.y = 0
+            if (Build.VERSION.SDK_INT >= 30) {
+                layout.setFitInsetsTypes(WindowInsets.Type.navigationBars())
+                layout.setFitInsetsSides(WindowInsets.Side.BOTTOM)
+            }
+        } else {
+            val saved = getSharedPreferences(POSITION_PREFS, MODE_PRIVATE)
+            layout.x = saved.getInt(POSITION_X, dp(12))
+            layout.y = saved.getInt(POSITION_Y, dp(300))
+            if (Build.VERSION.SDK_INT >= 30) {
+                layout.setFitInsetsTypes(WindowInsets.Type.statusBars())
+                layout.setFitInsetsSides(WindowInsets.Side.TOP)
+            }
+            clampPosition()
+        }
+    }
+
+    private fun updateVisibility() {
+        val visible = ready && if (docked) PlayerWindowVisibility.dockedVisible.value else
+            PlayerWindowVisibility.detachedVisible.value
+        params?.let {
+            it.alpha = if (visible) 1f else 0f
+            it.flags = if (visible) it.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+                else it.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        }
+        updateRootLayout()
+    }
 
     private fun updateMiniWindowSize() {
         val layout = params ?: return
@@ -562,6 +620,7 @@ class MiniWindowOverlayService : Service() {
         lastArtworkData = data
         val generation = ++artworkGeneration
         if (data == null) {
+            artworkAspect = 1f
             compact?.setArtwork(null)
             updateMiniWindowSize()
             return
@@ -576,6 +635,7 @@ class MiniWindowOverlayService : Service() {
                 bitmap
             }
             if (generation == artworkGeneration) {
+                artworkAspect = decoded?.let { it.width.toFloat() / it.height.coerceAtLeast(1) } ?: 1f
                 compact?.setArtwork(decoded)
                 updateMiniWindowSize()
             }
