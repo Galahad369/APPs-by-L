@@ -74,10 +74,6 @@
             android:name=".playback.MiniWindowOverlayService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
-        <service
-            android:name=".playback.NowPlayingOverlayService"
-            android:exported="false"
-            android:foregroundServiceType="mediaPlayback" />
         <activity
             android:name=".ui.ShareProxyActivity"
             android:exported="false"

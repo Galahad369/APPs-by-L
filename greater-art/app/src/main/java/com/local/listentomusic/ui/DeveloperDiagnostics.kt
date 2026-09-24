@@ -2,6 +2,10 @@ package com.local.listentomusic.ui
 
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.Intent
+import android.os.Build
+import android.provider.Settings
+import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +28,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,6 +57,17 @@ internal fun DeveloperDiagnostics(
     systemOverlay: Boolean = false,
 ) {
     val context = LocalContext.current
+    var overlayAllowed by remember { mutableStateOf(Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context)) }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = object : androidx.lifecycle.DefaultLifecycleObserver {
+            override fun onResume(owner: androidx.lifecycle.LifecycleOwner) {
+                overlayAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     var open by remember { mutableStateOf(false) }
     var showRegions by remember { mutableStateOf(false) }
     var showAdvanced by remember { mutableStateOf(false) }
@@ -87,7 +103,10 @@ internal fun DeveloperDiagnostics(
         }
 
         Surface(
-            onClick = { open = true },
+            onClick = {
+                overlayAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context)
+                open = true
+            },
             modifier = modifier.align(Alignment.TopEnd).statusBarsPadding().padding(8.dp)
                 .inspectElement("DEVELOPER_BUTTON", "Opens local diagnostics and element inspector"),
             shape = RoundedCornerShape(7.dp),
@@ -135,6 +154,14 @@ internal fun DeveloperDiagnostics(
                     summary.forEach { line ->
                         Text(line, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
                     }
+                    Text(if (overlayAllowed) "Floating window permission: enabled"
+                        else "Floating window permission: OFF — Mini and Now Playing cannot open",
+                        color = if (overlayAllowed) accent else Color(0xFFFF5C68),
+                        style = MaterialTheme.typography.bodySmall)
+                    if (!overlayAllowed) TextButton(onClick = {
+                        runCatching { context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:${context.packageName}"))) }
+                    }) { Text("Open floating window permission") }
                     Button(
                         onClick = { open = false; inspector.arm() },
                         modifier = Modifier.fillMaxWidth(),

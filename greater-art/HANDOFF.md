@@ -3,22 +3,54 @@
 This file describes the **current repository state only**. Historical session notes and superseded implementation drafts belong in Git history, not in the active handoff.
 
 **Project:** `greater-art/` in the repository checkout
-**Current version:** `1.13.5 (code 94)`
-**Latest APK:** `releases/GreaterArt-1.13.5.apk` (verification below)
+**Current version:** `1.13.7 (code 96)`
+**Latest APK:** `releases/GreaterArt-1.13.7.apk` (verification below)
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 ## Repository state
 
 - Project: `greater-art/`
-- Version: **1.13.5**
-- Version code: **94**
+- Version: **1.13.7**
+- Version code: **96**
 - Application ID: `com.local.listentomusic`
-- APK: `releases/GreaterArt-1.13.5.apk`
-- APK SHA-256: `cab5fd51d9e1b8897d9d4997fb5642a6b54fce9766e498ad9dcf3fcac8e65912`
+- APK: `releases/GreaterArt-1.13.7.apk`
+- APK SHA-256: `070af574f71936b9bf02d131a6227dd1341392b324b3940611ceeadeb92cc108`
 - Signing certificate SHA-256: `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 `app/build.gradle.kts` is the version source of truth. Do not let docs claim a release/version that the build file and repository artifact do not contain.
+
+### September 23 — 1.13.7 song-tap crash repair (local)
+
+- Reproduced 1.13.6 on the connected Pixel 8 API 37 emulator: tapping a Library video crashed with `ViewTreeLifecycleOwner not found` when the unified overlay attached its Compose view. The lifecycle, ViewModel, saved-state and Back owners had been tagged on the nested Compose view, not the actual window root.
+- The service now tags the root before WindowManager attaches it and creates the expanded Compose host only when Now Playing is opened. This keeps song selection on the compact native path. A second emulator failure showed that hiding the video overlay until a 2.5-second first-frame deadline could stop the service before a decoder produced a frame; the window now becomes visible when the media session is ready and waits for the native-quality frame without killing playback.
+- Launch and Dev Mode now show/check Android's floating-window permission, with a direct settings shortcut. No video resolution, bitrate or FPS caps were added.
+- Offline unit tests, lint and debug build passed. On the emulator, denied-permission prompt, MP3/video Library taps, dock and MP3-to-expanded Now Playing were exercised without a new Greater Art crash. The 12-second synthetic video was too short to establish long-running handoff smoothness; repeat on the user's Samsung phone. The old 1.13.6 crash trace is retained under `app/build/reports/overlay-regression/1.13.6-crash.txt` (build output, not committed).
+- APK: `releases/GreaterArt-1.13.7.apk`, 26,796,981 bytes, SHA-256 `070af574f71936b9bf02d131a6227dd1341392b324b3940611ceeadeb92cc108`; pinned signing certificate verified.
+
+### September 23 — 1.13.6 unified player window (local)
+
+- Cause: separate expanded and Mini overlay services made fullscreen target the
+  wrong Android window and forced an avoidable player-surface handoff. The
+  docked preview also did not contract to detached Mini's media footprint.
+- Fix: one persistent service/window/controller/PlayerView now has DOCKED,
+  DETACHED, and EXPANDED presentations. Expanded Compose chrome re-parents the
+  existing PlayerView instead of constructing another player. Fullscreen
+  controls the actual overlay's insets/flags; leaving fullscreen clears those
+  flags before returning to Mini. Dock has one play/pause button and its media
+  region matches detached Mini size. Small theme-aware shadows separate title
+  and transport areas. Red-X target moved four additional physical pixels up
+  (18 → 22 px raise). Sharing does not count as app exit.
+- Prevention: presentation transitions must not prepare, seek, create a second
+  controller, or reduce source quality. Keep overlay window flags mode-scoped;
+  never treat launching the share chooser as a Home press.
+- Verification: offline `testDebugUnitTest lintDebug assembleDebug` passed.
+  `releases/GreaterArt-1.13.6.apk` is 26,123,834 bytes; SHA-256
+  `27b2470439f1bbce82ccfb0aaee6892f32ec4a833e4eb3771545ca91ee9ee525`.
+  Pinned v2 signing certificate matches the historical sideload identity.
+  No Android device was attached, so video surface
+  continuity, fullscreen insets, drag target alignment, and rapid Home/return
+  transitions still require a Samsung phone smoke test.
 
 ### September 23 — 1.13.5 persistent dock/detach Mini (local)
 

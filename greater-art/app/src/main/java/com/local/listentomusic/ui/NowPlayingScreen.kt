@@ -103,6 +103,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -202,13 +203,18 @@ fun NowPlayingScreen(
     onShareCurrentMedia: () -> Unit,
     onShareQueue: () -> Unit,
     systemOverlay: Boolean = false,
+    onFullscreenChanged: (Boolean) -> Unit = {},
+    sharedVideoView: PlayerView? = null,
+    onSharedVideoReleased: () -> Unit = {},
 ) {
     androidx.compose.runtime.CompositionLocalProvider(LocalSystemPlayer provides systemOverlay) {
     var fullscreen by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(fullscreen) { onFullscreenChanged(fullscreen) }
 
     if (isPictureInPicture && playback.isVideo) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
-            VideoSurface(playback.currentPath, controller, onVideoBoundsChanged, Modifier.fillMaxSize())
+            VideoSurface(playback.currentPath, controller, onVideoBoundsChanged, Modifier.fillMaxSize(),
+                sharedVideoView, onSharedVideoReleased)
         }
         return@CompositionLocalProvider
     }
@@ -251,6 +257,8 @@ fun NowPlayingScreen(
                 VideoPlayerStage(
                     playback = playback,
                     controller = controller,
+                    sharedVideoView = sharedVideoView,
+                    onSharedVideoReleased = onSharedVideoReleased,
                     immersive = immersiveVideo,
                     onVideoBoundsChanged = onVideoBoundsChanged,
                     onHome = onHome,
@@ -344,6 +352,8 @@ fun NowPlayingScreen(
 private fun VideoPlayerStage(
     playback: PlaybackUiState,
     controller: MediaController?,
+    sharedVideoView: PlayerView?,
+    onSharedVideoReleased: () -> Unit,
     immersive: Boolean,
     onVideoBoundsChanged: (Rect) -> Unit,
     onHome: () -> Unit,
@@ -414,7 +424,8 @@ private fun VideoPlayerStage(
         },
         contentAlignment = Alignment.Center,
     ) {
-        VideoSurface(playback.currentPath, controller, onVideoBoundsChanged, Modifier.fillMaxSize())
+        VideoSurface(playback.currentPath, controller, onVideoBoundsChanged, Modifier.fillMaxSize(),
+            sharedVideoView, onSharedVideoReleased)
         AnimatedVisibility(
             visible = temporaryDoubleSpeed,
             enter = fadeIn(tween(100)),
@@ -754,9 +765,14 @@ private fun SecondaryControls(
     Column(
         modifier = modifier
             .windowInsetsPadding(playerNavigationInsets())
-            .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 0.dp),
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(start = 12.dp, end = 12.dp, top = 0.dp, bottom = 0.dp),
         horizontalAlignment = Alignment.Start,
     ) {
+        Box(Modifier.fillMaxWidth()
+            .shadow(7.dp, RoundedCornerShape(bottomStart = 5.dp, bottomEnd = 5.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(top = 7.dp, bottom = 5.dp)) {
         CurrentMediaHeader(
             playback = playback,
             isFavourite = isFavourite,
@@ -767,6 +783,7 @@ private fun SecondaryControls(
             headline = false,
             onSearch = { searchOpen = !searchOpen },
         )
+        }
         if (playback.showAbRepeat || playback.showSleepControl) {
             Spacer(Modifier.height(4.dp))
             SecondaryControlRow(playback, onSleepTimer, sleepTimer)
@@ -790,8 +807,13 @@ private fun SecondaryControls(
             onRemoveQueueItem = onRemoveQueueItem,
             modifier = Modifier.fillMaxWidth().weight(1f),
         )
-        Timeline(playback, onSeek)
-        PlayerBottomControls(playback, onRepeat, onPrevious, onTogglePlay, onNext, onSpeed)
+        Column(Modifier.fillMaxWidth()
+            .shadow(9.dp, RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(top = 3.dp)) {
+            Timeline(playback, onSeek)
+            PlayerBottomControls(playback, onRepeat, onPrevious, onTogglePlay, onNext, onSpeed)
+        }
     }
 }
 
@@ -1506,6 +1528,8 @@ internal fun VideoSurface(
     controller: MediaController?,
     onBoundsChanged: (Rect) -> Unit,
     modifier: Modifier,
+    sharedVideoView: PlayerView? = null,
+    onSharedVideoReleased: () -> Unit = {},
 ) {
     val surfaceLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
     var surfaceActive by remember(surfaceLifecycle) { mutableStateOf(surfaceLifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) }
@@ -1521,11 +1545,12 @@ internal fun VideoSurface(
     // Keep the same PlayerView across media transitions. Keying this view by path
     // created a fresh surface after Media3 had already rendered the new first frame,
     // producing generation N+1 / last-frame generation N false alarms.
-    key(controller) {
+    key(controller, sharedVideoView) {
         AndroidView(
         factory = { context ->
-            PlayerView(context).apply {
-                tag = "NOW_PLAYING"
+            (sharedVideoView ?: PlayerView(context)).apply {
+                (parent as? ViewGroup)?.removeView(this)
+                tag = if (sharedVideoView == null) "NOW_PLAYING" else "MINI_WINDOW"
                 layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT,
@@ -1533,15 +1558,20 @@ internal fun VideoSurface(
                 useController = false
                 resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                 setKeepContentOnPlayerReset(true)
-                if (surfaceActive) com.local.listentomusic.ui.components.VideoSurfaceOwner.attach(controller, this)
+                if (surfaceActive) com.local.listentomusic.ui.components.VideoSurfaceOwner.attach(
+                    controller, this, overlay = sharedVideoView != null)
             }
         },
         update = { view ->
             if (surfaceActive || activity?.isInPictureInPictureMode == true)
-                com.local.listentomusic.ui.components.VideoSurfaceOwner.attach(controller, view)
-            else com.local.listentomusic.ui.components.VideoSurfaceOwner.detach(view)
+                com.local.listentomusic.ui.components.VideoSurfaceOwner.attach(controller, view,
+                    overlay = sharedVideoView != null)
+            else if (sharedVideoView == null) com.local.listentomusic.ui.components.VideoSurfaceOwner.detach(view)
         },
-        onRelease = com.local.listentomusic.ui.components.VideoSurfaceOwner::detach,
+        onRelease = { view ->
+            if (sharedVideoView == null) com.local.listentomusic.ui.components.VideoSurfaceOwner.detach(view)
+            else onSharedVideoReleased()
+        },
         modifier = modifier.onGloballyPositioned { coordinates ->
             val bounds = coordinates.boundsInWindow()
             onBoundsChanged(

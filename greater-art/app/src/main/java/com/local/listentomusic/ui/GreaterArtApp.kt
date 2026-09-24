@@ -49,7 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.net.toUri
 import androidx.core.content.ContextCompat
-import com.local.listentomusic.playback.NowPlayingOverlayService
+import com.local.listentomusic.playback.MiniWindowOverlayService
 import com.local.listentomusic.MainViewModel
 import com.local.listentomusic.ui.components.AppBackground
 import com.local.listentomusic.data.AppBackgroundMode
@@ -145,7 +145,7 @@ fun GreaterArtApp(
         if (pendingNowPlayingOpen && Settings.canDrawOverlays(context)) {
             ContextCompat.startForegroundService(
                 context,
-                Intent(context, NowPlayingOverlayService::class.java),
+                Intent(context, MiniWindowOverlayService::class.java).setAction(MiniWindowOverlayService.ACTION_EXPAND),
             )
         }
         pendingNowPlayingOpen = false
@@ -154,7 +154,7 @@ fun GreaterArtApp(
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context)) {
             ContextCompat.startForegroundService(
                 context,
-                Intent(context, NowPlayingOverlayService::class.java),
+                Intent(context, MiniWindowOverlayService::class.java).setAction(MiniWindowOverlayService.ACTION_EXPAND),
             )
         } else {
             pendingNowPlayingOpen = true
@@ -258,7 +258,7 @@ fun GreaterArtApp(
                     contentColor = MaterialTheme.colorScheme.onBackground,
                     bottomBar = {
                         if (playback.hasMedia) {
-                            Spacer(Modifier.fillMaxWidth().height(com.local.listentomusic.model.CompactPlayerMetrics.HEIGHT_DP.dp))
+                            Spacer(Modifier.fillMaxWidth().height(com.local.listentomusic.model.MiniWindowMetrics.HEIGHT_DP.dp))
                         }
                     },
                 ) { padding ->
@@ -431,6 +431,8 @@ fun GreaterArtApp(
                 val thumbnailStats by viewModel.thumbnailStats.collectAsStateWithLifecycle()
                 val waveformDiagnostics by viewModel.waveformDiagnostics.collectAsStateWithLifecycle()
                 val engineReport by com.local.listentomusic.playback.PlaybackDiagnostics.report.collectAsStateWithLifecycle()
+                val windowMode by MiniWindowOverlayService.modeSnapshot.collectAsStateWithLifecycle()
+                val windowIdentities by MiniWindowOverlayService.identities.collectAsStateWithLifecycle()
                 val indexStatus by viewModel.indexStatus.collectAsStateWithLifecycle()
                 val viewport = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
                 val density = androidx.compose.ui.platform.LocalDensity.current
@@ -451,6 +453,7 @@ fun GreaterArtApp(
                     report = buildString {
                         appendLine("version=${com.local.listentomusic.BuildConfig.VERSION_NAME}")
                         appendLine("screen=${if (com.local.listentomusic.ui.components.VideoSurfaceOwner.systemOverlayActive) Screen.NOW_PLAYING.name else if (screen == Screen.LIBRARY && libraryPager.currentPage == 1) "NODES" else screen.name} systemPlayerOverlay=${com.local.listentomusic.ui.components.VideoSurfaceOwner.systemOverlayActive}")
+                        appendLine("playerWindowMode=${windowMode ?: "none"} playerWindowService=${windowMode != null} $windowIdentities")
                         appendLine("media=${playback.currentPath?.let { com.local.listentomusic.model.sourceMediaPath(it).substringAfterLast('.') } ?: "none"} (paths omitted)")
                         appendLine("playing=${playback.isPlaying} video=${playback.isVideo}")
                         appendLine("position=${playback.positionMs} duration=${playback.durationMs}")

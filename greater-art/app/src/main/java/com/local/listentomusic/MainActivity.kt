@@ -17,8 +17,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
@@ -29,7 +31,10 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.local.listentomusic.ui.GreaterArtApp
+import com.local.listentomusic.ui.uiText
+import com.local.listentomusic.ui.theme.GreaterArtTheme
 import com.local.listentomusic.data.FloatingWindowMode
 import com.local.listentomusic.playback.MiniWindowOverlayService
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -190,9 +195,9 @@ class MainActivity : ComponentActivity() {
         // A system-level Now Playing window is already the active external
         // presentation. Do not spawn a second Mini Window underneath it.
         if (com.local.listentomusic.ui.components.VideoSurfaceOwner.expandedOverlayActive) {
-            if (com.local.listentomusic.ui.components.VideoSurfaceOwner.expectedOwner == "NOW_PLAYING") {
-                startService(Intent(this, com.local.listentomusic.playback.NowPlayingOverlayService::class.java)
-                    .setAction(com.local.listentomusic.playback.NowPlayingOverlayService.ACTION_SHRINK))
+            if (!MiniWindowOverlayService.shareInProgress) {
+                startService(Intent(this, MiniWindowOverlayService::class.java)
+                    .setAction(MiniWindowOverlayService.ACTION_DETACH))
             }
             return
         }
@@ -362,6 +367,23 @@ private fun PermissionAwareApp(
     onEnterPictureInPicture: () -> Unit,
 ) {
     val context = LocalContext.current
+    val preferences by viewModel.settings.collectAsStateWithLifecycle()
+    val language = preferences.appLanguage
+    var overlayGranted by remember { mutableStateOf(Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context)) }
+    var showOverlayPrompt by remember { mutableStateOf(true) }
+    val overlaySettingsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { overlayGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context) }
+    DisposableEffect(context) {
+        val activity = context as? ComponentActivity
+        val observer = object : androidx.lifecycle.DefaultLifecycleObserver {
+            override fun onResume(owner: androidx.lifecycle.LifecycleOwner) {
+                overlayGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context)
+            }
+        }
+        activity?.lifecycle?.addObserver(observer)
+        onDispose { activity?.lifecycle?.removeObserver(observer) }
+    }
     val legacyPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { viewModel.rescan() }
@@ -404,4 +426,20 @@ private fun PermissionAwareApp(
             }
         },
     )
+    if (!overlayGranted && showOverlayPrompt) {
+        GreaterArtTheme(preferences.themeMode, preferences.appFont, preferences.silianRail) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showOverlayPrompt = false },
+            title = { androidx.compose.material3.Text(uiText(language, "Allow floating player", "允許浮動播放器")) },
+            text = { androidx.compose.material3.Text(uiText(language, "Enable Display over other apps to use the Library mini-player and Now Playing window. You can keep listening without it.", "啟用「顯示在其他應用程式上層」即可使用音樂庫迷你播放器和正在播放視窗。未啟用時仍可繼續聆聽。")) },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = {
+                overlaySettingsLauncher.launch(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    "package:${context.packageName}".toUri()))
+            }) { androidx.compose.material3.Text(uiText(language, "Open permission settings", "開啟權限設定")) } },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { showOverlayPrompt = false }) {
+                androidx.compose.material3.Text(uiText(language, "Not now", "暫時不用"))
+            } },
+        )
+        }
+    }
 }

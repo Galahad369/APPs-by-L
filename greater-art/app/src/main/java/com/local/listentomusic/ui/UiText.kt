@@ -19,6 +19,10 @@ internal fun uiText(language: AppLanguage, english: String, traditionalChinese: 
 }
 
 private val cantonese = mapOf(
+    "Allow floating player" to "開啟浮動播放器",
+    "Enable Display over other apps to use the Library mini-player and Now Playing window. You can keep listening without it." to "開啟「顯示喺其他應用程式上面」，就用到歌庫迷你播放器同正在播放視窗。未開都可以繼續聽歌。",
+    "Open permission settings" to "開權限設定",
+    "Not now" to "遲啲先",
     "Home" to "返首頁",
     "Play" to "播歌", "Pause" to "暫停", "Previous" to "上一首", "Next" to "下一首",
     "No songs in this list" to "呢個歌單未有歌", "No matches" to "搵唔到", "Search" to "搵歌",
@@ -56,6 +60,10 @@ private val cantonese = mapOf(
 // Bundled offline translations. Keys deliberately match the existing English copy
 // so old English/Traditional Chinese call sites keep their established behavior.
 private val translations: Map<String, List<String>> = """
+Allow floating player|フローティングプレーヤーを許可|Schwebenden Player erlauben|Autoriser le lecteur flottant
+Enable Display over other apps to use the Library mini-player and Now Playing window. You can keep listening without it.|「他のアプリの上に表示」を許可すると、ライブラリのミニプレーヤーと再生画面を使えます。許可しなくても音声は再生できます。|Aktiviere „Über anderen Apps einblenden“, um den Mini-Player und das Wiedergabefenster zu nutzen. Ohne diese Erlaubnis kannst du weiter Musik hören.|Activez « Afficher par-dessus les autres applications » pour utiliser le mini-lecteur et la fenêtre de lecture. Vous pouvez continuer à écouter sans cette autorisation.
+Open permission settings|権限設定を開く|Berechtigungseinstellungen öffnen|Ouvrir les autorisations
+Not now|後で|Nicht jetzt|Pas maintenant
 Home|ホーム|Startseite|Accueil
 Repeat mode|リピートモード|Wiederholungsmodus|Mode de répétition
 Undo|元に戻す|Rückgängig|Annuler l’action

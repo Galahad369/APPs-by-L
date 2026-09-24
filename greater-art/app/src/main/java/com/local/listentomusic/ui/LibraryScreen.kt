@@ -463,7 +463,7 @@ fun LibraryScreen(
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize().inspectElement("LIBRARY_LIST", "Virtualized ordered media rows"),
-            contentPadding = PaddingValues(bottom = if (currentPath == null) 2.dp else 62.dp),
+            contentPadding = PaddingValues(bottom = if (currentPath == null) 2.dp else 56.dp),
                     ) {
                         itemsIndexed(
                             state.files,

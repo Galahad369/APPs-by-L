@@ -4,12 +4,19 @@ Greater Art is a native Kotlin/Jetpack Compose player for local music and video.
 
 ## Current release
 
-- Version: **1.13.5**
-- Version code: **94**
+- Version: **1.13.7**
+- Version code: **96**
 - Application ID: `com.local.listentomusic`
-- APK: `releases/GreaterArt-1.13.5.apk`
-- APK SHA-256: `cab5fd51d9e1b8897d9d4997fb5642a6b54fce9766e498ad9dcf3fcac8e65912`
+- APK: `releases/GreaterArt-1.13.7.apk`
+- APK SHA-256: `070af574f71936b9bf02d131a6227dd1341392b324b3940611ceeadeb92cc108`
 - Signing certificate SHA-256: `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
+- v1.13.7 fixes the 1.13.6 Library song-tap crash in the unified floating player and checks floating-window permission at launch and in Dev Mode. An emulator smoke test covered song selection and expanded Now Playing; Samsung phone verification remains important.
+- v1.13.6 uses one persistent WindowManager player for Library-docked,
+  detached Mini, and expanded Now Playing. The dock keeps a single play/pause
+  control and a media preview sized exactly like detached Mini. Expanded mode
+  reuses the same PlayerView; fullscreen changes the overlay window itself.
+  Subtle title/control shadows clarify boundaries, and the red quit target is
+  four physical pixels higher. Phone-level transition checks are still needed.
 - v1.13.5 docks the actual persistent Mini Window overlay at Library's bottom,
   then resizes that same window and PlayerView into a draggable media-only player
   on Home. The separate Compose mini-player is gone. Dropping Mini on the red X

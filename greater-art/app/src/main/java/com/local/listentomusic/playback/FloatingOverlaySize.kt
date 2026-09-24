@@ -12,3 +12,6 @@ internal fun floatingOverlaySize(safeWidthPx: Int, safeHeightPx: Int): FloatingO
 
 internal fun pullDismissReached(distancePx: Int, density: Float): Boolean =
     distancePx >= (72f * density.coerceAtLeast(.1f)).toInt()
+
+internal fun shouldShrinkForSystemReason(reason: String?): Boolean =
+    reason == "homekey" || reason == "recentapps"

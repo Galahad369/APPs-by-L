@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.drawable.RippleDrawable
 import android.content.res.ColorStateList
 import android.view.Gravity
+import android.view.ViewGroup
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.FrameLayout
@@ -18,7 +19,7 @@ import androidx.media3.common.Player
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.AspectRatioFrameLayout
 import com.local.listentomusic.R
-import com.local.listentomusic.model.CompactPlayerMetrics
+import com.local.listentomusic.model.MiniWindowMetrics
 import androidx.compose.ui.graphics.toArgb
 import com.local.listentomusic.data.AppFont
 import com.local.listentomusic.data.ThemeMode
@@ -44,6 +45,7 @@ class CompactPlayerView(context: Context) : FrameLayout(context) {
     private var nextLabel = "Next"
     private var appearanceKey: List<Any>? = null
     private var detached = false
+    private var expanded = false
     var onOpen: () -> Unit = {}
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) { refresh() }
@@ -59,7 +61,7 @@ class CompactPlayerView(context: Context) : FrameLayout(context) {
         setBackgroundColor(Color.rgb(22, 30, 28))
         val row = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL }
         addView(row, LayoutParams(-1, -1))
-        row.addView(preview, LinearLayout.LayoutParams(dp(CompactPlayerMetrics.HEIGHT_DP), -1))
+        row.addView(preview, LinearLayout.LayoutParams(MiniWindowMetrics.squareWidthPx(resources.displayMetrics.density), -1))
         artwork.scaleType = ImageView.ScaleType.CENTER_CROP
         artwork.setImageResource(R.drawable.ic_launcher_foreground)
         preview.addView(artwork, LayoutParams(-1, -1))
@@ -76,6 +78,8 @@ class CompactPlayerView(context: Context) : FrameLayout(context) {
         row.addView(title, LinearLayout.LayoutParams(0, -1, 1f))
         title.gravity = Gravity.CENTER_VERTICAL
         listOf(previous, toggle, next).forEach { row.addView(it, LinearLayout.LayoutParams(dp(48f), -1)) }
+        previous.visibility = View.GONE
+        next.visibility = View.GONE
         progress.max = 1000
         progress.progressTintList = ColorStateList.valueOf(0xFF8FE3CF.toInt())
         addView(progress, LayoutParams(-1, dp(2f), Gravity.BOTTOM))
@@ -147,12 +151,22 @@ class CompactPlayerView(context: Context) : FrameLayout(context) {
     fun setDetached(value: Boolean) {
         if (detached == value) return
         detached = value
-        listOf(title, previous, toggle, next, progress).forEach {
+        listOf(title, toggle, progress).forEach {
             it.visibility = if (value) View.GONE else View.VISIBLE
         }
         removeCallbacks(ticker)
         if (!value && player != null) post(ticker)
         refresh()
+    }
+    fun setExpanded(value: Boolean) {
+        expanded = value
+        if (!value) restoreVideo()
+        refresh()
+    }
+    fun restoreVideo() {
+        if (video.parent === preview) return
+        (video.parent as? ViewGroup)?.removeView(video)
+        preview.addView(video, LayoutParams(-1, -1))
     }
     fun bind(value: Player?, presentation: String) {
         owner = presentation
@@ -179,11 +193,14 @@ class CompactPlayerView(context: Context) : FrameLayout(context) {
         artwork.visibility = if (isVideo) View.GONE else View.VISIBLE
         val ratio = if (isVideo && p.videoSize.height > 0) p.videoSize.width.toFloat() * p.videoSize.pixelWidthHeightRatio / p.videoSize.height
             else lastArtwork?.let { it.width.toFloat() / it.height.coerceAtLeast(1) } ?: 1f
-        val width = if (detached) LayoutParams.MATCH_PARENT else
-            dp(CompactPlayerMetrics.HEIGHT_DP * if (ratio in 0.9f..1.1f) 1f else 103f / 56f)
+        val width = if (detached) LayoutParams.MATCH_PARENT else if (MiniWindowMetrics.isSquareAspect(ratio))
+            MiniWindowMetrics.squareWidthPx(resources.displayMetrics.density)
+        else MiniWindowMetrics.widthPx(resources.displayMetrics.density)
         if (preview.layoutParams.width != width) { preview.layoutParams = preview.layoutParams.apply { this.width = width } }
-        if (isVideo) VideoSurfaceOwner.attach(p, video, overlay = owner == "MINI_WINDOW")
-        else VideoSurfaceOwner.detach(video)
+        if (!expanded) {
+            if (isVideo) VideoSurfaceOwner.attach(p, video, overlay = owner == "MINI_WINDOW")
+            else VideoSurfaceOwner.detach(video)
+        }
     }
     fun release() {
         removeCallbacks(ticker)

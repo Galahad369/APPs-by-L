@@ -5,6 +5,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.app.ActivityManager
+import android.animation.ValueAnimator
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
 import android.content.ComponentName
 import android.content.Intent
 import android.content.res.Configuration
@@ -21,10 +25,19 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.WindowInsets
+import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.OnBackPressedDispatcher
+import androidx.activity.OnBackPressedDispatcherOwner
+import androidx.activity.setViewTreeOnBackPressedDispatcherOwner
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
@@ -34,8 +47,23 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.google.common.util.concurrent.ListenableFuture
 import com.local.listentomusic.R
+import com.local.listentomusic.MainViewModel
+import com.local.listentomusic.MainActivity
+import com.local.listentomusic.ui.ShareProxyActivity
 import com.local.listentomusic.model.MiniWindowMetrics
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -48,10 +76,17 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 
-// A tiny, local-only floating player implemented with WindowManager.
-// Plain Android views (NOT Compose) so it needs no LifecycleOwner.
-// Drag onto the bottom-center red cross to close + stop the app.
-class MiniWindowOverlayService : Service() {
+// One floating window. Compact presentation is native Android; Compose is created
+// only when the user expands it, keeping song-start on the proven lightweight path.
+class MiniWindowOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
+    SavedStateRegistryOwner, OnBackPressedDispatcherOwner {
+    private val lifecycleRegistry = LifecycleRegistry(this)
+    private val savedStateController = SavedStateRegistryController.create(this)
+    override val lifecycle: Lifecycle get() = lifecycleRegistry
+    override val viewModelStore = ViewModelStore()
+    override val savedStateRegistry: SavedStateRegistry get() = savedStateController.savedStateRegistry
+    override val onBackPressedDispatcher = OnBackPressedDispatcher { collapseExpanded() }
+    private lateinit var viewModel: MainViewModel
     private var wm: WindowManager? = null
     private var root: FrameLayout? = null
     private var params: WindowManager.LayoutParams? = null
@@ -68,7 +103,7 @@ class MiniWindowOverlayService : Service() {
         private val crossSize = 25
         private val crossMargin = 11
         private val crossBaseAlpha = 1f
-        private val crossRaisePx = 18
+        private val crossRaisePx = 22
         private var crossActive: Boolean? = null
         private var framePending = false
         private var openingApp = false
@@ -84,7 +119,31 @@ class MiniWindowOverlayService : Service() {
     private var startX = 0
     private var startY = 0
     private var dragging = false
-    private var docked = false
+    private var mode = PlayerWindowMode.DETACHED
+    private val modeState = MutableStateFlow(PlayerWindowMode.DETACHED)
+    private val docked get() = mode == PlayerWindowMode.DOCKED
+    private val expanded get() = mode == PlayerWindowMode.EXPANDED
+    private var expandedView: ComposeView? = null
+    private var expandedHostReady = false
+    private var shareReceiverRegistered = false
+    private var homeReceiverRegistered = false
+    private var expandedFullscreen = false
+    private var windowAnimator: ValueAnimator? = null
+    private var sharing = false
+    private var savedWindowFlags = 0
+    private val shareFinished = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == ShareProxyActivity.ACTION_FINISHED) restoreAfterShare()
+        }
+    }
+    private val systemHome = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == Intent.ACTION_CLOSE_SYSTEM_DIALOGS &&
+                shouldShrinkForSystemReason(intent.getStringExtra("reason")) && expanded) {
+                switchMode(PlayerWindowMode.DETACHED)
+            }
+        }
+    }
 
     // views
     private var dangerTint: View? = null
@@ -99,12 +158,15 @@ class MiniWindowOverlayService : Service() {
 
     companion object {
         internal val destinationReady = MutableStateFlow(false)
+        internal val modeSnapshot = MutableStateFlow<PlayerWindowMode?>(null)
+        internal val identities = MutableStateFlow("controllerId=none playerViewId=none")
+        @Volatile internal var shareInProgress = false
         // Reuse the media channel so Android accepts the foreground promotion.
         private const val CHANNEL_ID = "greater_art_playback"
         const val EXTRA_OPEN_PLAYER = "open_player"
         const val ACTION_DOCK = "com.local.listentomusic.player.DOCK"
         const val ACTION_DETACH = "com.local.listentomusic.player.DETACH"
-        const val EXTRA_FROM_EXPANDED = "from_expanded"
+        const val ACTION_EXPAND = "com.local.listentomusic.player.EXPAND"
         private const val POSITION_PREFS = "mini_window_position"
         private const val POSITION_X = "x"
         private const val POSITION_Y = "y"
@@ -125,7 +187,9 @@ class MiniWindowOverlayService : Service() {
             return
         }
         createChannel()
-                docked = PlayerWindowVisibility.libraryShowing.value
+                mode = if (PlayerWindowVisibility.libraryShowing.value) PlayerWindowMode.DOCKED else PlayerWindowMode.DETACHED
+                modeState.value = mode
+                modeSnapshot.value = mode
                 startForeground(2, buildNotification())
                 wm = getSystemService(WindowManager::class.java)
                 buildView()
@@ -168,7 +232,7 @@ class MiniWindowOverlayService : Service() {
             combine(PlayerWindowVisibility.libraryShowing, PlayerWindowVisibility.detachedVisible,
                 PlayerWindowVisibility.dockedVisible) { library, detached, _ -> library to detached }
                 .collect { (library, detached) ->
-                if (docked != library && (library || detached)) switchMode(library)
+                if (!expanded && docked != library && (library || detached)) switchMode(library)
                 updateVisibility()
             }
         }
@@ -191,8 +255,9 @@ class MiniWindowOverlayService : Service() {
         when (intent?.action) {
             ACTION_DOCK -> switchMode(true)
             ACTION_DETACH -> switchMode(false)
+            ACTION_EXPAND -> switchMode(PlayerWindowMode.EXPANDED)
         }
-        val handoffNeeded = intent?.getBooleanExtra(EXTRA_FROM_EXPANDED, false) == true || controller == null ||
+        val handoffNeeded = controller == null ||
             com.local.listentomusic.ui.components.VideoSurfaceOwner.expectedOwner != "MINI_WINDOW"
         if (handoffNeeded) {
             com.local.listentomusic.ui.components.VideoSurfaceOwner.beginHandoff("MINI_WINDOW")
@@ -221,23 +286,10 @@ class MiniWindowOverlayService : Service() {
     }
 
     private fun openApp() {
-        // Mini Window and full Now Playing are two system-overlay presentations of
-        // the same playback session. Expand directly without routing through Activity.
         if (openingApp) return
         openingApp = true
-        com.local.listentomusic.ui.components.VideoSurfaceOwner.beginHandoff("NOW_PLAYING")
-        try {
-            ContextCompat.startForegroundService(
-                this,
-                Intent(this, NowPlayingOverlayService::class.java).apply {
-                    putExtra(NowPlayingOverlayService.EXTRA_FROM_MINI_WINDOW, true)
-                },
-            )
-            root?.postDelayed({ openingApp = false }, 1000)
-        } catch (t: Throwable) {
-            com.local.listentomusic.ui.components.VideoSurfaceOwner.finishHandoff("NOW_PLAYING")
-            openingApp = false
-        }
+        switchMode(PlayerWindowMode.EXPANDED)
+        openingApp = false
     }
 
     // Dragging onto the center red cross closes the window and stops playback.
@@ -265,7 +317,7 @@ class MiniWindowOverlayService : Service() {
     private fun buildView() {
         root = object : FrameLayout(this) {
             override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
-                if (docked) return false
+                if (docked || expanded) return false
                 if (event.actionMasked == MotionEvent.ACTION_DOWN) drag(this, event)
                 if (event.actionMasked == MotionEvent.ACTION_MOVE &&
                     (abs(event.rawX - downX) > android.view.ViewConfiguration.get(context).scaledTouchSlop ||
@@ -273,6 +325,12 @@ class MiniWindowOverlayService : Service() {
                 return false
             }
         }
+        // Compose installs its window recomposer on the window root, not on the
+        // nested ComposeView. All owner tags must exist here before attachment.
+        root!!.setViewTreeLifecycleOwner(this)
+        root!!.setViewTreeViewModelStoreOwner(this)
+        root!!.setViewTreeSavedStateRegistryOwner(this)
+        root!!.setViewTreeOnBackPressedDispatcherOwner(this)
         compact = com.local.listentomusic.ui.components.CompactPlayerView(this).also {
             it.onOpen = { openApp() }
             root!!.addView(it, FrameLayout.LayoutParams(-1, -1))
@@ -285,6 +343,64 @@ class MiniWindowOverlayService : Service() {
             isClickable = false
         }
         root!!.addView(dangerTint, FrameLayout.LayoutParams(-1, -1))
+    }
+
+    private fun ensureExpandedHost(): Boolean {
+        if (expandedHostReady) return true
+        return runCatching {
+            savedStateController.performAttach()
+            savedStateController.performRestore(null)
+            lifecycleRegistry.currentState = Lifecycle.State.CREATED
+            viewModel = ViewModelProvider(this,
+                ViewModelProvider.AndroidViewModelFactory.getInstance(application))[MainViewModel::class.java]
+            viewModel.useSessionPresentationOnly()
+            ContextCompat.registerReceiver(this, shareFinished,
+                IntentFilter(ShareProxyActivity.ACTION_FINISHED), ContextCompat.RECEIVER_NOT_EXPORTED)
+            shareReceiverRegistered = true
+            runCatching {
+                ContextCompat.registerReceiver(this, systemHome,
+                    IntentFilter(Intent.ACTION_CLOSE_SYSTEM_DIALOGS), ContextCompat.RECEIVER_NOT_EXPORTED)
+                homeReceiverRegistered = true
+            }
+            expandedView = ComposeView(this).apply {
+            visibility = View.GONE
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setViewTreeLifecycleOwner(this@MiniWindowOverlayService)
+            setViewTreeViewModelStoreOwner(this@MiniWindowOverlayService)
+            setViewTreeSavedStateRegistryOwner(this@MiniWindowOverlayService)
+            setViewTreeOnBackPressedDispatcherOwner(this@MiniWindowOverlayService)
+            setContent {
+                val currentMode by modeState.collectAsState()
+                if (currentMode == PlayerWindowMode.EXPANDED) {
+                    PlayerWindowExpandedContent(
+                        viewModel = viewModel,
+                        videoView = videoView,
+                        scope = scope,
+                        onVideoReleased = { compact?.restoreVideo() },
+                        onHome = ::returnToLibrary,
+                        onClose = ::collapseExpanded,
+                        onShrink = {
+                            sendBroadcast(Intent(MainActivity.ACTION_BACKGROUND_PLAYER).setPackage(packageName))
+                            switchMode(PlayerWindowMode.DETACHED)
+                        },
+                        onFullscreen = ::updateExpandedFullscreen,
+                        onPull = ::dragExpanded,
+                        onPullEnd = ::finishExpandedPull,
+                        onPullCancel = ::resetExpandedPull,
+                        onShare = ::launchShare,
+                        onShareFailure = { Toast.makeText(this@MiniWindowOverlayService, it, Toast.LENGTH_LONG).show() },
+                    )
+                }
+            }
+            }.also { root!!.addView(it, FrameLayout.LayoutParams(-1, -1)) }
+            lifecycleRegistry.currentState = Lifecycle.State.RESUMED
+            expandedHostReady = true
+            true
+        }.getOrElse { error ->
+            android.util.Log.e("PlayerWindow", "Expanded player unavailable", error)
+            Toast.makeText(this, "Could not open floating player", Toast.LENGTH_LONG).show()
+            false
+        }
     }
 
     private fun buildCross() {
@@ -333,6 +449,7 @@ class MiniWindowOverlayService : Service() {
             }
             runCatching { pending.get() }.onSuccess { c ->
                 controller = c
+                identities.value = "controllerId=${System.identityHashCode(c)} playerViewId=${System.identityHashCode(videoView)}"
                 c.addListener(listener)
                 push(c)
                 awaitDestinationReady()
@@ -353,18 +470,9 @@ class MiniWindowOverlayService : Service() {
         }
         updateRootLayout()
         readinessJob = scope.launch {
-            val success = kotlinx.coroutines.withTimeoutOrNull(2500L) {
-                sessionHasMedia.first { it }
-                if (isVideo.value) com.local.listentomusic.ui.components.VideoSurfaceOwner.state.first {
-                    it.owner == "MINI_WINDOW" && it.firstFrame
-                }
-                true
-            } == true
-            if (!success) {
-                com.local.listentomusic.ui.components.VideoSurfaceOwner.serviceEvent("first-frame-timeout")
-                stopSelf()
-                return@launch
-            }
+            // This is the only player window. Show its surface while the decoder
+            // warms up; closing it before the first frame prevents that frame.
+            sessionHasMedia.first { it }
             ready = true
             destinationReady.value = true
             params?.let {
@@ -390,7 +498,7 @@ class MiniWindowOverlayService : Service() {
     }
 
     private fun drag(view: View, event: MotionEvent): Boolean {
-        if (docked) return false
+        if (docked || expanded) return false
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 gestureGeneration++
@@ -476,7 +584,7 @@ class MiniWindowOverlayService : Service() {
     }
 
     private fun clampPosition() {
-        if (docked) return
+        if (docked || expanded) return
         val layout = params ?: return
         val bounds = if (Build.VERSION.SDK_INT >= 30) wm?.currentWindowMetrics?.bounds else null
         val metrics = resources.displayMetrics
@@ -531,7 +639,7 @@ class MiniWindowOverlayService : Service() {
     }
 
     private fun savePosition() {
-        if (docked) return
+        if (docked || expanded) return
         val layout = params ?: return
         getSharedPreferences(POSITION_PREFS, MODE_PRIVATE).edit {
             putInt(POSITION_X, layout.x)
@@ -542,7 +650,7 @@ class MiniWindowOverlayService : Service() {
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     private fun miniWidthPx(): Int {
-        if (docked) return WindowManager.LayoutParams.MATCH_PARENT
+        if (docked || expanded) return WindowManager.LayoutParams.MATCH_PARENT
         val size = controller?.videoSize
         val aspect = if (isVideo.value) {
             if (size != null && size.height > 0) size.width.toFloat() * size.pixelWidthHeightRatio / size.height
@@ -552,17 +660,38 @@ class MiniWindowOverlayService : Service() {
             MiniWindowMetrics.squareWidthPx(resources.displayMetrics.density)
         else MiniWindowMetrics.widthPx(resources.displayMetrics.density)
     }
-    private fun miniHeightPx() = if (docked)
-        com.local.listentomusic.model.CompactPlayerMetrics.heightPx(resources.displayMetrics.density)
-    else com.local.listentomusic.model.MiniWindowMetrics.heightPx(resources.displayMetrics.density)
+    private fun miniHeightPx() = if (expanded) WindowManager.LayoutParams.MATCH_PARENT
+        else MiniWindowMetrics.heightPx(resources.displayMetrics.density)
 
     private fun switchMode(toDocked: Boolean) {
-        if (docked == toDocked) return
-        if (docked) savePosition()
-        docked = toDocked
+        switchMode(if (toDocked) PlayerWindowMode.DOCKED else PlayerWindowMode.DETACHED)
+    }
+
+    private fun switchMode(target: PlayerWindowMode) {
+        if (mode == target) return
+        if (target == PlayerWindowMode.EXPANDED && !ensureExpandedHost()) return
+        if (mode == PlayerWindowMode.DETACHED) savePosition()
+        val leavingExpanded = expanded
+        mode = target
+        modeSnapshot.value = target
+        com.local.listentomusic.ui.components.VideoSurfaceOwner.setUnifiedExpanded(expanded)
         dragging = false
         crossView?.visibility = View.INVISIBLE
-        compact?.setDetached(!toDocked)
+        if (leavingExpanded) {
+            modeState.value = mode
+            expandedView?.visibility = View.GONE
+            compact?.setExpanded(false)
+            expandedFullscreen = false
+        }
+        if (expanded) {
+            compact?.setExpanded(true)
+            compact?.visibility = View.GONE
+            expandedView?.visibility = View.VISIBLE
+            modeState.value = mode
+        } else {
+            compact?.setDetached(!docked)
+            compact?.visibility = View.VISIBLE
+        }
         applyModeLayout()
         updateRootLayout()
         updateVisibility()
@@ -573,7 +702,22 @@ class MiniWindowOverlayService : Service() {
         layout.width = miniWidthPx()
         layout.height = miniHeightPx()
         layout.gravity = if (docked) Gravity.BOTTOM or Gravity.LEFT else Gravity.TOP or Gravity.LEFT
-        if (docked) {
+        layout.flags = if (expanded) {
+            (layout.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv() and
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()) or WindowManager.LayoutParams.FLAG_DIM_BEHIND
+        } else {
+            (layout.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE) and
+                WindowManager.LayoutParams.FLAG_DIM_BEHIND.inv() and
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS.inv()
+        }
+        layout.dimAmount = if (expanded) .14f else 0f
+        if (expanded) {
+            layout.x = 0
+            layout.y = 0
+            if (Build.VERSION.SDK_INT >= 30) {
+                layout.setFitInsetsTypes(if (expandedFullscreen) 0 else WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+            }
+        } else if (docked) {
             layout.x = 0
             layout.y = 0
             if (Build.VERSION.SDK_INT >= 30) {
@@ -593,7 +737,7 @@ class MiniWindowOverlayService : Service() {
     }
 
     private fun updateVisibility() {
-        val visible = ready && if (docked) PlayerWindowVisibility.dockedVisible.value else
+        val visible = ready && if (expanded) true else if (docked) PlayerWindowVisibility.dockedVisible.value else
             PlayerWindowVisibility.detachedVisible.value
         params?.let {
             it.alpha = if (visible) 1f else 0f
@@ -612,6 +756,101 @@ class MiniWindowOverlayService : Service() {
         layout.height = height
         clampPosition()
         updateRootLayout()
+    }
+
+    private fun collapseExpanded() {
+        if (!expanded) return
+        switchMode(if (PlayerWindowVisibility.libraryShowing.value) PlayerWindowMode.DOCKED
+            else PlayerWindowMode.DETACHED)
+    }
+
+    private fun returnToLibrary() {
+        if (!expanded) return
+        runCatching {
+            startActivity(Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NO_ANIMATION
+            })
+        }
+        switchMode(PlayerWindowMode.DOCKED)
+    }
+
+    private fun updateExpandedFullscreen(value: Boolean) {
+        if (!expanded || expandedFullscreen == value) return
+        expandedFullscreen = value
+        params?.let { layout ->
+            layout.flags = if (value) layout.flags or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                else layout.flags and WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS.inv()
+            if (Build.VERSION.SDK_INT >= 30) {
+                layout.setFitInsetsTypes(if (value) 0 else WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+                runCatching {
+                    if (value) expandedView?.windowInsetsController?.hide(WindowInsets.Type.systemBars())
+                    else expandedView?.windowInsetsController?.show(WindowInsets.Type.systemBars())
+                }
+            }
+            updateRootLayout()
+        }
+    }
+
+    private fun dragExpanded(amount: Float) {
+        if (!expanded || sharing) return
+        windowAnimator?.cancel()
+        params?.let {
+            it.y = (it.y + amount.toInt()).coerceIn(0, it.height.coerceAtLeast(1))
+            it.flags = it.flags or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+            updateRootLayout()
+        }
+    }
+
+    private fun finishExpandedPull() {
+        val position = params?.y ?: return
+        if (position >= dp(72)) returnToLibrary() else resetExpandedPull()
+    }
+
+    private fun resetExpandedPull() {
+        val layout = params ?: return
+        windowAnimator?.cancel()
+        windowAnimator = ValueAnimator.ofInt(layout.y, 0).apply {
+            duration = 180L
+            interpolator = DecelerateInterpolator()
+            addUpdateListener {
+                layout.y = it.animatedValue as Int
+                if (layout.y == 0 && !expandedFullscreen)
+                    layout.flags = layout.flags and WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS.inv()
+                updateRootLayout()
+            }
+            start()
+        }
+    }
+
+    private fun launchShare(chooser: Intent) {
+        if (!expanded || sharing) return
+        val layout = params ?: return
+        sharing = true
+        shareInProgress = true
+        savedWindowFlags = layout.flags
+        layout.alpha = 0f
+        layout.dimAmount = 0f
+        layout.flags = layout.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        updateRootLayout()
+        runCatching {
+            startActivity(Intent(this, ShareProxyActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+                putExtra(ShareProxyActivity.EXTRA_CHOOSER, chooser)
+            })
+        }.onFailure { restoreAfterShare() }
+    }
+
+    private fun restoreAfterShare() {
+        if (!sharing) return
+        sharing = false
+        shareInProgress = false
+        params?.let {
+            it.flags = savedWindowFlags
+            it.dimAmount = if (expanded) .14f else 0f
+            updateVisibility()
+        }
     }
 
     private var lastArtworkData: ByteArray? = null
@@ -644,7 +883,15 @@ class MiniWindowOverlayService : Service() {
 
     override fun onDestroy() {
         destinationReady.value = false
+        shareInProgress = false
+        modeSnapshot.value = null
+        identities.value = "controllerId=none playerViewId=none"
+        windowAnimator?.cancel()
+        if (shareReceiverRegistered) runCatching { unregisterReceiver(shareFinished) }
+        if (homeReceiverRegistered) runCatching { unregisterReceiver(systemHome) }
+        if (expandedHostReady) lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
         scope.cancel()
+        com.local.listentomusic.ui.components.VideoSurfaceOwner.setUnifiedExpanded(false)
         com.local.listentomusic.ui.components.VideoSurfaceOwner.serviceEvent("stop")
         com.local.listentomusic.ui.components.VideoSurfaceOwner.setSystemOverlayVisible(
             "mini_window_overlay",
@@ -664,9 +911,11 @@ class MiniWindowOverlayService : Service() {
         connectionLease = null
         future = null
         root = null
+        expandedView = null
         crossView = null
         crossParams = null
         wm = null
+        viewModelStore.clear()
         super.onDestroy()
     }
 
