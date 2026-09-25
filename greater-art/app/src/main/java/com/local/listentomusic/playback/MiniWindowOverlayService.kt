@@ -128,6 +128,7 @@ class MiniWindowOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
     private var shareReceiverRegistered = false
     private var homeReceiverRegistered = false
     private var expandedFullscreen = false
+    private var fullscreenActivityActive = false
     private var windowAnimator: ValueAnimator? = null
     private var sharing = false
     private var savedWindowFlags = 0
@@ -167,6 +168,8 @@ class MiniWindowOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
         const val ACTION_DOCK = "com.local.listentomusic.player.DOCK"
         const val ACTION_DETACH = "com.local.listentomusic.player.DETACH"
         const val ACTION_EXPAND = "com.local.listentomusic.player.EXPAND"
+        const val ACTION_FULLSCREEN_RETURN = "com.local.listentomusic.player.FULLSCREEN_RETURN"
+        const val EXTRA_FULLSCREEN_DESTINATION = "fullscreen_destination"
         private const val POSITION_PREFS = "mini_window_position"
         private const val POSITION_X = "x"
         private const val POSITION_Y = "y"
@@ -251,6 +254,19 @@ class MiniWindowOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_FULLSCREEN_RETURN) {
+            com.local.listentomusic.ui.components.VideoSurfaceOwner.beginHandoff("MINI_WINDOW")
+            fullscreenActivityActive = false
+            val target = when (intent.getStringExtra(EXTRA_FULLSCREEN_DESTINATION)) {
+                "DOCKED" -> PlayerWindowMode.DOCKED
+                "DETACHED" -> PlayerWindowMode.DETACHED
+                else -> PlayerWindowMode.EXPANDED
+            }
+            switchMode(target)
+            updateVisibility()
+            com.local.listentomusic.ui.components.VideoSurfaceOwner.finishHandoff("MINI_WINDOW")
+            return START_NOT_STICKY
+        }
         val wasDocked = docked
         when (intent?.action) {
             ACTION_DOCK -> switchMode(true)
@@ -383,7 +399,10 @@ class MiniWindowOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
                             sendBroadcast(Intent(MainActivity.ACTION_BACKGROUND_PLAYER).setPackage(packageName))
                             switchMode(PlayerWindowMode.DETACHED)
                         },
-                        onFullscreen = ::updateExpandedFullscreen,
+                        onFullscreen = { value ->
+                            if (value && viewModel.playback.value.isVideo) openLandscapeFullscreen()
+                            else updateExpandedFullscreen(value)
+                        },
                         onPull = ::dragExpanded,
                         onPullEnd = ::finishExpandedPull,
                         onPullCancel = ::resetExpandedPull,
@@ -716,6 +735,9 @@ class MiniWindowOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
             layout.y = 0
             if (Build.VERSION.SDK_INT >= 30) {
                 layout.setFitInsetsTypes(if (expandedFullscreen) 0 else WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+                // Dock and Mini fit only one inset side. Restore all sides for
+                // expanded mode or its content can be clipped on tall phones.
+                layout.setFitInsetsSides(if (expandedFullscreen) 0 else WindowInsets.Side.all())
             }
         } else if (docked) {
             layout.x = 0
@@ -737,7 +759,7 @@ class MiniWindowOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
     }
 
     private fun updateVisibility() {
-        val visible = ready && if (expanded) true else if (docked) PlayerWindowVisibility.dockedVisible.value else
+        val visible = ready && !fullscreenActivityActive && if (expanded) true else if (docked) PlayerWindowVisibility.dockedVisible.value else
             PlayerWindowVisibility.detachedVisible.value
         params?.let {
             it.alpha = if (visible) 1f else 0f
@@ -779,16 +801,37 @@ class MiniWindowOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
         if (!expanded || expandedFullscreen == value) return
         expandedFullscreen = value
         params?.let { layout ->
-            layout.flags = if (value) layout.flags or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-                else layout.flags and WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS.inv()
+            layout.flags = if (value) layout.flags or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                WindowManager.LayoutParams.FLAG_FULLSCREEN
+                else layout.flags and WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS.inv() and
+                    WindowManager.LayoutParams.FLAG_FULLSCREEN.inv()
             if (Build.VERSION.SDK_INT >= 30) {
                 layout.setFitInsetsTypes(if (value) 0 else WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+                layout.setFitInsetsSides(if (value) 0 else WindowInsets.Side.all())
                 runCatching {
                     if (value) expandedView?.windowInsetsController?.hide(WindowInsets.Type.systemBars())
                     else expandedView?.windowInsetsController?.show(WindowInsets.Type.systemBars())
                 }
             }
             updateRootLayout()
+        }
+    }
+
+    private fun openLandscapeFullscreen() {
+        if (!expanded || fullscreenActivityActive) return
+        com.local.listentomusic.ui.components.VideoSurfaceOwner.beginHandoff("NOW_PLAYING")
+        fullscreenActivityActive = true
+        runCatching {
+            startActivity(Intent(this, FullscreenVideoActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+            })
+            switchMode(PlayerWindowMode.DETACHED)
+            updateVisibility()
+        }.onFailure {
+            fullscreenActivityActive = false
+            com.local.listentomusic.ui.components.VideoSurfaceOwner.finishHandoff("NOW_PLAYING")
+            switchMode(PlayerWindowMode.EXPANDED)
+            updateVisibility()
         }
     }
 

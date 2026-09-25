@@ -31,7 +31,7 @@ data class UserPreferences(
     val themeMode: ThemeMode = ThemeMode.DARK,
     val showThumbnails: Boolean = true,
     val showFileDetails: Boolean = false,
-    val preloadThumbnails: Boolean = true,
+    val preloadThumbnails: Boolean = false,
     val resumePlayback: Boolean = true,
     val autoPictureInPicture: Boolean = true,
     val floatingWindowMode: FloatingWindowMode = FloatingWindowMode.MINI_WINDOW,
@@ -155,7 +155,9 @@ class AppPreferences(private val context: Context) {
             themeMode = enumValueOrDefault(prefs[Keys.themeMode], ThemeMode.DARK),
             showThumbnails = prefs[Keys.showThumbnails] ?: true,
             showFileDetails = prefs[Keys.showFileDetails] ?: false,
-            preloadThumbnails = prefs[Keys.preloadThumbnails] ?: true,
+            // Bulk thumbnail decoding competes with full-quality video playback.
+            // Keep on-demand thumbnails; old saved preload=true values are retired.
+            preloadThumbnails = false,
             resumePlayback = prefs[Keys.resumePlayback] ?: true,
             autoPictureInPicture = prefs[Keys.autoPictureInPicture] ?: true,
             floatingWindowMode = enumValueOrDefault(

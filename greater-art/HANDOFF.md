@@ -3,22 +3,34 @@
 This file describes the **current repository state only**. Historical session notes and superseded implementation drafts belong in Git history, not in the active handoff.
 
 **Project:** `greater-art/` in the repository checkout
-**Current version:** `1.13.7 (code 96)`
-**Latest APK:** `releases/GreaterArt-1.13.7.apk` (verification below)
+**Current version:** `1.13.9 (code 98)`
+**Latest APK:** `releases/GreaterArt-1.13.9.apk` (verification below)
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 ## Repository state
 
 - Project: `greater-art/`
-- Version: **1.13.7**
-- Version code: **96**
+- Version: **1.13.9**
+- Version code: **98**
 - Application ID: `com.local.listentomusic`
-- APK: `releases/GreaterArt-1.13.7.apk`
-- APK SHA-256: `070af574f71936b9bf02d131a6227dd1341392b324b3940611ceeadeb92cc108`
+- APK: `releases/GreaterArt-1.13.9.apk`
+- APK SHA-256: `85f497dd13d509f7b41c5c200e9b46d578a351ef7c8d44e8e989c3fe2a110d8f`
 - Signing certificate SHA-256: `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 `app/build.gradle.kts` is the version source of truth. Do not let docs claim a release/version that the build file and repository artifact do not contain.
+
+### September 25 — 1.13.9 mini-window border removal (local)
+
+- Removed 1px stroke border from mini-window background drawable (`res/drawable/mini_player_bg.xml`). The stroke was unused per lint (`UnusedResources` warning) and produced a visible 1px outline on the mini player. Corners (12dp) and size unchanged.
+- Verification: debug assembly passed with Java 21. Mini window active on API 36 AVD (1080×2340/450 dpi), video playback and surface handoff working. Build size 26,140,258 bytes; pinned signing certificate retained.
+
+### September 24 — 1.13.8 A55-size layout and landscape fullscreen (local)
+
+- Root cause: Android system overlays cannot request device orientation. The old fullscreen control only expanded the overlay, so widescreen video remained a portrait strip. Dock/Mini also left a bottom-only inset policy on the expanded overlay, clipping its bounds on taller phones. The native PlayerView consumed taps before a parent gesture detector could show hidden controls.
+- Fix: a non-exported `FullscreenVideoActivity` presents the same playback session in sensor landscape, with `FIT` video framing and no resolution/FPS/bitrate limits. The existing overlay is hidden during fullscreen and restored on return. Expanded mode now restores all safe-area inset sides; a transparent gesture layer above the video surface receives tap/double-tap. Bulk thumbnail warmup is retired, with on-demand thumbnails retained. This removes competing decode work without adding a second song cache or changing Media3 playback quality.
+- Verification: 117 unit tests, lint, and debug assembly passed with Java 21. An API 36 AVD at 1080×2340/450 dpi (Samsung A55 viewport approximation, not One UI) showed the portrait controls fitting, the 16:9 synthetic video uncropped in 2340×1080 fullscreen, and Back returning to expanded portrait playback without a crash. The AVD briefly disconnected during lint and recovered after a cold restart; still test on the Samsung A55 before treating One UI transitions as proven. The debug APK is 26,140,258 bytes and retains the pinned signing certificate.
+- Build-toolchain note: `No defined toolchain download url for WINDOWS on x86_64` means Gradle did not discover JDK 21. Use `C:\Program Files\Android\openjdk\jdk-21.0.8` as `JAVA_HOME` and Android Studio's Gradle JDK; do not add a download URL or alter app code for this error. From `greater-art/`: `$env:JAVA_HOME='C:\Program Files\Android\openjdk\jdk-21.0.8'; $env:ANDROID_HOME="$env:LOCALAPPDATA\Android\Sdk"; & "$env:JAVA_HOME\bin\java.exe" -jar gradle/wrapper/gradle-wrapper.jar testDebugUnitTest lintDebug assembleDebug`.
 
 ### September 23 — 1.13.7 song-tap crash repair (local)
 

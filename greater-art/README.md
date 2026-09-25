@@ -4,12 +4,13 @@ Greater Art is a native Kotlin/Jetpack Compose player for local music and video.
 
 ## Current release
 
-- Version: **1.13.7**
-- Version code: **96**
+- Version: **1.13.8**
+- Version code: **97**
 - Application ID: `com.local.listentomusic`
-- APK: `releases/GreaterArt-1.13.7.apk`
-- APK SHA-256: `070af574f71936b9bf02d131a6227dd1341392b324b3940611ceeadeb92cc108`
+- APK: `releases/GreaterArt-1.13.8.apk`
+- APK SHA-256: `38f053733900710a27962bf4b898410f9d4e0db89edf1f37a67b0c6c08c51e60`
 - Signing certificate SHA-256: `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
+- v1.13.8 gives video fullscreen a landscape Activity so Android can rotate the whole frame; the normal expanded player remains a floating overlay. It restores expanded safe-area insets after the dock/mini state, lets taps reach video controls above the native surface, and disables bulk thumbnail preloading to avoid competing with playback. The A55-sized API 36 emulator showed a fitted portrait player and an uncropped landscape video; real Samsung A55 transition testing is still required.
 - v1.13.7 fixes the 1.13.6 Library song-tap crash in the unified floating player and checks floating-window permission at launch and in Dev Mode. An emulator smoke test covered song selection and expanded Now Playing; Samsung phone verification remains important.
 - v1.13.6 uses one persistent WindowManager player for Library-docked,
   detached Mini, and expanded Now Playing. The dock keeps a single play/pause
@@ -177,7 +178,7 @@ $env:GRADLE_USER_HOME = Join-Path $env:USERPROFILE '.gradle'
 Current release artifact:
 
 ```text
-releases/GreaterArt-1.12.7.apk
+releases/GreaterArt-1.13.8.apk
 ```
 
 Versioned APKs are never overwritten. Builds remain signed by the pinned personal

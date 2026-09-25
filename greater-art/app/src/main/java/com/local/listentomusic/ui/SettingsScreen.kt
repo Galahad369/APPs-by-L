@@ -410,7 +410,6 @@ fun SettingsScreen(
                 preferences.excludedFolders.forEach { folder ->
                     SwitchSetting(folder, uiText(language, "Turn off to include again. Files remain untouched.", "關閉後重新加入，不會更改檔案。"), true, { onFolderExcluded(folder, false) })
                 }
-                SwitchSetting(uiText(language, "Preload thumbnails", "預先載入縮圖"), uiText(language, "Warm the first library page for faster scrolling.", "預先載入第一頁，讓捲動更快速。"), preferences.preloadThumbnails, onPreloadThumbnails)
                 ActionCard(Icons.Rounded.Cached, uiText(language, "Scan Download again", "重新掃描 Download"), uiText(language, "Refresh the recursive local media index.", "重新整理遞迴本機媒體索引。"), uiText(language, "Rescan", "重新掃描")) { onRescan(); onBack() }
                 ActionCard(
                     Icons.Rounded.DeleteSweep,

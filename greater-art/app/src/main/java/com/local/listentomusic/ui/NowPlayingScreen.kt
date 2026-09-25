@@ -203,12 +203,14 @@ fun NowPlayingScreen(
     onShareCurrentMedia: () -> Unit,
     onShareQueue: () -> Unit,
     systemOverlay: Boolean = false,
+    initialFullscreen: Boolean = false,
+    forceLandscapeFullscreen: Boolean = false,
     onFullscreenChanged: (Boolean) -> Unit = {},
     sharedVideoView: PlayerView? = null,
     onSharedVideoReleased: () -> Unit = {},
 ) {
     androidx.compose.runtime.CompositionLocalProvider(LocalSystemPlayer provides systemOverlay) {
-    var fullscreen by rememberSaveable { mutableStateOf(false) }
+    var fullscreen by rememberSaveable { mutableStateOf(initialFullscreen) }
     LaunchedEffect(fullscreen) { onFullscreenChanged(fullscreen) }
 
     if (isPictureInPicture && playback.isVideo) {
@@ -230,7 +232,8 @@ fun NowPlayingScreen(
         val landscape = maxWidth > maxHeight
         val portraitVideoHeight = minOf(maxWidth / playback.videoAspectRatio.coerceIn(0.75f, 2.25f), maxHeight * 0.34f)
         val immersiveVideo = playback.isVideo && (fullscreen || landscape)
-        FullscreenEffect(enabled = fullscreen || (playback.isVideo && landscape))
+        FullscreenEffect(enabled = fullscreen || (playback.isVideo && landscape),
+            forceLandscape = forceLandscapeFullscreen)
         BackHandler(enabled = fullscreen) { fullscreen = false }
 
         if (playback.isVideo) {
@@ -394,7 +397,14 @@ private fun VideoPlayerStage(
 
     Box(
         modifier = modifier.inspectElement("VIDEO_STAGE", "Side double-tap seeks; center double-tap does nothing")
-            .background(Color.Black).pointerInput(seekOffsetMs) {
+            .background(Color.Black),
+        contentAlignment = Alignment.Center,
+    ) {
+        VideoSurface(playback.currentPath, controller, onVideoBoundsChanged, Modifier.fillMaxSize(),
+            sharedVideoView, onSharedVideoReleased)
+        // PlayerView is a native AndroidView and can consume taps before a parent
+        // gesture detector sees them. Keep this transparent hit layer above video.
+        Box(Modifier.fillMaxSize().pointerInput(seekOffsetMs) {
             detectTapGestures(
                 onPress = {
                     coroutineScope {
@@ -421,11 +431,7 @@ private fun VideoPlayerStage(
                     }
                 },
             )
-        },
-        contentAlignment = Alignment.Center,
-    ) {
-        VideoSurface(playback.currentPath, controller, onVideoBoundsChanged, Modifier.fillMaxSize(),
-            sharedVideoView, onSharedVideoReleased)
+        })
         AnimatedVisibility(
             visible = temporaryDoubleSpeed,
             enter = fadeIn(tween(100)),
@@ -1588,13 +1594,14 @@ internal fun VideoSurface(
 }
 
 @Composable
-private fun FullscreenEffect(enabled: Boolean) {
+private fun FullscreenEffect(enabled: Boolean, forceLandscape: Boolean = false) {
     val activity = LocalContext.current.findActivity() ?: return
     val systemDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    DisposableEffect(activity, enabled, systemDark) {
+    DisposableEffect(activity, enabled, systemDark, forceLandscape) {
         val insets = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
         if (enabled) {
-            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+            activity.requestedOrientation = if (forceLandscape) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                else ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
             insets.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             insets.hide(WindowInsetsCompat.Type.systemBars())
         } else {
