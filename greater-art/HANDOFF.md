@@ -3,22 +3,29 @@
 This file describes the **current repository state only**. Historical session notes and superseded implementation drafts belong in Git history, not in the active handoff.
 
 **Project:** `greater-art/` in the repository checkout
-**Current version:** `1.13.9 (code 98)`
-**Latest APK:** `releases/GreaterArt-1.13.9.apk` (verification below)
+**Current version:** `1.13.10 (code 99)`
+**Latest APK:** `releases/GreaterArt-1.13.10.apk` (verification below)
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 ## Repository state
 
 - Project: `greater-art/`
-- Version: **1.13.9**
-- Version code: **98**
+- Version: **1.13.10**
+- Version code: **99**
 - Application ID: `com.local.listentomusic`
-- APK: `releases/GreaterArt-1.13.9.apk`
-- APK SHA-256: `85f497dd13d509f7b41c5c200e9b46d578a351ef7c8d44e8e989c3fe2a110d8f`
+- APK: `releases/GreaterArt-1.13.10.apk`
+- APK SHA-256: `a367a230417aabfeb1958ddbaadaea618ede7194449d58976f574e5a9a771b85`
 - Signing certificate SHA-256: `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 `app/build.gradle.kts` is the version source of truth. Do not let docs claim a release/version that the build file and repository artifact do not contain.
+
+### September 25 — 1.13.10 direct detach and Now Playing controls (local)
+
+- Cause: closing expanded Now Playing while Library was still marked visible selected DOCKED first, then Activity backgrounding selected DETACHED. The Library visibility collector could re-dock even after a direct detach request. A single video tap also re-enabled a full-stage dark scrim, and the round jump badge was visually heavy.
+- Fix: close requests DETACHED immediately and backgrounds the Library task; a short-lived detach latch prevents the collector from re-docking until Library actually leaves. The 1.13.9 mini-window stroke removal is retained; an attempted zoom workaround was deliberately dropped because it would crop the video. Now Playing has an unlockable full-screen input guard, long current titles marquee only on overflow, single video taps are inert, swipe reveals immersive controls, double-tap jump feedback uses a compact three-chevron sweep, and the play/pause control moves up 4dp.
+- Cache finding: the media files are already local. Media3 currently buffers 10–50 seconds ahead with a 96 MiB target and Android's page cache handles repeat reads. A duplicate full-file cache would add I/O/storage and is not evidence-based for UI or decoder jank; no quality, FPS, bitrate, or resolution limit was introduced.
+- Verification: 117 unit tests, lint, and debug assembly passed. On the API 36 A55-sized emulator, Lock blocked Next, Unlock restored it, and Close took the task to Android Home with detached Mini visible. No new AndroidRuntime crash appeared after clearing the old log. Physical Samsung/One UI testing of the animation, border, and video tap feel remains worthwhile. APK: `releases/GreaterArt-1.13.10.apk`, 26,156,586 bytes, SHA-256 `a367a230417aabfeb1958ddbaadaea618ede7194449d58976f574e5a9a771b85`; pinned signing certificate unchanged.
 
 ### September 25 — 1.13.9 mini-window border removal (local)
 

@@ -129,6 +129,7 @@ class MiniWindowOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
     private var homeReceiverRegistered = false
     private var expandedFullscreen = false
     private var fullscreenActivityActive = false
+    private var detachUntilLibraryHidden = false
     private var windowAnimator: ValueAnimator? = null
     private var sharing = false
     private var savedWindowFlags = 0
@@ -141,6 +142,7 @@ class MiniWindowOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == Intent.ACTION_CLOSE_SYSTEM_DIALOGS &&
                 shouldShrinkForSystemReason(intent.getStringExtra("reason")) && expanded) {
+                detachUntilLibraryHidden = true
                 switchMode(PlayerWindowMode.DETACHED)
             }
         }
@@ -235,7 +237,9 @@ class MiniWindowOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
             combine(PlayerWindowVisibility.libraryShowing, PlayerWindowVisibility.detachedVisible,
                 PlayerWindowVisibility.dockedVisible) { library, detached, _ -> library to detached }
                 .collect { (library, detached) ->
-                if (!expanded && docked != library && (library || detached)) switchMode(library)
+                if (!library) detachUntilLibraryHidden = false
+                if (!expanded && docked != library && (library || detached) &&
+                    !(library && detachUntilLibraryHidden)) switchMode(library)
                 updateVisibility()
             }
         }
@@ -269,8 +273,11 @@ class MiniWindowOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
         }
         val wasDocked = docked
         when (intent?.action) {
-            ACTION_DOCK -> switchMode(true)
-            ACTION_DETACH -> switchMode(false)
+            ACTION_DOCK -> { detachUntilLibraryHidden = false; switchMode(true) }
+            ACTION_DETACH -> {
+                detachUntilLibraryHidden = true
+                switchMode(false)
+            }
             ACTION_EXPAND -> switchMode(PlayerWindowMode.EXPANDED)
         }
         val handoffNeeded = controller == null ||
@@ -691,6 +698,7 @@ class MiniWindowOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
         if (target == PlayerWindowMode.EXPANDED && !ensureExpandedHost()) return
         if (mode == PlayerWindowMode.DETACHED) savePosition()
         val leavingExpanded = expanded
+        if (leavingExpanded && target == PlayerWindowMode.DETACHED) detachUntilLibraryHidden = true
         mode = target
         modeSnapshot.value = target
         com.local.listentomusic.ui.components.VideoSurfaceOwner.setUnifiedExpanded(expanded)
@@ -782,8 +790,11 @@ class MiniWindowOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner,
 
     private fun collapseExpanded() {
         if (!expanded) return
-        switchMode(if (PlayerWindowVisibility.libraryShowing.value) PlayerWindowMode.DOCKED
-            else PlayerWindowMode.DETACHED)
+        detachUntilLibraryHidden = true
+        switchMode(PlayerWindowMode.DETACHED)
+        // Close the Activity underneath too; otherwise its visible Library immediately
+        // requests a docked player and creates a needless DETACHED→DOCKED→DETACHED hop.
+        sendBroadcast(Intent(MainActivity.ACTION_BACKGROUND_PLAYER).setPackage(packageName))
     }
 
     private fun returnToLibrary() {

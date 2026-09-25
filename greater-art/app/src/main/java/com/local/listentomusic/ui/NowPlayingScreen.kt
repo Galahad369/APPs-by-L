@@ -20,11 +20,13 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,6 +42,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -54,6 +57,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Fullscreen
@@ -104,6 +109,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -211,6 +217,7 @@ fun NowPlayingScreen(
 ) {
     androidx.compose.runtime.CompositionLocalProvider(LocalSystemPlayer provides systemOverlay) {
     var fullscreen by rememberSaveable { mutableStateOf(initialFullscreen) }
+    var controlsLocked by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(fullscreen) { onFullscreenChanged(fullscreen) }
 
     if (isPictureInPicture && playback.isVideo) {
@@ -235,7 +242,9 @@ fun NowPlayingScreen(
         FullscreenEffect(enabled = fullscreen || (playback.isVideo && landscape),
             forceLandscape = forceLandscapeFullscreen)
         BackHandler(enabled = fullscreen) { fullscreen = false }
+        BackHandler(enabled = controlsLocked) { controlsLocked = false }
 
+        Box(Modifier.fillMaxSize().then(if (controlsLocked) Modifier.clearAndSetSemantics { } else Modifier)) {
         if (playback.isVideo) {
             val (pageBg, pageInsets) = if (immersiveVideo) {
                 Color.Black to WindowInsets(0)
@@ -347,6 +356,28 @@ fun NowPlayingScreen(
                 onShareCurrentMedia = onShareCurrentMedia,
             )
         }
+        }
+        if (controlsLocked) {
+            Box(Modifier.fillMaxSize().pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) awaitPointerEvent().changes.forEach { it.consume() }
+                }
+            })
+        }
+        IconButton(
+            onClick = { controlsLocked = !controlsLocked },
+            modifier = Modifier.align(Alignment.TopEnd).windowInsetsPadding(playerStatusInsets())
+                .padding(end = 100.dp).size(48.dp)
+                .inspectElement("PLAYER_LOCK_BUTTON", if (controlsLocked) "Unlock Now Playing controls" else "Lock Now Playing controls"),
+        ) {
+            Icon(
+                if (controlsLocked) Icons.Rounded.Lock else Icons.Rounded.LockOpen,
+                uiText(language, if (controlsLocked) "Unlock player controls" else "Lock player controls",
+                    if (controlsLocked) "解鎖播放器控制" else "鎖定播放器控制"),
+                tint = if (playback.isVideo && immersiveVideo) Color.White else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(27.dp),
+            )
+        }
     }
 }
 }
@@ -404,7 +435,14 @@ private fun VideoPlayerStage(
             sharedVideoView, onSharedVideoReleased)
         // PlayerView is a native AndroidView and can consume taps before a parent
         // gesture detector sees them. Keep this transparent hit layer above video.
-        Box(Modifier.fillMaxSize().pointerInput(seekOffsetMs) {
+        Box(Modifier.fillMaxSize().pointerInput(Unit) {
+            detectVerticalDragGestures(onVerticalDrag = { change, amount ->
+                if (abs(amount) > 4f) {
+                    controlsVisible = true
+                    change.consume()
+                }
+            })
+        }.pointerInput(seekOffsetMs) {
             detectTapGestures(
                 onPress = {
                     coroutineScope {
@@ -423,7 +461,7 @@ private fun VideoPlayerStage(
                         }
                     }
                 },
-                onTap = { controlsVisible = !controlsVisible },
+                // A single video tap is inert; only a side double-tap seeks.
                 onDoubleTap = { offset ->
                     doubleTapSeekDelta(offset.x, size.width.toFloat(), seekOffsetMs)?.let { delta ->
                         onSeekBy(delta)
@@ -454,17 +492,7 @@ private fun VideoPlayerStage(
             exit = fadeOut(),
             modifier = Modifier.fillMaxSize(),
         ) {
-            Box(
-                Modifier.fillMaxSize().background(
-                    Brush.verticalGradient(
-                        listOf(
-                            Color.Black.copy(alpha = 0.68f),
-                            Color.Transparent,
-                            Color.Black.copy(alpha = 0.78f),
-                        )
-                    )
-                )
-            ) {
+            Box(Modifier.fillMaxSize()) {
                 if (immersive) {
                     NowPlayingTopBar(
                         language = playback.appLanguage,
@@ -490,7 +518,7 @@ private fun VideoPlayerStage(
                     }
                     // Keep the center play control available whenever controls are visible.
                     Box(
-                        modifier = Modifier.size(52.dp).clip(CircleShape)
+                        modifier = Modifier.size(52.dp).offset(y = (-4).dp).clip(CircleShape)
                             .background(Color.White.copy(alpha = 0.2f)).clickable(onClick = onTogglePlay),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -913,7 +941,7 @@ private fun NowPlayingQueue(
                     val index = indexed.index
                     val file = indexed.value
                     val selected = file.path == currentPath
-                    Row(
+        Row(
                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
                             .background(
                                 if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f)
@@ -1274,7 +1302,8 @@ private fun PlayerBottomControls(
             Icon(Icons.Rounded.SkipPrevious, uiText(playback.appLanguage, "Previous", "上一首"), modifier = Modifier.size(36.dp))
         }
         LiquidMetalSurface(
-                    modifier = Modifier.size(52.dp).inspectElement("PLAY_PAUSE_BUTTON", if (playback.isPlaying) "Pause" else "Play").clickable(
+                    modifier = Modifier.size(52.dp).offset(y = (-4).dp)
+                        .inspectElement("PLAY_PAUSE_BUTTON", if (playback.isPlaying) "Pause" else "Play").clickable(
                         indication = null,
                         interactionSource = remember { MutableInteractionSource() },
                         onClick = onTogglePlay
@@ -1325,10 +1354,11 @@ private fun CurrentMediaHeader(
             com.local.listentomusic.model.mediaTitle(playback.title, playback.currentPath),
             style = if (headline) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleMedium,
             fontWeight = if (headline) FontWeight.Bold else FontWeight.SemiBold,
-            maxLines = if (headline) 2 else 1,
-            overflow = TextOverflow.Ellipsis,
+            maxLines = 1,
+            overflow = TextOverflow.Clip,
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f).padding(start = if (headline) 0.dp else 2.dp, end = 4.dp),
+            modifier = Modifier.weight(1f).padding(start = if (headline) 0.dp else 2.dp, end = 4.dp)
+                .basicMarquee(),
         )
         IconButton(
             onClick = onToggleFavourite,
@@ -1499,6 +1529,9 @@ private fun NowPlayingTopBar(
             Icon(Icons.Rounded.Home, uiText(language, "Home", "首頁"), Modifier.size(30.dp), tint = foreground)
         }
         Spacer(Modifier.weight(1f))
+        // The lock is drawn above the whole player so it remains usable when
+        // an input-blocking layer protects the rest of Now Playing.
+        Spacer(Modifier.size(48.dp))
         IconButton(onClick = onFullscreen, modifier = Modifier.inspectElement("FULLSCREEN_BUTTON", if (fullscreen) "Exit fullscreen" else "Enter fullscreen")) {
             Icon(
                 if (fullscreen) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
