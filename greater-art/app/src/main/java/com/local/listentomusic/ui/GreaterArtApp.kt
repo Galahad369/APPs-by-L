@@ -31,6 +31,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Construction
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -262,16 +270,22 @@ fun GreaterArtApp(
                         }
                     },
                 ) { padding ->
-                    HorizontalPager(state = libraryPager, modifier = Modifier.fillMaxSize(), key = { if (it == 1) "NODES" else "LIBRARY" }) { page ->
-                    if (page == 1) {
-                        val graph by viewModel.graph.collectAsStateWithLifecycle()
-                        val loading by viewModel.graphLoading.collectAsStateWithLifecycle()
-                        val error by viewModel.graphError.collectAsStateWithLifecycle()
-                        NodesScreen(graph, loading, error, playback.currentPath, padding,
-                            { navigationScope.launch { libraryPager.animateScrollToPage(0) } }, viewModel::requestGraph,
-                            { viewModel.playGraphNode(it); openNowPlayingOverlay() }, settings.graphOptions, viewModel::setGraphOptions, settings.appLanguage)
-                    } else {
-                    LibraryScreen(
+                                    HorizontalPager(state = libraryPager, modifier = Modifier.fillMaxSize(), key = { if (it == 1) "NODES" else "LIBRARY" }) { page ->
+                                                                            if (page == 1) {
+                                                                                // NodesScreen temporarily disabled - will be redesigned
+                                                                                Box(
+                                                                                    modifier = Modifier.fillMaxSize()
+                                                                                        .background(MaterialTheme.colorScheme.surface),
+                                                                                    contentAlignment = Alignment.Center
+                                                                                ) {
+                                                                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                                                        Icon(Icons.Rounded.Construction, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(48.dp))
+                                                                                        Spacer(Modifier.height(12.dp))
+                                                                                        Text("Nodes page redesigned - coming soon", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                                                    }
+                                                                                }
+                                                                            } else {
+                                            LibraryScreen(
                         appName = appName,
                         state = library,
                         preferences = settings,

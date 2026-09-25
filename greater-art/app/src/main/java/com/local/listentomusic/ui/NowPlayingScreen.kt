@@ -26,6 +26,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.foundation.layout.Arrangement
@@ -81,6 +82,7 @@ import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
@@ -228,7 +230,25 @@ fun NowPlayingScreen(
         return@CompositionLocalProvider
     }
 
-    val backdrop = com.local.listentomusic.ui.components.artworkBackdrop(
+    // Shared list state for queue scrolling (used by locate button)
+        val queueListState = rememberLazyListState()
+        var locateTrigger by remember { mutableStateOf(0) }
+
+        // Callback to scroll queue to currently playing item
+        val onLocateCurrent = {
+            val currentIndex = queue.indexOfFirst { it.path == playback.currentPath }
+            if (currentIndex >= 0 && !queueListState.isScrollInProgress) {
+                locateTrigger++
+            }
+        }
+        LaunchedEffect(locateTrigger) {
+            val currentIndex = queue.indexOfFirst { it.path == playback.currentPath }
+            if (currentIndex >= 0) {
+                queueListState.animateScrollToItem(currentIndex)
+            }
+        }
+
+        val backdrop = com.local.listentomusic.ui.components.artworkBackdrop(
         artwork, MaterialTheme.colorScheme.background.luminance() > .5f,
     )
     BoxWithConstraints(
@@ -258,15 +278,16 @@ fun NowPlayingScreen(
                 .windowInsetsPadding(pageInsets)
             Column(videoPageModifier) {
                 if (!immersiveVideo) {
-                    NowPlayingTopBar(
-                        language = language,
-                        onPictureInPicture = onPictureInPicture,
-                        onHome = onHome,
-                        onFullscreen = { fullscreen = true },
-                        onClose = onClose,
-                    )
-                }
-                VideoPlayerStage(
+                                    NowPlayingTopBar(
+                                        language = language,
+                                        onPictureInPicture = onPictureInPicture,
+                                        onHome = onHome,
+                                        onFullscreen = { fullscreen = true },
+                                        onClose = onClose,
+                                        onLocateCurrent = onLocateCurrent,
+                                    )
+                                }
+                                VideoPlayerStage(
                     playback = playback,
                     controller = controller,
                     sharedVideoView = sharedVideoView,
@@ -293,68 +314,72 @@ fun NowPlayingScreen(
                     },
                 )
                 if (!immersiveVideo) {
-                    SecondaryControls(
-                        playback = playback.copy(appLanguage = language),
-                        queue = queue,
-                        lyrics = lyrics,
-                        showFileDetails = showFileDetails,
-                        editableQueue = editableQueue,
-                        language = language,
-                        onSpeed = onSpeed,
-                        onRepeat = onRepeat,
-                        onPrevious = onPrevious,
-                        onTogglePlay = onTogglePlay,
-                        onNext = onNext,
-                        onSleepTimer = onSleepTimer,
-                        sleepTimer = sleepTimer,
-                        onPlayQueueItem = onPlayQueueItem,
-                        onLoadThumbnail = onLoadThumbnail,
-                        onSeek = onSeek,
-                        onMoveQueueItem = onMoveQueueItem,
-                        onRemoveQueueItem = onRemoveQueueItem,
-                        onShareQueue = onShareQueue,
-                        isFavourite = isFavourite,
-                        onToggleFavourite = { playback.currentPath?.let(onToggleFavourite) },
-                        onShareCurrentMedia = onShareCurrentMedia,
-                        modifier = Modifier.fillMaxWidth().weight(1f),
-                    )
-                }
+                                    SecondaryControls(
+                                        playback = playback.copy(appLanguage = language),
+                                        queue = queue,
+                                        lyrics = lyrics,
+                                        showFileDetails = showFileDetails,
+                                        editableQueue = editableQueue,
+                                        language = language,
+                                        onSpeed = onSpeed,
+                                        onRepeat = onRepeat,
+                                        onPrevious = onPrevious,
+                                        onTogglePlay = onTogglePlay,
+                                        onNext = onNext,
+                                        onSleepTimer = onSleepTimer,
+                                        sleepTimer = sleepTimer,
+                                        onPlayQueueItem = onPlayQueueItem,
+                                        onLoadThumbnail = onLoadThumbnail,
+                                        onSeek = onSeek,
+                                        onMoveQueueItem = onMoveQueueItem,
+                                        onRemoveQueueItem = onRemoveQueueItem,
+                                        onShareQueue = onShareQueue,
+                                        isFavourite = isFavourite,
+                                        onToggleFavourite = { playback.currentPath?.let(onToggleFavourite) },
+                                        onShareCurrentMedia = onShareCurrentMedia,
+                                        modifier = Modifier.fillMaxWidth().weight(1f),
+                                        queueListState = queueListState,
+                                        onLocateCurrent = onLocateCurrent,
+                                    )
+                                }
             }
         } else {
             AudioPlayer(
-                playback = playback.copy(appLanguage = language),
-                artwork = artwork,
-                queue = queue,
-                lyrics = lyrics,
-                showFileDetails = showFileDetails,
-                editableQueue = editableQueue,
-                blackDiscMode = blackDiscMode,
-                language = language,
-                fullscreen = fullscreen,
-                onHome = onHome,
-                onClose = onClose,
-                onPictureInPicture = onPictureInPicture,
-                onFullscreen = { fullscreen = !fullscreen },
-                onTogglePlay = onTogglePlay,
-                onPrevious = onPrevious,
-                onNext = onNext,
-                onSeek = onSeek,
-                onSpeed = onSpeed,
-                onRepeat = onRepeat,
-                onSleepTimer = onSleepTimer,
-                sleepTimer = sleepTimer,
-                seekOffsetMs = seekOffsetMs,
-                onSeekBy = onSeekBy,
-                onPlayQueueItem = onPlayQueueItem,
-                onLoadThumbnail = onLoadThumbnail,
-                onLoadWaveform = onLoadWaveform,
-                onMoveQueueItem = onMoveQueueItem,
-                onRemoveQueueItem = onRemoveQueueItem,
-                onShareQueue = onShareQueue,
-                isFavourite = isFavourite,
-                onToggleFavourite = { playback.currentPath?.let(onToggleFavourite) },
-                onShareCurrentMedia = onShareCurrentMedia,
-            )
+                            playback = playback.copy(appLanguage = language),
+                            artwork = artwork,
+                            queue = queue,
+                            lyrics = lyrics,
+                            showFileDetails = showFileDetails,
+                            editableQueue = editableQueue,
+                            blackDiscMode = blackDiscMode,
+                            language = language,
+                            fullscreen = fullscreen,
+                            onHome = onHome,
+                            onClose = onClose,
+                            onPictureInPicture = onPictureInPicture,
+                            onFullscreen = { fullscreen = !fullscreen },
+                            onTogglePlay = onTogglePlay,
+                            onPrevious = onPrevious,
+                            onNext = onNext,
+                            onSeek = onSeek,
+                            onSpeed = onSpeed,
+                            onRepeat = onRepeat,
+                            onSleepTimer = onSleepTimer,
+                            sleepTimer = sleepTimer,
+                            seekOffsetMs = seekOffsetMs,
+                            onSeekBy = onSeekBy,
+                            onPlayQueueItem = onPlayQueueItem,
+                            onLoadThumbnail = onLoadThumbnail,
+                            onLoadWaveform = onLoadWaveform,
+                            onMoveQueueItem = onMoveQueueItem,
+                            onRemoveQueueItem = onRemoveQueueItem,
+                            onShareQueue = onShareQueue,
+                            isFavourite = isFavourite,
+                            onToggleFavourite = { playback.currentPath?.let(onToggleFavourite) },
+                            onShareCurrentMedia = onShareCurrentMedia,
+                            queueListState = queueListState,
+                            onLocateCurrent = onLocateCurrent,
+                        )
         }
         }
         if (controlsLocked) {
@@ -403,6 +428,7 @@ private fun VideoPlayerStage(
     onBeginTemporaryDoubleSpeed: () -> Boolean,
     onEndTemporaryDoubleSpeed: () -> Unit,
     modifier: Modifier,
+    onLocateCurrent: (() -> Unit)? = null,
 ) {
     var controlsVisible by rememberSaveable { mutableStateOf(true) }
     var seekFeedback by remember { mutableStateOf(0L to 0L) }
@@ -419,6 +445,10 @@ private fun VideoPlayerStage(
     val haptics = LocalHapticFeedback.current
     var temporaryDoubleSpeed by remember { mutableStateOf(false) }
 
+    // Zoom state for fullscreen pinch-to-zoom
+    var videoScale by remember { mutableFloatStateOf(1f) }
+    var videoOffset by remember { mutableStateOf(Offset.Zero) }
+
     LaunchedEffect(controlsVisible, playback.isPlaying, playback.currentPath) {
         if (controlsVisible && playback.isPlaying) {
             delay(2_500)
@@ -426,13 +456,45 @@ private fun VideoPlayerStage(
         }
     }
 
+    // Reset zoom when exiting immersive mode
+    LaunchedEffect(immersive) {
+        if (!immersive) {
+            videoScale = 1f
+            videoOffset = Offset.Zero
+        }
+    }
+
     Box(
-        modifier = modifier.inspectElement("VIDEO_STAGE", "Side double-tap seeks; center double-tap does nothing")
+        modifier = modifier.inspectElement("VIDEO_STAGE", "Side double-tap seeks; pinch to zoom in fullscreen")
             .background(Color.Black),
         contentAlignment = Alignment.Center,
     ) {
-        VideoSurface(playback.currentPath, controller, onVideoBoundsChanged, Modifier.fillMaxSize(),
-            sharedVideoView, onSharedVideoReleased)
+        // Video with pinch-to-zoom support in fullscreen
+        Box(
+            Modifier
+                .graphicsLayer {
+                    scaleX = videoScale
+                    scaleY = videoScale
+                    translationX = videoOffset.x
+                    translationY = videoOffset.y
+                }
+                .pointerInput(Unit) {
+                                    if (immersive) {
+                                        detectTransformGestures(
+                                            onGesture = { centroid, pan, zoom, rotation ->
+                                                videoOffset = Offset(
+                                                    (videoOffset.x + pan.x).coerceIn(-size.width * (videoScale - 1) / 2, size.width * (videoScale - 1) / 2),
+                                                    (videoOffset.y + pan.y).coerceIn(-size.height * (videoScale - 1) / 2, size.height * (videoScale - 1) / 2)
+                                                )
+                                                videoScale = (videoScale * zoom).coerceIn(1f, 4f)
+                                            }
+                                        )
+                                    }
+                                }
+        ) {
+            VideoSurface(playback.currentPath, controller, onVideoBoundsChanged, Modifier.fillMaxSize(),
+                sharedVideoView, onSharedVideoReleased)
+        }
         // PlayerView is a native AndroidView and can consume taps before a parent
         // gesture detector sees them. Keep this transparent hit layer above video.
         Box(Modifier.fillMaxSize().pointerInput(Unit) {
@@ -494,18 +556,19 @@ private fun VideoPlayerStage(
         ) {
             Box(Modifier.fillMaxSize()) {
                 if (immersive) {
-                    NowPlayingTopBar(
-                        language = playback.appLanguage,
-                        onPictureInPicture = onPictureInPicture,
-                        onHome = onHome,
-                        onFullscreen = onFullscreen,
-                        onClose = onClose,
-                        overlay = true,
-                        fullscreen = true,
-                        modifier = Modifier.align(Alignment.TopCenter)
-                            .windowInsetsPadding(playerStatusInsets()),
-                    )
-                }
+                                    NowPlayingTopBar(
+                                        language = playback.appLanguage,
+                                        onPictureInPicture = onPictureInPicture,
+                                        onHome = onHome,
+                                        onFullscreen = onFullscreen,
+                                        onClose = onClose,
+                                        overlay = true,
+                                        fullscreen = true,
+                                        onLocateCurrent = onLocateCurrent,
+                                        modifier = Modifier.align(Alignment.TopCenter)
+                                            .windowInsetsPadding(playerStatusInsets()),
+                                    )
+                                }
 
                 if (immersive) Row(
                     modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
@@ -600,6 +663,8 @@ private fun AudioPlayer(
     isFavourite: Boolean,
     onToggleFavourite: () -> Unit,
     onShareCurrentMedia: () -> Unit,
+    queueListState: androidx.compose.foundation.lazy.LazyListState,
+    onLocateCurrent: () -> Unit,
 ) {
     var waveformLoading by remember(playback.currentPath) { mutableStateOf(true) }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
@@ -621,13 +686,14 @@ private fun AudioPlayer(
         var seekFeedback by remember { mutableStateOf(0L to 0L) }
         Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
         NowPlayingTopBar(
-            language = language,
-            onPictureInPicture = onPictureInPicture,
-            onHome = onHome,
-            onFullscreen = onFullscreen,
-            onClose = onClose,
-            fullscreen = fullscreen,
-        )
+                    language = language,
+                    onPictureInPicture = onPictureInPicture,
+                    onHome = onHome,
+                    onFullscreen = onFullscreen,
+                    onClose = onClose,
+                    fullscreen = fullscreen,
+                    onLocateCurrent = onLocateCurrent,
+                )
         LiquidMetalSurface(
             modifier = Modifier.padding(vertical = 4.dp).size(artSize)
                 .graphicsLayer { scaleX = artworkScale.value; scaleY = artworkScale.value }
@@ -699,14 +765,16 @@ private fun AudioPlayer(
                 editableQueue = editableQueue,
                 positionMs = if (lyrics == null) 0L else playback.positionMs,
                 currentPath = playback.currentPath,
-                language = language,
-                onPlay = onPlayQueueItem,
-                onSeek = onSeek,
-                onLoadThumbnail = onLoadThumbnail,
-                onMoveQueueItem = onMoveQueueItem,
-                onRemoveQueueItem = onRemoveQueueItem,
-                modifier = Modifier.fillMaxWidth().weight(1f),
-            )
+                                language = language,
+                                onPlay = onPlayQueueItem,
+                                onSeek = onSeek,
+                                onLoadThumbnail = onLoadThumbnail,
+                                onMoveQueueItem = onMoveQueueItem,
+                                onRemoveQueueItem = onRemoveQueueItem,
+                                modifier = Modifier.fillMaxWidth().weight(1f),
+                                queueListState = queueListState,
+                                onLocateCurrent = onLocateCurrent,
+                            )
             WaveformTimeline(playback, waveform, onSeek, language, waveformLoading, artwork)
             PlayerBottomControls(playback, onRepeat, onPrevious, onTogglePlay, onNext, onSpeed)
         }
@@ -794,6 +862,8 @@ private fun SecondaryControls(
     onToggleFavourite: () -> Unit,
     onShareCurrentMedia: () -> Unit,
     modifier: Modifier,
+    queueListState: androidx.compose.foundation.lazy.LazyListState,
+    onLocateCurrent: () -> Unit,
 ) {
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     Column(
@@ -825,23 +895,25 @@ private fun SecondaryControls(
         PlaybackError(playback.errorMessage)
         Spacer(Modifier.height(6.dp))
         NowPlayingQueue(
-            searchOpen = searchOpen,
-            onCloseSearch = { searchOpen = false },
-            queue = queue,
-            lyrics = lyrics,
-            showFileDetails = showFileDetails,
-            editableQueue = editableQueue,
-            positionMs = if (lyrics == null) 0L else playback.positionMs,
-            currentPath = playback.currentPath,
-            language = language,
-            onPlay = onPlayQueueItem,
-            onSeek = onSeek,
-            onLoadThumbnail = onLoadThumbnail,
-            onMoveQueueItem = onMoveQueueItem,
-            onRemoveQueueItem = onRemoveQueueItem,
-            modifier = Modifier.fillMaxWidth().weight(1f),
-        )
-        Column(Modifier.fillMaxWidth()
+                    searchOpen = searchOpen,
+                    onCloseSearch = { searchOpen = false },
+                    queue = queue,
+                    lyrics = lyrics,
+                    showFileDetails = showFileDetails,
+                    editableQueue = editableQueue,
+                    positionMs = if (lyrics == null) 0L else playback.positionMs,
+                    currentPath = playback.currentPath,
+                    language = language,
+                    onPlay = onPlayQueueItem,
+                    onSeek = onSeek,
+                    onLoadThumbnail = onLoadThumbnail,
+                    onMoveQueueItem = onMoveQueueItem,
+                    onRemoveQueueItem = onRemoveQueueItem,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    queueListState = queueListState,
+                    onLocateCurrent = onLocateCurrent,
+                )
+                Column(Modifier.fillMaxWidth()
             .shadow(9.dp, RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
             .background(MaterialTheme.colorScheme.surface)
             .padding(top = 3.dp)) {
@@ -868,6 +940,8 @@ private fun NowPlayingQueue(
     onMoveQueueItem: (Int, Int) -> Unit,
     onRemoveQueueItem: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    queueListState: androidx.compose.foundation.lazy.LazyListState,
+    onLocateCurrent: () -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     val searchFocus = remember { FocusRequester() }
@@ -1508,6 +1582,7 @@ private fun NowPlayingTopBar(
     modifier: Modifier = Modifier,
     overlay: Boolean = false,
     fullscreen: Boolean = false,
+    onLocateCurrent: (() -> Unit)? = null,
 ) {
     val foreground = if (overlay) Color.White else MaterialTheme.colorScheme.onSurface
     val background = if (overlay) Color.Black.copy(alpha = 0.34f)
@@ -1527,6 +1602,11 @@ private fun NowPlayingTopBar(
         }
         IconButton(onClick = onHome, modifier = Modifier.inspectElement("HOME_BUTTON", "Returns to Library")) {
             Icon(Icons.Rounded.Home, uiText(language, "Home", "首頁"), Modifier.size(30.dp), tint = foreground)
+        }
+        onLocateCurrent?.let { locateAction ->
+            IconButton(onClick = locateAction, modifier = Modifier.inspectElement("LOCATE_CURRENT_BUTTON", "Scroll to currently playing song in queue")) {
+                Icon(Icons.Rounded.MyLocation, uiText(language, "Locate current song", "定位當前播放"), Modifier.size(30.dp), tint = foreground)
+            }
         }
         Spacer(Modifier.weight(1f))
         // The lock is drawn above the whole player so it remains usable when
