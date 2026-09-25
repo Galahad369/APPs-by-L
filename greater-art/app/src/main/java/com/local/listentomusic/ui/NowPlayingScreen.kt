@@ -965,9 +965,7 @@ private fun NowPlayingQueue(
             file.album.contains(normalized, ignoreCase = true)
         }
     }
-    val listState = rememberLazyListState(
-        initialFirstVisibleItemIndex = currentIndex.coerceAtLeast(0),
-    )
+    val listState = queueListState
     val visibleIndex = visibleQueue.indexOfFirst { it.value.path == currentPath }
     LaunchedEffect(currentPath, visibleIndex) {
         if (visibleIndex >= 0 && !listState.isScrollInProgress) listState.scrollToItem(visibleIndex)

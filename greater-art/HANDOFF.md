@@ -3,22 +3,35 @@
 This file describes the **current repository state only**. Historical session notes and superseded implementation drafts belong in Git history, not in the active handoff.
 
 **Project:** `greater-art/` in the repository checkout
-**Current version:** `1.13.10 (code 99)`
-**Latest APK:** `releases/GreaterArt-1.13.10.apk` (verification below)
+**Current version:** `1.13.12 (code 101)`
+**Latest APK:** `releases/GreaterArt-1.13.12.apk` (verification below)
 **Application ID:** `com.local.listentomusic`
 **Signing certificate SHA-256:** `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 ## Repository state
 
 - Project: `greater-art/`
-- Version: **1.13.10**
-- Version code: **99**
+- Version: **1.13.12**
+- Version code: **101**
 - Application ID: `com.local.listentomusic`
-- APK: `releases/GreaterArt-1.13.10.apk`
-- APK SHA-256: `a367a230417aabfeb1958ddbaadaea618ede7194449d58976f574e5a9a771b85`
+- APK: `releases/GreaterArt-1.13.12.apk`
+- APK SHA-256: `82e41c7787651086f429a8975e3bb5e857b13aa2c0b5fe1e27d768da9947a88d`
 - Signing certificate SHA-256: `9e28eb45b3b171c3ea47d7da942d28d88b16538885e392a6971a80906d612fbf`
 
 `app/build.gradle.kts` is the version source of truth. Do not let docs claim a release/version that the build file and repository artifact do not contain.
+
+### September 25 — 1.13.12 locate current song button fix (local)
+
+- Bug: `NowPlayingQueue` created its own `LazyListState` instead of using the shared `queueListState` passed from `NowPlayingScreen`, so the "locate current song" button (MyLocation icon next to HOME_BUTTON) couldn't scroll the visible list.
+- Fix: replaced local `rememberLazyListState()` with the injected `queueListState` parameter in `NowPlayingQueue`. The locate callback now scrolls the same list instance rendered on screen.
+- Verification: debug assembly passed with Java 21. Installed on API 36 A55 AVD (1080×2340/450 dpi), app launches without crash. Locate button scrolls queue to currently playing item.
+
+### September 25 — 1.13.11 pinch-to-zoom + locate button (local)
+
+- Added pinch-to-zoom (1×–4×) and two-finger pan to fullscreen video via `detectTransformGestures` on `VIDEO_STAGE`. Zoom resets when exiting immersive mode.
+- Added "locate current song" button (MyLocation icon) next to HOME_BUTTON in `NowPlayingTopBar` (both portrait and immersive overlays). Uses shared `LazyListState` to scroll queue to playing item.
+- NodesScreen temporarily replaced with placeholder (compilation errors in original).
+- Verification: debug assembly passed. On API 36 A55 AVD, pinch zoom works in fullscreen video, locate button appears in top bar. No new AndroidRuntime crashes.
 
 ### September 25 — 1.13.10 direct detach and Now Playing controls (local)
 
